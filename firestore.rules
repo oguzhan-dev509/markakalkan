@@ -251,11 +251,8 @@ match /brands/{brandUid}/productionBatches/{batchId} {
 match /productCodes/{codeId} {
   // Tüketici yalnız bildiği tekil kodu doğrudan sorgulayabilir.
   // Tüm kod koleksiyonu herkese açık şekilde listelenemez.
-  allow get: if true;
-
-  // Marka hesabı yalnız kendi oluşturduğu kodları listeleyebilir.
-  allow list: if request.auth != null
-      && resource.data.ownerUid == request.auth.uid;
+  allow read: if request.auth != null
+    && resource.data.ownerUid == request.auth.uid;
 
   allow create: if request.auth != null
       && request.resource.data.keys().hasAll([
@@ -342,6 +339,69 @@ match /productCodes/{codeId} {
 
   allow delete: if request.auth != null
       && resource.data.ownerUid == request.auth.uid;
+}
+match /publicProductCodes/{codeId} {
+  allow get: if true;
+  allow list: if false;
+
+  allow create: if request.auth != null
+      && request.resource.data.keys().hasAll([
+        'publicCode',
+        'brandName',
+        'productName',
+        'batchNumber',
+        'status',
+        'createdAt'
+      ])
+      && request.resource.data.keys().hasOnly([
+        'publicCode',
+        'brandName',
+        'productName',
+        'batchNumber',
+        'status',
+        'createdAt'
+      ])
+      && request.resource.data.publicCode == codeId
+      && request.resource.data.publicCode is string
+      && request.resource.data.publicCode.size() >= 10
+      && request.resource.data.publicCode.size() <= 80
+      && request.resource.data.brandName is string
+      && request.resource.data.brandName.size() >= 2
+      && request.resource.data.brandName.size() <= 120
+      && request.resource.data.productName is string
+      && request.resource.data.productName.size() >= 2
+      && request.resource.data.productName.size() <= 160
+      && request.resource.data.batchNumber is string
+      && request.resource.data.batchNumber.size() >= 2
+      && request.resource.data.batchNumber.size() <= 100
+      && request.resource.data.status == 'active'
+      && request.resource.data.createdAt == request.time
+
+      && getAfter(
+        /databases/$(database)/documents/productCodes/$(codeId)
+      ).data.ownerUid == request.auth.uid
+
+      && getAfter(
+        /databases/$(database)/documents/productCodes/$(codeId)
+      ).data.publicCode == request.resource.data.publicCode
+
+      && getAfter(
+        /databases/$(database)/documents/productCodes/$(codeId)
+      ).data.brandName == request.resource.data.brandName
+
+      && getAfter(
+        /databases/$(database)/documents/productCodes/$(codeId)
+      ).data.productName == request.resource.data.productName
+
+      && getAfter(
+        /databases/$(database)/documents/productCodes/$(codeId)
+      ).data.batchNumber == request.resource.data.batchNumber
+
+      && getAfter(
+        /databases/$(database)/documents/productCodes/$(codeId)
+      ).data.status == request.resource.data.status;
+
+  allow update, delete: if false;
 }
     match /{document=**} {
       allow read, write: if false;

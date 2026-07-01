@@ -51,14 +51,23 @@ class ProductCodeService {
 
     for (var attempt = 0; attempt < 5; attempt++) {
       final publicCode = _generatePublicCode();
-      final document = _codesCollection.doc(publicCode);
-      final existing = await document.get();
 
-      if (existing.exists) {
+      final privateDocument = _codesCollection.doc(publicCode);
+      final publicDocument = _firestore
+          .collection('publicProductCodes')
+          .doc(publicCode);
+
+      // Açık kayıt üzerinden kod çakışması kontrol edilir.
+      // Özel productCodes belgesi, henüz oluşmadığı için burada okunmaz.
+      final existingPublicDocument = await publicDocument.get();
+
+      if (existingPublicDocument.exists) {
         continue;
       }
 
-      await document.set({
+      final writeBatch = _firestore.batch();
+
+      writeBatch.set(privateDocument, {
         'publicCode': publicCode,
         'ownerUid': user.uid,
         'brandName': brandName.trim(),
@@ -73,6 +82,17 @@ class ProductCodeService {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      writeBatch.set(publicDocument, {
+        'publicCode': publicCode,
+        'brandName': brandName.trim(),
+        'productName': productName.trim(),
+        'batchNumber': batchNumber.trim(),
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await writeBatch.commit();
 
       return publicCode;
     }

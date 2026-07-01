@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/verification/data/product_verification_service.dart';
 
 class ProductVerificationPage extends StatefulWidget {
   const ProductVerificationPage({super.key});
@@ -13,7 +15,12 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
   final _formKey = GlobalKey<FormState>();
   final _productCodeController = TextEditingController();
   final _secretPinController = TextEditingController();
+  final ProductVerificationService _verificationService =
+      ProductVerificationService();
 
+  ProductVerificationResult? _verificationResult;
+  String? _verificationError;
+  bool _isVerifying = false;
   bool _showPinField = false;
 
   @override
@@ -23,18 +30,65 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
     super.dispose();
   }
 
-  void _verifyProduct() {
+  Future<void> _verifyProduct() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Marka Dedektifi doğrulama servisi ürün kayıtları oluşturulduktan sonra aktif olacaktır.',
-        ),
-      ),
-    );
+    setState(() {
+      _isVerifying = true;
+      _verificationResult = null;
+      _verificationError = null;
+    });
+
+    try {
+      final result = await _verificationService.verifyCode(
+        _productCodeController.text,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _verificationResult = result;
+      });
+
+      if (_showPinField) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tekil kod sorgulandı. Gizli PIN doğrulaması sonraki aşamada etkinleştirilecektir.',
+            ),
+          ),
+        );
+      }
+    } on FirebaseException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _verificationError = error.code == 'permission-denied'
+            ? 'Marka Dedektifi bu kod kaydına erişemedi.'
+            : 'Kod sorgulanırken bağlantı hatası oluştu.';
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _verificationError =
+            'Beklenmeyen bir hata oluştu. Lütfen yeniden deneyin.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVerifying = false;
+        });
+      }
+    }
   }
 
   @override
@@ -196,13 +250,36 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
                     ],
                     const SizedBox(height: 22),
                     FilledButton.icon(
-                      onPressed: _verifyProduct,
+                      onPressed: _isVerifying ? null : _verifyProduct,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 17),
                       ),
-                      icon: const Icon(Icons.verified_outlined),
-                      label: const Text('Ürünü İncele'),
+                      icon: _isVerifying
+                          ? const SizedBox(
+                              width: 19,
+                              height: 19,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.verified_outlined),
+                      label: Text(
+                        _isVerifying ? 'İnceleniyor...' : 'Ürünü İncele',
+                      ),
                     ),
+                    if (_verificationError != null) ...[
+                      const SizedBox(height: 18),
+                      _VerificationMessageCard(
+                        icon: Icons.error_outline,
+                        title: 'Sorgulama yapılamadı',
+                        description: _verificationError!,
+                        backgroundColor: const Color(0xFFFFF1F0),
+                        foregroundColor: const Color(0xFFB42318),
+                      ),
+                    ],
+
+                    if (_verificationResult != null) ...[
+                      const SizedBox(height: 18),
+                      _VerificationResultCard(result: _verificationResult!),
+                    ],
                     const SizedBox(height: 22),
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -238,6 +315,214 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VerificationResultCard extends StatelessWidget {
+  final ProductVerificationResult result;
+
+  const _VerificationResultCard({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!result.found) {
+      return const _VerificationMessageCard(
+        icon: Icons.search_off_outlined,
+        title: 'Kod bulunamadı',
+        description:
+            'Bu tekil ürün kodu MarkaKalkan kayıtlarında bulunamadı. '
+            'Kodu kontrol edin veya ürünü satın aldığınız satıcıdan bilgi isteyin.',
+        backgroundColor: Color(0xFFFFF7E8),
+        foregroundColor: Color(0xFF9A6700),
+      );
+    }
+
+    if (result.isBlocked) {
+      return _VerificationMessageCard(
+        icon: Icons.block_outlined,
+        title: 'Kod engellenmiş',
+        description:
+            '${result.brandName ?? 'Marka'} tarafından bu kod engellenmiştir. '
+            'Ürünle ilgili ek doğrulama yapılması önerilir.',
+        backgroundColor: const Color(0xFFFFF1F0),
+        foregroundColor: const Color(0xFFB42318),
+      );
+    }
+
+    if (result.isRevoked) {
+      return const _VerificationMessageCard(
+        icon: Icons.cancel_outlined,
+        title: 'Kod iptal edilmiş',
+        description:
+            'Bu tekil ürün kodu marka tarafından iptal edilmiştir. '
+            'Ürünü kullanmadan veya satın almadan önce marka ile iletişime geçin.',
+        backgroundColor: Color(0xFFFFF1F0),
+        foregroundColor: Color(0xFFB42318),
+      );
+    }
+
+    if (!result.isActive) {
+      return const _VerificationMessageCard(
+        icon: Icons.help_outline,
+        title: 'Ek doğrulama gerekli',
+        description:
+            'Kod bulundu ancak güncel durumu kesin olarak belirlenemedi.',
+        backgroundColor: Color(0xFFFFF7E8),
+        foregroundColor: Color(0xFF9A6700),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF8F4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF9FD8CA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.verified_user_outlined,
+                color: MarkaKalkanTheme.teal,
+                size: 30,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Kod marka kaydıyla eşleşti',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Bu tekil ürün kodu, doğrulanmış marka kayıtlarıyla eşleşmektedir.',
+            style: TextStyle(color: Color(0xFF40515A), height: 1.45),
+          ),
+          const SizedBox(height: 16),
+          _ResultLine(
+            label: 'Marka',
+            value: result.brandName ?? 'Belirtilmemiş',
+          ),
+          _ResultLine(
+            label: 'Ürün',
+            value: result.productName ?? 'Belirtilmemiş',
+          ),
+          _ResultLine(
+            label: 'Üretim partisi',
+            value: result.batchNumber ?? 'Belirtilmemiş',
+          ),
+          _ResultLine(
+            label: 'Tekil kod',
+            value: result.publicCode ?? 'Belirtilmemiş',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerificationMessageCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  const _VerificationMessageCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: foregroundColor.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: foregroundColor, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: foregroundColor,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: Color(0xFF40515A),
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ResultLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF687580),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: MarkaKalkanTheme.navy,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
