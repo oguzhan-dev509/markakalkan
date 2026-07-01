@@ -1,6 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/auth/data/brand_auth_service.dart';
 
 class BrandLoginPage extends StatefulWidget {
   const BrandLoginPage({super.key});
@@ -11,6 +13,9 @@ class BrandLoginPage extends StatefulWidget {
 
 class _BrandLoginPageState extends State<BrandLoginPage> {
   final _formKey = GlobalKey<FormState>();
+  final BrandAuthService _authService = BrandAuthService();
+
+  bool _isSubmitting = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -23,18 +28,70 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Firebase bağlantısından sonra marka girişi aktif olacaktır.',
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final credential = await _authService.signIn(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final email = credential.user?.email ?? 'Marka kullanıcısı';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$email hesabıyla giriş başarılı.')),
+      );
+      AppRouter.openBrandDashboard(context);
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message = switch (error.code) {
+        'invalid-email' => 'E-posta adresi geçerli değil.',
+        'invalid-credential' => 'E-posta adresi veya şifre hatalı.',
+        'user-not-found' =>
+          'Bu e-posta adresiyle kayıtlı bir marka hesabı bulunamadı.',
+        'wrong-password' => 'E-posta adresi veya şifre hatalı.',
+        'user-disabled' => 'Bu marka hesabı devre dışı bırakılmış.',
+        'too-many-requests' =>
+          'Çok fazla başarısız deneme yapıldı. Bir süre sonra yeniden deneyin.',
+        'network-request-failed' =>
+          'İnternet bağlantısı kurulamadı. Bağlantınızı kontrol edin.',
+        _ => 'Giriş yapılamadı. Bilgilerinizi kontrol ederek yeniden deneyin.',
+      };
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Beklenmeyen bir hata oluştu. Yeniden deneyin.'),
         ),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   @override
@@ -161,12 +218,20 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
                     ),
                     const SizedBox(height: 22),
                     FilledButton.icon(
-                      onPressed: _submit,
+                      onPressed: _isSubmitting ? null : _submit,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 17),
                       ),
-                      icon: const Icon(Icons.login),
-                      label: const Text('Giriş Yap'),
+                      icon: _isSubmitting
+                          ? const SizedBox(
+                              width: 19,
+                              height: 19,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.login),
+                      label: Text(
+                        _isSubmitting ? 'Giriş yapılıyor...' : 'Giriş Yap',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
