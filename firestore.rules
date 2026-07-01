@@ -1,0 +1,100 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidRequiredText(value, maxLength) {
+      return value is string
+          && value.size() > 0
+          && value.size() <= maxLength;
+    }
+
+    function isValidOptionalText(value, maxLength) {
+      return value == null
+          || (value is string && value.size() <= maxLength);
+    }
+
+    match /brandApplications/{applicationId} {
+      allow create: if
+          request.resource.data.keys().hasAll([
+            'companyName',
+            'brandName',
+            'businessType',
+            'sector',
+            'authorizedPerson',
+            'email',
+            'phone',
+            'taxNumber',
+            'website',
+            'problemDescription',
+            'status',
+            'createdAt'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'companyName',
+            'brandName',
+            'businessType',
+            'sector',
+            'authorizedPerson',
+            'email',
+            'phone',
+            'taxNumber',
+            'website',
+            'problemDescription',
+            'status',
+            'createdAt'
+          ])
+          && isValidRequiredText(
+            request.resource.data.companyName,
+            180
+          )
+          && isValidRequiredText(
+            request.resource.data.brandName,
+            120
+          )
+          && isValidRequiredText(
+            request.resource.data.businessType,
+            60
+          )
+          && isValidRequiredText(
+            request.resource.data.sector,
+            80
+          )
+          && isValidRequiredText(
+            request.resource.data.authorizedPerson,
+            120
+          )
+          && isValidRequiredText(
+            request.resource.data.email,
+            180
+          )
+          && request.resource.data.email.matches(
+            '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'
+          )
+          && isValidRequiredText(
+            request.resource.data.phone,
+            40
+          )
+          && isValidRequiredText(
+            request.resource.data.taxNumber,
+            30
+          )
+          && isValidOptionalText(
+            request.resource.data.website,
+            300
+          )
+          && isValidRequiredText(
+            request.resource.data.problemDescription,
+            2000
+          )
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdAt == request.time;
+
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
