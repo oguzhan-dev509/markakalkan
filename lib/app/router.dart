@@ -4,12 +4,19 @@ import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/verification/presentation/product_verification_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/brand_dashboard_page.dart';
 import 'package:markakalkan/features/products/presentation/products_page.dart';
+import 'package:markakalkan/features/production_batches/presentation/production_batches_page.dart';
 
 abstract final class AppRouter {
   static Future<void> openBrandLogin(BuildContext context) {
     return Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const BrandLoginPage()));
+  }
+
+  static void openProductionBatches(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => ProductionBatchesPage()));
   }
 
   static void openProducts(BuildContext context) {

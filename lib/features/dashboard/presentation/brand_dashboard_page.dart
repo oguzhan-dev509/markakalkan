@@ -241,6 +241,11 @@ class _DashboardModuleCard extends StatelessWidget {
           return;
         }
 
+        if (module.title == 'Üretim Partileri') {
+          AppRouter.openProductionBatches(context);
+          return;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

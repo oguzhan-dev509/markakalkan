@@ -149,6 +149,105 @@ match /brands/{brandUid}/products/{productId} {
       && request.auth.uid == brandUid
       && resource.data.ownerUid == request.auth.uid;
 }
+match /brands/{brandUid}/productionBatches/{batchId} {
+  allow read: if request.auth != null
+      && request.auth.uid == brandUid;
+
+  allow create: if request.auth != null
+      && request.auth.uid == brandUid
+      && request.resource.data.keys().hasAll([
+        'productId',
+        'productName',
+        'batchNumber',
+        'productionType',
+        'authorizedQuantity',
+        'defectQuantity',
+        'shippedQuantity',
+        'productionDate',
+        'notes',
+        'status',
+        'ownerUid',
+        'createdAt',
+        'updatedAt'
+      ])
+      && request.resource.data.keys().hasOnly([
+        'productId',
+        'productName',
+        'batchNumber',
+        'productionType',
+        'authorizedQuantity',
+        'defectQuantity',
+        'shippedQuantity',
+        'productionDate',
+        'notes',
+        'status',
+        'ownerUid',
+        'createdAt',
+        'updatedAt'
+      ])
+      && request.resource.data.productId is string
+      && request.resource.data.productId.size() > 0
+      && request.resource.data.productId.size() <= 160
+      && request.resource.data.productName is string
+      && request.resource.data.productName.size() > 0
+      && request.resource.data.productName.size() <= 160
+      && request.resource.data.batchNumber is string
+      && request.resource.data.batchNumber.size() >= 2
+      && request.resource.data.batchNumber.size() <= 100
+      && request.resource.data.productionType is string
+      && request.resource.data.productionType in [
+        'Kendi üretim',
+        'Fason üretim',
+        'İthalat'
+      ]
+      && request.resource.data.authorizedQuantity is int
+      && request.resource.data.authorizedQuantity > 0
+      && request.resource.data.defectQuantity is int
+      && request.resource.data.defectQuantity >= 0
+      && request.resource.data.shippedQuantity is int
+      && request.resource.data.shippedQuantity >= 0
+      && request.resource.data.defectQuantity
+          + request.resource.data.shippedQuantity
+          <= request.resource.data.authorizedQuantity
+      && request.resource.data.productionDate is timestamp
+      && request.resource.data.notes is string
+      && request.resource.data.notes.size() <= 2000
+      && request.resource.data.status in [
+        'planned',
+        'in_production',
+        'completed',
+        'cancelled'
+      ]
+      && request.resource.data.ownerUid == request.auth.uid
+      && request.resource.data.createdAt == request.time
+      && request.resource.data.updatedAt == request.time;
+
+  allow update: if request.auth != null
+      && request.auth.uid == brandUid
+      && resource.data.ownerUid == request.auth.uid
+      && request.resource.data.ownerUid == request.auth.uid
+      && request.resource.data.createdAt == resource.data.createdAt
+      && request.resource.data.keys().hasOnly([
+        'productId',
+        'productName',
+        'batchNumber',
+        'productionType',
+        'authorizedQuantity',
+        'defectQuantity',
+        'shippedQuantity',
+        'productionDate',
+        'notes',
+        'status',
+        'ownerUid',
+        'createdAt',
+        'updatedAt'
+      ])
+      && request.resource.data.updatedAt == request.time;
+
+  allow delete: if request.auth != null
+      && request.auth.uid == brandUid
+      && resource.data.ownerUid == request.auth.uid;
+}
     match /{document=**} {
       allow read, write: if false;
     }
