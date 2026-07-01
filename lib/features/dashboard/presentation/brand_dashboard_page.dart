@@ -246,6 +246,11 @@ class _DashboardModuleCard extends StatelessWidget {
           return;
         }
 
+        if (module.title == 'Tekil Kodlar') {
+          AppRouter.openProductCodes(context);
+          return;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

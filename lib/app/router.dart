@@ -5,12 +5,19 @@ import 'package:markakalkan/features/verification/presentation/product_verificat
 import 'package:markakalkan/features/dashboard/presentation/brand_dashboard_page.dart';
 import 'package:markakalkan/features/products/presentation/products_page.dart';
 import 'package:markakalkan/features/production_batches/presentation/production_batches_page.dart';
+import 'package:markakalkan/features/product_codes/presentation/product_codes_page.dart';
 
 abstract final class AppRouter {
   static Future<void> openBrandLogin(BuildContext context) {
     return Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const BrandLoginPage()));
+  }
+
+  static void openProductCodes(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => ProductCodesPage()));
   }
 
   static void openProductionBatches(BuildContext context) {
