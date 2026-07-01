@@ -4,7 +4,14 @@ import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/verification/data/product_verification_service.dart';
 
 class ProductVerificationPage extends StatefulWidget {
-  const ProductVerificationPage({super.key});
+  final String? initialCode;
+  final bool autoVerify;
+
+  const ProductVerificationPage({
+    super.key,
+    this.initialCode,
+    this.autoVerify = false,
+  });
 
   @override
   State<ProductVerificationPage> createState() =>
@@ -22,6 +29,26 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
   String? _verificationError;
   bool _isVerifying = false;
   bool _showPinField = false;
+  @override
+  void initState() {
+    super.initState();
+
+    final initialCode = widget.initialCode?.trim();
+
+    if (initialCode == null || initialCode.isEmpty) {
+      return;
+    }
+
+    _productCodeController.text = initialCode.toUpperCase();
+
+    if (widget.autoVerify) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _verifyProduct();
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {

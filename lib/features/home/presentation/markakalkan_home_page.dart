@@ -227,8 +227,59 @@ class _HeroLabel extends StatelessWidget {
   }
 }
 
-class _VerificationCard extends StatelessWidget {
+class _VerificationCard extends StatefulWidget {
   const _VerificationCard();
+
+  @override
+  State<_VerificationCard> createState() => _VerificationCardState();
+}
+
+class _VerificationCardState extends State<_VerificationCard> {
+  final TextEditingController _productCodeController = TextEditingController();
+
+  @override
+  void dispose() {
+    _productCodeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanQrCode() async {
+    final scannedCode = await AppRouter.openQrScanner(context);
+
+    if (!mounted || scannedCode == null || scannedCode.trim().isEmpty) {
+      return;
+    }
+
+    final normalizedCode = scannedCode.trim().toUpperCase();
+    _productCodeController.text = normalizedCode;
+
+    await AppRouter.openProductVerification(
+      context,
+      initialCode: normalizedCode,
+      autoVerify: true,
+    );
+  }
+
+  Future<void> _inspectProduct() async {
+    final productCode = _productCodeController.text.trim().toUpperCase();
+
+    if (productCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Lütfen tekil ürün kodunu girin veya QR kodunu okutun.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await AppRouter.openProductVerification(
+      context,
+      initialCode: productCode,
+      autoVerify: true,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -276,22 +327,54 @@ class _VerificationCard extends StatelessWidget {
             style: TextStyle(color: Color(0xFF687580), height: 1.45),
           ),
           const SizedBox(height: 20),
-          const TextField(
-            decoration: InputDecoration(
-              labelText: 'Tekil ürün kodu',
-              hintText: 'Örnek: MK-8F7K-2Q9X',
+          FilledButton.icon(
+            onPressed: _scanQrCode,
+            style: FilledButton.styleFrom(
+              backgroundColor: MarkaKalkanTheme.teal,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            ),
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: const Text('Kamerayla QR Tara'),
+          ),
+          const SizedBox(height: 18),
+          const Row(
+            children: [
+              Expanded(child: Divider()),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  'veya',
+                  style: TextStyle(
+                    color: Color(0xFF8A959D),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider()),
+            ],
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _productCodeController,
+            textCapitalization: TextCapitalization.characters,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _inspectProduct(),
+            decoration: const InputDecoration(
+              labelText: 'Tekil ürün kodunu girin',
+              hintText: 'Örnek: MK-S394-MFC2-DKT6',
               prefixIcon: Icon(Icons.password_outlined),
             ),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
-            onPressed: null,
-            icon: Icon(Icons.verified_outlined),
-            label: Text('Ürünü İncele'),
+            onPressed: _inspectProduct,
+            icon: const Icon(Icons.verified_outlined),
+            label: const Text('Ürünü İncele'),
           ),
           const SizedBox(height: 12),
           const Text(
-            'Marka Dedektifi, ürün kayıtları oluşturulduktan sonra aktif olacaktır.',
+            'Kamera kullanmak istemiyorsanız ürün kodunu elle girebilirsiniz.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFF8A959D), fontSize: 12),
           ),
