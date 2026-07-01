@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/app/router.dart';
 
 class BrandDashboardPage extends StatelessWidget {
   const BrandDashboardPage({super.key});
@@ -235,6 +236,11 @@ class _DashboardModuleCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () {
+        if (module.title == 'Ürünler') {
+          AppRouter.openProducts(context);
+          return;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
