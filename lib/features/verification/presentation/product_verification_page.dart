@@ -31,7 +31,7 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Ürün doğrulama servisi Firebase bağlantısından sonra aktif olacaktır.',
+          'Marka Dedektifi doğrulama servisi ürün kayıtları oluşturulduktan sonra aktif olacaktır.',
         ),
       ),
     );
@@ -45,7 +45,7 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         title: const Text(
-          'Ürün Doğrula',
+          'Marka Dedektifi',
           style: TextStyle(
             color: MarkaKalkanTheme.navy,
             fontWeight: FontWeight.w800,
@@ -91,7 +91,7 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
                     ),
                     const SizedBox(height: 24),
                     const Text(
-                      'Ürününüzü kontrol edin',
+                      'Marka Dedektifi ile ürünü inceleyin',
                       style: TextStyle(
                         color: MarkaKalkanTheme.navy,
                         fontSize: 28,
@@ -100,8 +100,8 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Ambalaj üzerindeki QR kodunu okutun veya ürün '
-                      'doğrulama kodunu aşağıdaki alana girin.',
+                      'Ambalaj üzerindeki QR kodunu okutun veya tekil ürün '
+                      'kodunu girerek MarkaKalkan kayıtlarıyla eşleşmesini inceleyin.',
                       style: TextStyle(color: Color(0xFF687580), height: 1.5),
                     ),
                     const SizedBox(height: 28),
@@ -140,13 +140,13 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
                       controller: _productCodeController,
                       textCapitalization: TextCapitalization.characters,
                       decoration: const InputDecoration(
-                        labelText: 'Ürün doğrulama kodu',
+                        labelText: 'Tekil ürün kodu',
                         hintText: 'Örnek: MK-8F7K-2Q9X',
                         prefixIcon: Icon(Icons.fingerprint),
                       ),
                       validator: (value) {
                         if ((value?.trim() ?? '').isEmpty) {
-                          return 'Ürün doğrulama kodunu girin.';
+                          return 'Tekil ürün kodunu girin.';
                         }
 
                         return null;
@@ -201,7 +201,7 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
                         padding: const EdgeInsets.symmetric(vertical: 17),
                       ),
                       icon: const Icon(Icons.verified_outlined),
-                      label: const Text('Ürünü Doğrula'),
+                      label: const Text('Ürünü İncele'),
                     ),
                     const SizedBox(height: 22),
                     Container(
@@ -220,9 +220,9 @@ class _ProductVerificationPageState extends State<ProductVerificationPage> {
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Doğrulama sonucu, ürün üzerindeki tekil kodun '
-                              'doğrulanmış marka kayıtlarıyla eşleşip '
-                              'eşleşmediğini gösterecektir.',
+                              'Marka Dedektifi, ürün üzerindeki tekil kodun doğrulanmış '
+                              'marka kayıtlarıyla eşleşip eşleşmediğini ve şüpheli '
+                              'tarama işaretleri bulunup bulunmadığını gösterecektir.',
                               style: TextStyle(
                                 color: Color(0xFF687580),
                                 height: 1.45,

@@ -70,7 +70,7 @@ class _Header extends StatelessWidget {
                 onPressed: () {
                   AppRouter.openProductVerification(context);
                 },
-                child: const Text('Ürün Doğrula'),
+                child: const Text('Marka Dedektifi'),
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
@@ -166,7 +166,7 @@ class _HeroSection extends StatelessWidget {
                           ),
                         ),
                         icon: const Icon(Icons.qr_code_scanner),
-                        label: const Text('Ürün Doğrula'),
+                        label: const Text('Marka Dedektifi'),
                       ),
                     ],
                   ),
@@ -263,7 +263,7 @@ class _VerificationCard extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Ürününüzü doğrulayın',
+            'Marka Dedektifi',
             style: TextStyle(
               color: MarkaKalkanTheme.navy,
               fontSize: 23,
@@ -272,13 +272,13 @@ class _VerificationCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Ürün üzerindeki QR kodunu okutun veya ürün kodunu girin.',
+            'QR kodunu okutun veya tekil ürün kodunu girerek ürünü inceleyin.',
             style: TextStyle(color: Color(0xFF687580), height: 1.45),
           ),
           const SizedBox(height: 20),
           const TextField(
             decoration: InputDecoration(
-              labelText: 'Ürün doğrulama kodu',
+              labelText: 'Tekil ürün kodu',
               hintText: 'Örnek: MK-8F7K-2Q9X',
               prefixIcon: Icon(Icons.password_outlined),
             ),
@@ -287,11 +287,11 @@ class _VerificationCard extends StatelessWidget {
           FilledButton.icon(
             onPressed: null,
             icon: Icon(Icons.verified_outlined),
-            label: Text('Kodu Doğrula'),
+            label: Text('Ürünü İncele'),
           ),
           const SizedBox(height: 12),
           const Text(
-            'İlk geliştirme aşamasında doğrulama işlemi henüz aktif değildir.',
+            'Marka Dedektifi, ürün kayıtları oluşturulduktan sonra aktif olacaktır.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFF8A959D), fontSize: 12),
           ),
