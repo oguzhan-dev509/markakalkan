@@ -14,84 +14,104 @@ service cloud.firestore {
           || (value is string && value.size() <= maxLength);
     }
 
-    match /brandApplications/{applicationId} {
-      allow create: if
-          request.resource.data.keys().hasAll([
-            'companyName',
-            'brandName',
-            'businessType',
-            'sector',
-            'authorizedPerson',
-            'email',
-            'phone',
-            'taxNumber',
-            'website',
-            'problemDescription',
-            'status',
-            'createdAt'
-          ])
-          && request.resource.data.keys().hasOnly([
-            'companyName',
-            'brandName',
-            'businessType',
-            'sector',
-            'authorizedPerson',
-            'email',
-            'phone',
-            'taxNumber',
-            'website',
-            'problemDescription',
-            'status',
-            'createdAt'
-          ])
-          && isValidRequiredText(
-            request.resource.data.companyName,
-            180
-          )
-          && isValidRequiredText(
-            request.resource.data.brandName,
-            120
-          )
-          && isValidRequiredText(
-            request.resource.data.businessType,
-            60
-          )
-          && isValidRequiredText(
-            request.resource.data.sector,
-            80
-          )
-          && isValidRequiredText(
-            request.resource.data.authorizedPerson,
-            120
-          )
-          && isValidRequiredText(
-            request.resource.data.email,
-            180
-          )
-          && request.resource.data.email.matches(
-            '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'
-          )
-          && isValidRequiredText(
-            request.resource.data.phone,
-            40
-          )
-          && isValidRequiredText(
-            request.resource.data.taxNumber,
-            30
-          )
-          && isValidOptionalText(
-            request.resource.data.website,
-            300
-          )
-          && isValidRequiredText(
-            request.resource.data.problemDescription,
-            2000
-          )
-          && request.resource.data.status == 'pending'
-          && request.resource.data.createdAt == request.time;
+   match /brandApplications/{applicationId} {
+  allow create: if
+      request.auth != null
+      && request.auth.token.email != null
+      && request.resource.data.keys().hasAll([
+        'applicantUid',
+        'applicantEmail',
+        'companyName',
+        'brandName',
+        'businessType',
+        'sector',
+        'authorizedPerson',
+        'email',
+        'phone',
+        'taxNumber',
+        'website',
+        'problemDescription',
+        'status',
+        'createdAt'
+      ])
+      && request.resource.data.keys().hasOnly([
+        'applicantUid',
+        'applicantEmail',
+        'companyName',
+        'brandName',
+        'businessType',
+        'sector',
+        'authorizedPerson',
+        'email',
+        'phone',
+        'taxNumber',
+        'website',
+        'problemDescription',
+        'status',
+        'createdAt'
+      ])
+      && request.resource.data.applicantUid == request.auth.uid
+      && request.resource.data.applicantEmail == request.auth.token.email
+      && request.resource.data.email == request.auth.token.email
+      && isValidRequiredText(
+        request.resource.data.applicantUid,
+        160
+      )
+      && isValidRequiredText(
+        request.resource.data.applicantEmail,
+        180
+      )
+      && request.resource.data.applicantEmail.matches(
+        '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'
+      )
+      && isValidRequiredText(
+        request.resource.data.companyName,
+        180
+      )
+      && isValidRequiredText(
+        request.resource.data.brandName,
+        120
+      )
+      && isValidRequiredText(
+        request.resource.data.businessType,
+        60
+      )
+      && isValidRequiredText(
+        request.resource.data.sector,
+        80
+      )
+      && isValidRequiredText(
+        request.resource.data.authorizedPerson,
+        120
+      )
+      && isValidRequiredText(
+        request.resource.data.email,
+        180
+      )
+      && request.resource.data.email.matches(
+        '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'
+      )
+      && isValidRequiredText(
+        request.resource.data.phone,
+        40
+      )
+      && isValidRequiredText(
+        request.resource.data.taxNumber,
+        30
+      )
+      && isValidOptionalText(
+        request.resource.data.website,
+        300
+      )
+      && isValidRequiredText(
+        request.resource.data.problemDescription,
+        2000
+      )
+      && request.resource.data.status == 'pending'
+      && request.resource.data.createdAt == request.time;
 
-      allow read, update, delete: if false;
-    }
+  allow read, update, delete: if false;
+}
 match /brands/{brandUid}/products/{productId} {
   allow read: if request.auth != null
       && request.auth.uid == brandUid;

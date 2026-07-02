@@ -16,6 +16,26 @@ class BrandAuthService {
     );
   }
 
+  Future<UserCredential> createAccount({
+    required String email,
+    required String password,
+  }) {
+    return _firebaseAuth.createUserWithEmailAndPassword(
+      email: email.trim().toLowerCase(),
+      password: password,
+    );
+  }
+
+  Future<void> sendEmailVerification() async {
+    final user = _firebaseAuth.currentUser;
+
+    if (user == null || user.emailVerified) {
+      return;
+    }
+
+    await user.sendEmailVerification();
+  }
+
   Future<void> signOut() {
     return _firebaseAuth.signOut();
   }

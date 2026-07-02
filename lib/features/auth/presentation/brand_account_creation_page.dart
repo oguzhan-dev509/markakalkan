@@ -4,31 +4,35 @@ import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/auth/data/brand_auth_service.dart';
 
-class BrandLoginPage extends StatefulWidget {
-  const BrandLoginPage({super.key});
+class BrandAccountCreationPage extends StatefulWidget {
+  const BrandAccountCreationPage({super.key});
 
   @override
-  State<BrandLoginPage> createState() => _BrandLoginPageState();
+  State<BrandAccountCreationPage> createState() =>
+      _BrandAccountCreationPageState();
 }
 
-class _BrandLoginPageState extends State<BrandLoginPage> {
+class _BrandAccountCreationPageState extends State<BrandAccountCreationPage> {
   final _formKey = GlobalKey<FormState>();
   final BrandAuthService _authService = BrandAuthService();
 
-  bool _isSubmitting = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordConfirmationController = TextEditingController();
 
+  bool _isSubmitting = false;
   bool _obscurePassword = true;
+  bool _obscurePasswordConfirmation = true;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _passwordConfirmationController.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _createAccount() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -38,38 +42,75 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
     });
 
     try {
-      final credential = await _authService.signIn(
+      await _authService.createAccount(
         email: _emailController.text,
         password: _passwordController.text,
+      );
+
+      await _authService.sendEmailVerification();
+
+      if (!mounted) {
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            icon: const Icon(
+              Icons.verified_user_outlined,
+              color: MarkaKalkanTheme.teal,
+              size: 42,
+            ),
+            title: const Text(
+              'MarkaKalkan’a hoş geldiniz',
+              textAlign: TextAlign.center,
+            ),
+            content: const Text(
+              'Hesabınız başarıyla oluşturuldu. E-posta adresinize '
+              'doğrulama bağlantısı gönderdik.\n\n'
+              'Şimdi marka sahipliği ve şirket yetkisi incelemesi için '
+              'başvurunuzu tamamlayın.',
+              textAlign: TextAlign.center,
+              style: TextStyle(height: 1.5),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                },
+                icon: const Icon(Icons.arrow_forward),
+                label: const Text('Başvuruya Devam Et'),
+              ),
+            ],
+          );
+        },
       );
 
       if (!mounted) {
         return;
       }
 
-      final email = credential.user?.email ?? 'Marka kullanıcısı';
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$email hesabıyla giriş başarılı.')),
-      );
-      AppRouter.openCorporateHub(context);
+      await AppRouter.openBrandApplication(context);
     } on FirebaseAuthException catch (error) {
       if (!mounted) {
         return;
       }
 
       final message = switch (error.code) {
-        'invalid-email' => 'E-posta adresi geçerli değil.',
-        'invalid-credential' => 'E-posta adresi veya şifre hatalı.',
-        'user-not-found' =>
-          'Bu e-posta adresiyle kayıtlı bir marka hesabı bulunamadı.',
-        'wrong-password' => 'E-posta adresi veya şifre hatalı.',
-        'user-disabled' => 'Bu marka hesabı devre dışı bırakılmış.',
-        'too-many-requests' =>
-          'Çok fazla başarısız deneme yapıldı. Bir süre sonra yeniden deneyin.',
+        'email-already-in-use' =>
+          'Bu e-posta adresiyle daha önce hesap oluşturulmuş.',
+        'invalid-email' => 'Geçerli bir e-posta adresi girin.',
+        'weak-password' => 'Daha güçlü bir şifre belirleyin.',
+        'operation-not-allowed' =>
+          'E-posta ile hesap oluşturma şu anda kullanılamıyor.',
         'network-request-failed' =>
           'İnternet bağlantısı kurulamadı. Bağlantınızı kontrol edin.',
-        _ => 'Giriş yapılamadı. Bilgilerinizi kontrol ederek yeniden deneyin.',
+        'too-many-requests' =>
+          'Çok fazla deneme yapıldı. Bir süre sonra yeniden deneyin.',
+        _ => 'Hesap oluşturulamadı. Bilgilerinizi kontrol edin.',
       };
 
       ScaffoldMessenger.of(
@@ -82,7 +123,7 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Beklenmeyen bir hata oluştu. Yeniden deneyin.'),
+          content: Text('Beklenmeyen bir hata oluştu. Lütfen yeniden deneyin.'),
         ),
       );
     } finally {
@@ -102,7 +143,7 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         title: const Text(
-          'Marka Girişi',
+          'Hesap Oluştur',
           style: TextStyle(
             color: MarkaKalkanTheme.navy,
             fontWeight: FontWeight.w800,
@@ -113,7 +154,7 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+            constraints: const BoxConstraints(maxWidth: 500),
             child: Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
@@ -133,39 +174,33 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F6F4),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(
-                        Icons.verified_user_outlined,
-                        color: MarkaKalkanTheme.teal,
-                        size: 34,
-                      ),
+                    const Icon(
+                      Icons.person_add_alt_1_outlined,
+                      color: MarkaKalkanTheme.teal,
+                      size: 54,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                     const Text(
-                      'Markanızı yönetin',
+                      'MarkaKalkan hesabınızı oluşturun',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         color: MarkaKalkanTheme.navy,
-                        fontSize: 28,
+                        fontSize: 26,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Ürünlerinizi, üretim partilerinizi, tekil kodlarınızı '
-                      've şüpheli hareketleri tek panelden yönetin.',
+                      'Hesabınızı oluşturduktan sonra marka sahipliği ve '
+                      'şirket yetkisi başvurunuzu tamamlayacaksınız.',
+                      textAlign: TextAlign.center,
                       style: TextStyle(color: Color(0xFF687580), height: 1.5),
                     ),
                     const SizedBox(height: 28),
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
+                      autofillHints: const [AutofillHints.newUsername],
                       decoration: const InputDecoration(
                         labelText: 'E-posta adresi',
                         prefixIcon: Icon(Icons.email_outlined),
@@ -188,7 +223,7 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
-                      autofillHints: const [AutofillHints.password],
+                      autofillHints: const [AutofillHints.newPassword],
                       decoration: InputDecoration(
                         labelText: 'Şifre',
                         prefixIcon: const Icon(Icons.lock_outline),
@@ -209,16 +244,50 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
                         ),
                       ),
                       validator: (value) {
-                        if ((value ?? '').length < 6) {
-                          return 'Şifre en az 6 karakter olmalıdır.';
+                        if ((value ?? '').length < 8) {
+                          return 'Şifre en az 8 karakter olmalıdır.';
                         }
 
                         return null;
                       },
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordConfirmationController,
+                      obscureText: _obscurePasswordConfirmation,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _createAccount(),
+                      decoration: InputDecoration(
+                        labelText: 'Şifreyi tekrar girin',
+                        prefixIcon: const Icon(Icons.lock_reset_outlined),
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePasswordConfirmation
+                              ? 'Şifreyi göster'
+                              : 'Şifreyi gizle',
+                          onPressed: () {
+                            setState(() {
+                              _obscurePasswordConfirmation =
+                                  !_obscurePasswordConfirmation;
+                            });
+                          },
+                          icon: Icon(
+                            _obscurePasswordConfirmation
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value != _passwordController.text) {
+                          return 'Şifreler birbiriyle eşleşmiyor.';
+                        }
+
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
                     FilledButton.icon(
-                      onPressed: _isSubmitting ? null : _submit,
+                      onPressed: _isSubmitting ? null : _createAccount,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 17),
                       ),
@@ -228,67 +297,24 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
                               height: 19,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.login),
+                          : const Icon(Icons.person_add_alt_1),
                       label: Text(
-                        _isSubmitting ? 'Giriş yapılıyor...' : 'Giriş Yap',
+                        _isSubmitting
+                            ? 'Hesap oluşturuluyor...'
+                            : 'Hesap Oluştur',
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 16),
                     const Text(
-                      'Henüz MarkaKalkan hesabınız yok mu?',
+                      'Hesap oluşturmak marka yönetim yetkisi vermez. '
+                      'Başvurunuz MarkaKalkan yönetimi tarafından '
+                      'incelendikten sonra onaylanır.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Color(0xFF687580),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        AppRouter.openBrandAccountCreation(context);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 17),
-                      ),
-                      icon: const Icon(Icons.person_add_alt_1_outlined),
-                      label: const Text('Hesap Oluştur ve Marka Başvurusu Yap'),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Başvurular, marka sahipliği ve şirket yetkisi '
-                      'doğrulandıktan sonra onaylanır.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF8A959D),
+                        color: Color(0xFF7C8992),
                         fontSize: 12,
-                        height: 1.4,
+                        height: 1.45,
                       ),
-                    ),
-                    const SizedBox(height: 22),
-                    const Divider(),
-                    const SizedBox(height: 14),
-                    const Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.shield_outlined,
-                          color: MarkaKalkanTheme.blue,
-                          size: 21,
-                        ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Marka hesapları, hak sahipliği ve şirket '
-                            'bilgileri doğrulandıktan sonra aktif edilir.',
-                            style: TextStyle(
-                              color: Color(0xFF687580),
-                              fontSize: 13,
-                              height: 1.45,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),

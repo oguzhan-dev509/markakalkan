@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
-import 'package:firebase_core/firebase_core.dart';
+
 import 'package:markakalkan/features/auth/data/brand_application_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class BrandApplicationPage extends StatefulWidget {
   const BrandApplicationPage({super.key});
@@ -49,6 +50,35 @@ class _BrandApplicationPageState extends State<BrandApplicationPage> {
     'Sanayi ürünü',
     'Diğer',
   ];
+  @override
+  void initState() {
+    super.initState();
+
+    final user = FirebaseAuth.instance.currentUser;
+    final accountEmail = user?.email?.trim().toLowerCase();
+
+    if (user == null || accountEmail == null || accountEmail.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Marka başvurusu için önce hesap oluşturmalı veya giriş yapmalısınız.',
+            ),
+          ),
+        );
+
+        Navigator.of(context).pop();
+      });
+
+      return;
+    }
+
+    _emailController.text = accountEmail;
+  }
 
   @override
   void dispose() {
@@ -126,7 +156,7 @@ class _BrandApplicationPageState extends State<BrandApplicationPage> {
       _companyNameController.clear();
       _brandNameController.clear();
       _authorizedPersonController.clear();
-      _emailController.clear();
+
       _phoneController.clear();
       _taxNumberController.clear();
       _websiteController.clear();
@@ -365,24 +395,13 @@ class _BrandApplicationPageState extends State<BrandApplicationPage> {
 
                             final emailField = TextFormField(
                               controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
+                              readOnly: true,
                               decoration: const InputDecoration(
-                                labelText: 'E-posta adresi',
-                                prefixIcon: Icon(Icons.email_outlined),
+                                labelText: 'Hesap e-posta adresi',
+                                helperText:
+                                    'Başvuru bu MarkaKalkan hesabına bağlanacaktır.',
+                                prefixIcon: Icon(Icons.verified_user_outlined),
                               ),
-                              validator: (value) {
-                                final email = value?.trim() ?? '';
-
-                                if (email.isEmpty) {
-                                  return 'E-posta adresini girin.';
-                                }
-
-                                if (!email.contains('@')) {
-                                  return 'Geçerli bir e-posta adresi girin.';
-                                }
-
-                                return null;
-                              },
                             );
 
                             final phoneField = TextFormField(
