@@ -11,6 +11,7 @@ import 'package:markakalkan/features/auth/presentation/brand_account_creation_pa
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/ai_field_detectives_hub_page.dart';
+import 'package:markakalkan/features/detective/presentation/ai_field_operation_create_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_task_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_tasks_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_findings_page.dart';
@@ -61,6 +62,14 @@ abstract final class AppRouter {
   static Future<void> openDigitalDetectiveTask(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const DigitalDetectiveTaskPage()),
+    );
+  }
+
+  static Future<String?> openAiFieldOperationCreate(BuildContext context) {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => const AiFieldOperationCreatePage(),
+      ),
     );
   }
 

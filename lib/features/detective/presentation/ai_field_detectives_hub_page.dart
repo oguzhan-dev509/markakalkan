@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 class AiFieldDetectivesHubPage extends StatelessWidget {
@@ -139,7 +140,46 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const _AiFieldHeader(),
-                const SizedBox(height: 28),
+                const SizedBox(height: 22),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      final operationId =
+                          await AppRouter.openAiFieldOperationCreate(context);
+
+                      if (!context.mounted || operationId == null) {
+                        return;
+                      }
+
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Operasyon ve 12 ajan görevi oluşturuldu. '
+                              'Operasyon No: $operationId',
+                            ),
+                            duration: const Duration(seconds: 6),
+                          ),
+                        );
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MarkaKalkanTheme.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 16,
+                      ),
+                    ),
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text(
+                      'Yeni Operasyon Oluştur',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
                 const _OperationFlow(),
                 const SizedBox(height: 30),
                 const Text(
