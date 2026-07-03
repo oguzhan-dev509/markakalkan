@@ -18,6 +18,19 @@ class DigitalDetectiveFindingsPage extends StatelessWidget {
   final String brandName;
   final String productName;
 
+  static void showFindingDetails(
+    BuildContext context, {
+    required String findingId,
+    required Map<String, dynamic> data,
+  }) {
+    const DigitalDetectiveFindingsPage(
+      taskId: '',
+      taskName: '',
+      brandName: '',
+      productName: '',
+    )._showFindingDetails(context, findingId, data);
+  }
+
   CollectionReference<Map<String, dynamic>> get _findingsCollection {
     final user = FirebaseAuth.instance.currentUser;
 
@@ -412,6 +425,7 @@ class _FindingsHeader extends StatelessWidget {
   final String taskName;
   final String brandName;
   final String productName;
+
   final int findingCount;
 
   @override

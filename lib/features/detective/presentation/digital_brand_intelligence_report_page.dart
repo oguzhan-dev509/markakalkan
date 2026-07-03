@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/detective/presentation/digital_detective_findings_page.dart';
 
 class DigitalBrandIntelligenceReportPage extends StatefulWidget {
   const DigitalBrandIntelligenceReportPage({super.key});
@@ -899,6 +900,12 @@ class _PriorityFindingsCard extends StatelessWidget {
                 return Column(
                   children: [
                     ListTile(
+                      onTap: () =>
+                          DigitalDetectiveFindingsPage.showFindingDetails(
+                            context,
+                            findingId: finding.id,
+                            data: data,
+                          ),
                       leading: CircleAvatar(
                         backgroundColor: const Color(0xFFFDECEC),
                         foregroundColor: const Color(0xFFB42318),
@@ -917,14 +924,25 @@ class _PriorityFindingsCard extends StatelessWidget {
                         '${data['sellerName'] ?? 'Satıcı belirtilmedi'}\n'
                         '${finding.taskName}',
                       ),
-                      trailing: Text(
-                        _isHighRisk(data) ? 'Yüksek Risk' : 'Saha Önerisi',
-                        style: TextStyle(
-                          color: _isHighRisk(data)
-                              ? const Color(0xFFB42318)
-                              : MarkaKalkanTheme.blue,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _isHighRisk(data) ? 'Yüksek Risk' : 'Saha Önerisi',
+                            style: TextStyle(
+                              color: _isHighRisk(data)
+                                  ? const Color(0xFFB42318)
+                                  : MarkaKalkanTheme.blue,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.open_in_new_rounded,
+                            size: 19,
+                            color: MarkaKalkanTheme.blue,
+                          ),
+                        ],
                       ),
                     ),
                     if (index != findings.length - 1) const Divider(height: 1),
