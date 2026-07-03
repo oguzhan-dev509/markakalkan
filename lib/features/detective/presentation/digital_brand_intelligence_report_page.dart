@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/detective/data/digital_brand_intelligence_pdf_service.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_findings_page.dart';
 
 class DigitalBrandIntelligenceReportPage extends StatefulWidget {
@@ -23,6 +24,7 @@ class _DigitalBrandIntelligenceReportPageState
   String _selectedReviewStatus = 'all';
   String _selectedFieldRecommendation = 'all';
   RangeValues _interventionScoreRange = const RangeValues(0, 100);
+  bool _isExportingPdf = false;
 
   @override
   void initState() {
@@ -206,6 +208,254 @@ class _DigitalBrandIntelligenceReportPageState
     });
   }
 
+  List<String> _pdfActiveFilters() {
+    final filters = <String>[];
+
+    final riskLabel = switch (_selectedRisk) {
+      'high' => 'Yüksek risk',
+      'medium' => 'Orta risk',
+      'low' => 'Düşük risk',
+      'unknown' => 'İnceleniyor',
+      _ => '',
+    };
+
+    if (riskLabel.isNotEmpty) {
+      filters.add('Risk seviyesi: $riskLabel');
+    }
+
+    if (_selectedPlatform != 'all') {
+      filters.add('Platform: $_selectedPlatform');
+    }
+
+    if (_selectedCountry != 'all') {
+      filters.add('Ülke: $_selectedCountry');
+    }
+
+    if (_selectedCity != 'all') {
+      filters.add('Şehir: $_selectedCity');
+    }
+
+    final reviewLabel = switch (_selectedReviewStatus) {
+      'pending' => 'İnceleme bekliyor',
+      'confirmed' => 'Doğrulandı',
+      'unreviewed' => 'Durum girilmemiş',
+      _ => '',
+    };
+
+    if (reviewLabel.isNotEmpty) {
+      filters.add('Uzman incelemesi: $reviewLabel');
+    }
+
+    final fieldLabel = switch (_selectedFieldRecommendation) {
+      'recommended' => 'Saha incelemesi önerildi',
+      'not_recommended' => 'Saha incelemesi önerilmedi',
+      _ => '',
+    };
+
+    if (fieldLabel.isNotEmpty) {
+      filters.add('Saha önerisi: $fieldLabel');
+    }
+
+    if (_interventionScoreRange.start > 0 ||
+        _interventionScoreRange.end < 100) {
+      filters.add(
+        'Müdahale skoru: '
+        '${_interventionScoreRange.start.round()} - '
+        '${_interventionScoreRange.end.round()}',
+      );
+    }
+
+    if (filters.isEmpty) {
+      filters.add('Aktif filtre yok - tüm bulgular rapora dâhil edildi.');
+    }
+
+    return filters;
+  }
+
+  String _pdfRiskLabel(Map<String, dynamic> data) {
+    final risk = data['riskLevel']?.toString().trim().toLowerCase() ?? '';
+
+    return switch (risk) {
+      'high' || 'yüksek' => 'Yüksek',
+      'medium' || 'orta' => 'Orta',
+      'low' || 'düşük' => 'Düşük',
+      _ => 'İnceleniyor',
+    };
+  }
+
+  String _pdfReviewLabel(Map<String, dynamic> data) {
+    final status = data['reviewStatus']?.toString().trim().toLowerCase() ?? '';
+
+    return switch (status) {
+      'confirmed' || 'approved' => 'Doğrulandı',
+      'pending' || 'in_review' || 'reviewing' => 'İnceleme bekliyor',
+      _ => 'Durum girilmemiş',
+    };
+  }
+
+  String _pdfFindingTitle(_ReportFinding finding) {
+    final data = finding.data;
+
+    final candidates = [
+      data['listingTitle'],
+      data['pageTitle'],
+      data['productName'],
+      data['title'],
+    ];
+
+    for (final candidate in candidates) {
+      final value = candidate?.toString().trim() ?? '';
+
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+
+    return 'Dijital ihlâl bulgusu';
+  }
+
+  String _pdfFindingLocation(Map<String, dynamic> data) {
+    final city = data['city']?.toString().trim() ?? '';
+    final country = data['country']?.toString().trim() ?? '';
+
+    if (city.isNotEmpty && country.isNotEmpty) {
+      return '$city / $country';
+    }
+
+    if (city.isNotEmpty) {
+      return city;
+    }
+
+    if (country.isNotEmpty) {
+      return country;
+    }
+
+    return 'Konum belirtilmemiş';
+  }
+
+  String _pdfFindingPrice(Map<String, dynamic> data) {
+    final price = data['price'];
+
+    if (price is! num) {
+      return 'Fiyat yok';
+    }
+
+    final rawCurrency = data['currency']?.toString().trim().toUpperCase() ?? '';
+    final currency = rawCurrency.isEmpty ? 'TRY' : rawCurrency;
+
+    return '${price.toStringAsFixed(2)} $currency';
+  }
+
+  Future<void> _exportFilteredPdf() async {
+    if (_isExportingPdf) {
+      return;
+    }
+
+    setState(() {
+      _isExportingPdf = true;
+    });
+
+    try {
+      final baseReport = await _reportFuture;
+      final filteredFindings = _applyFilters(baseReport.allFindings);
+
+      final report = _BrandIntelligenceReport.fromData(
+        taskCount: baseReport.taskCount,
+        processedPageCount: baseReport.processedPageCount,
+        findings: filteredFindings,
+      );
+
+      final pdfData = DigitalBrandIntelligencePdfData(
+        generatedAt: DateTime.now(),
+        totalAvailableFindings: baseReport.allFindings.length,
+        filteredFindingCount: report.totalFindings,
+        activeFilters: _pdfActiveFilters(),
+        taskCount: report.taskCount,
+        processedPageCount: report.processedPageCount,
+        highRiskCount: report.highRiskCount,
+        mediumRiskCount: report.mediumRiskCount,
+        lowRiskCount: report.lowRiskCount,
+        unknownRiskCount: report.unknownRiskCount,
+        platformCount: report.platformCount,
+        uniqueSellerCount: report.uniqueSellerCount,
+        cityCount: report.cityCount,
+        fieldRecommendedCount: report.fieldRecommendedCount,
+        pendingReviewCount: report.pendingReviewCount,
+        confirmedCount: report.confirmedCount,
+        archivedEvidenceCount: report.archivedEvidenceCount,
+        completeEvidenceCount: report.completeEvidenceCount,
+        averageEvidenceCompletionPercent:
+            report.averageEvidenceCompletionPercent,
+        averageInterventionScore: report.averageInterventionScore,
+        highestInterventionScore: report.highestInterventionScore,
+        totalViolationSignals: report.totalViolationSignals,
+        sourceDistribution: report.sourceDistribution,
+        countryDistribution: report.countryDistribution,
+        cityDistribution: report.cityDistribution,
+        violationDistribution: report.violationDistribution.map(
+          (key, value) => MapEntry(_violationLabel(key), value),
+        ),
+        priceSummaries: report.priceSummaries
+            .map(
+              (summary) => DigitalBrandIntelligencePdfPriceSummary(
+                currency: summary.currency,
+                recordCount: summary.recordCount,
+                averagePrice: summary.averagePrice,
+                minimumPrice: summary.minimumPrice,
+                maximumPrice: summary.maximumPrice,
+                upTo500Count: summary.upTo500Count,
+                from500To1500Count: summary.from500To1500Count,
+                from1500To3000Count: summary.from1500To3000Count,
+                above3000Count: summary.above3000Count,
+              ),
+            )
+            .toList(),
+        priorityFindings: report.priorityFindings.map((finding) {
+          final data = finding.data;
+          final rawViolations = data['violationIds'];
+
+          final violations = rawViolations is List
+              ? rawViolations.whereType<String>().map(_violationLabel).toList()
+              : <String>[];
+
+          return DigitalBrandIntelligencePdfFinding(
+            title: _pdfFindingTitle(finding),
+            platform: data['sourcePlatform']?.toString().trim() ?? 'Bilinmiyor',
+            seller: data['sellerName']?.toString().trim() ?? 'Bilinmiyor',
+            riskLabel: _pdfRiskLabel(data),
+            reviewLabel: _pdfReviewLabel(data),
+            location: _pdfFindingLocation(data),
+            priceLabel: _pdfFindingPrice(data),
+            evidenceCompletionPercent: _evidenceCompletionPercent(data),
+            interventionScore: _interventionScore(data),
+            fieldRecommended: data['fieldRecommended'] == true,
+            violations: violations,
+            taskName: finding.taskName,
+          );
+        }).toList(),
+      );
+
+      await const DigitalBrandIntelligencePdfService().export(pdfData);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('PDF oluşturulamadı: $error'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExportingPdf = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -221,6 +471,17 @@ class _DigitalBrandIntelligenceReportPageState
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'PDF raporu oluştur',
+            onPressed: _isExportingPdf ? null : _exportFilteredPdf,
+            icon: _isExportingPdf
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: IconButton(
