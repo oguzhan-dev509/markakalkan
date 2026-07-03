@@ -260,6 +260,11 @@ class _DigitalBrandIntelligenceReportPageState
                     ),
                     const SizedBox(height: 14),
                     _StatusGrid(report: report),
+                    const SizedBox(height: 18),
+                    _ResponsiveTwoColumn(
+                      left: _EvidenceCompletionCard(report: report),
+                      right: _InterventionScoreCard(report: report),
+                    ),
                     const SizedBox(height: 28),
                     _SectionTitle(
                       title: 'Müdahale Öncelik Listesi',
@@ -282,6 +287,109 @@ class _DigitalBrandIntelligenceReportPageState
   }
 }
 
+bool _hasEvidenceText(dynamic value) {
+  return value?.toString().trim().isNotEmpty == true;
+}
+
+bool _hasValidHttpUrl(dynamic value) {
+  final uri = Uri.tryParse(value?.toString().trim() ?? '');
+
+  return uri != null &&
+      (uri.scheme == 'http' || uri.scheme == 'https') &&
+      uri.host.isNotEmpty;
+}
+
+bool _hasCapturedAt(dynamic value) {
+  if (value is Timestamp || value is DateTime) {
+    return true;
+  }
+
+  return _hasEvidenceText(value);
+}
+
+bool _isArchivedEvidence(Map<String, dynamic> data) {
+  final status = data['archiveStatus']?.toString().trim().toLowerCase() ?? '';
+
+  return status == 'archived' || status == 'completed';
+}
+
+bool _isConfirmedFinding(Map<String, dynamic> data) {
+  final status = data['reviewStatus']?.toString().trim().toLowerCase() ?? '';
+
+  return status == 'confirmed' || status == 'approved';
+}
+
+int _findingViolationCount(Map<String, dynamic> data) {
+  final violations = data['violationIds'];
+
+  if (violations is! List) {
+    return 0;
+  }
+
+  return violations.whereType<String>().where((value) {
+    return value.trim().isNotEmpty;
+  }).length;
+}
+
+int _evidenceCompletionPoints(Map<String, dynamic> data) {
+  var completed = 0;
+
+  if (_hasValidHttpUrl(data['sourceUrl'])) {
+    completed++;
+  }
+
+  if (_hasEvidenceText(data['pageTitle'])) {
+    completed++;
+  }
+
+  if (_hasCapturedAt(data['capturedAt'])) {
+    completed++;
+  }
+
+  if (_hasValidHttpUrl(data['screenshotUrl'])) {
+    completed++;
+  }
+
+  if (_hasEvidenceText(data['contentHash'])) {
+    completed++;
+  }
+
+  if (_isArchivedEvidence(data)) {
+    completed++;
+  }
+
+  return completed;
+}
+
+int _evidenceCompletionPercent(Map<String, dynamic> data) {
+  return ((_evidenceCompletionPoints(data) / 6) * 100).round();
+}
+
+int _interventionScore(Map<String, dynamic> data) {
+  var score = 0;
+
+  if (_isHighRisk(data)) {
+    score += 35;
+  }
+
+  if (data['fieldRecommended'] == true) {
+    score += 20;
+  }
+
+  if (_isConfirmedFinding(data)) {
+    score += 20;
+  }
+
+  if (_isArchivedEvidence(data)) {
+    score += 15;
+  }
+
+  final violationScore = _findingViolationCount(data) * 2;
+  score += violationScore > 10 ? 10 : violationScore;
+
+  return score.clamp(0, 100);
+}
+
 class _BrandIntelligenceReport {
   const _BrandIntelligenceReport({
     required this.taskCount,
@@ -298,6 +406,10 @@ class _BrandIntelligenceReport {
     required this.pendingReviewCount,
     required this.confirmedCount,
     required this.archivedEvidenceCount,
+    required this.completeEvidenceCount,
+    required this.averageEvidenceCompletionPercent,
+    required this.averageInterventionScore,
+    required this.highestInterventionScore,
     required this.priceRecordCount,
     required this.totalViolationSignals,
     required this.sourceDistribution,
@@ -328,11 +440,29 @@ class _BrandIntelligenceReport {
     var pendingReviewCount = 0;
     var confirmedCount = 0;
     var archivedEvidenceCount = 0;
+    var completeEvidenceCount = 0;
+    var totalEvidenceCompletionPercent = 0;
+    var totalInterventionScore = 0;
+    var highestInterventionScore = 0;
     var priceRecordCount = 0;
     var totalViolationSignals = 0;
 
     for (final finding in findings) {
       final data = finding.data;
+      final evidencePercent = _evidenceCompletionPercent(data);
+      final interventionScore = _interventionScore(data);
+
+      totalEvidenceCompletionPercent += evidencePercent;
+      totalInterventionScore += interventionScore;
+
+      if (evidencePercent == 100) {
+        completeEvidenceCount++;
+      }
+
+      if (interventionScore > highestInterventionScore) {
+        highestInterventionScore = interventionScore;
+      }
+
       final risk = data['riskLevel']?.toString().trim().toLowerCase() ?? '';
 
       switch (risk) {
@@ -415,6 +545,14 @@ class _BrandIntelligenceReport {
       }
     }
 
+    final averageEvidenceCompletionPercent = findings.isEmpty
+        ? 0
+        : (totalEvidenceCompletionPercent / findings.length).round();
+
+    final averageInterventionScore = findings.isEmpty
+        ? 0
+        : (totalInterventionScore / findings.length).round();
+
     final priceSummaries = pricesByCurrency.entries.map((entry) {
       final prices = [...entry.value]..sort();
       final total = prices.fold<double>(
@@ -448,11 +586,12 @@ class _BrandIntelligenceReport {
               risk == 'yüksek' ||
               finding.data['fieldRecommended'] == true;
         }).toList()..sort((a, b) {
-          final aHigh = _isHighRisk(a.data) ? 1 : 0;
-          final bHigh = _isHighRisk(b.data) ? 1 : 0;
+          final scoreComparison = _interventionScore(
+            b.data,
+          ).compareTo(_interventionScore(a.data));
 
-          if (aHigh != bHigh) {
-            return bHigh.compareTo(aHigh);
+          if (scoreComparison != 0) {
+            return scoreComparison;
           }
 
           return _timestampMilliseconds(
@@ -475,6 +614,10 @@ class _BrandIntelligenceReport {
       pendingReviewCount: pendingReviewCount,
       confirmedCount: confirmedCount,
       archivedEvidenceCount: archivedEvidenceCount,
+      completeEvidenceCount: completeEvidenceCount,
+      averageEvidenceCompletionPercent: averageEvidenceCompletionPercent,
+      averageInterventionScore: averageInterventionScore,
+      highestInterventionScore: highestInterventionScore,
       priceRecordCount: priceRecordCount,
       totalViolationSignals: totalViolationSignals,
       sourceDistribution: _sortMap(sourceCounts),
@@ -500,6 +643,10 @@ class _BrandIntelligenceReport {
   final int pendingReviewCount;
   final int confirmedCount;
   final int archivedEvidenceCount;
+  final int completeEvidenceCount;
+  final int averageEvidenceCompletionPercent;
+  final int averageInterventionScore;
+  final int highestInterventionScore;
   final int priceRecordCount;
   final int totalViolationSignals;
   final Map<String, int> sourceDistribution;
@@ -652,6 +799,16 @@ class _MetricGrid extends StatelessWidget {
         'Fiyat Kaydı',
         '${report.priceRecordCount}',
         Icons.payments_outlined,
+      ),
+      _MetricData(
+        'Delil Tamamlama',
+        '%${report.averageEvidenceCompletionPercent}',
+        Icons.fact_check_outlined,
+      ),
+      _MetricData(
+        'Ort. Müdahale Skoru',
+        '${report.averageInterventionScore}/100',
+        Icons.speed_outlined,
       ),
     ];
 
@@ -1057,6 +1214,149 @@ class _PriceSummaryRow extends StatelessWidget {
   }
 }
 
+class _EvidenceCompletionCard extends StatelessWidget {
+  const _EvidenceCompletionCard({required this.report});
+
+  final _BrandIntelligenceReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = report.averageEvidenceCompletionPercent / 100;
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE0E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.fact_check_outlined, color: MarkaKalkanTheme.teal),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Delil Tamamlama Oranı',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            '%${report.averageEvidenceCompletionPercent}',
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(
+            value: ratio.clamp(0.0, 1.0),
+            minHeight: 10,
+            borderRadius: BorderRadius.circular(99),
+            backgroundColor: const Color(0xFFE9EEF1),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Tam delil paketi: ${report.completeEvidenceCount} / '
+            '${report.totalFindings}',
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Kaynak bağlantısı, sayfa başlığı, yakalama tarihi, ekran '
+            'görüntüsü, içerik hash’i ve arşiv durumu birlikte ölçülür.',
+            style: TextStyle(color: Color(0xFF687580), height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InterventionScoreCard extends StatelessWidget {
+  const _InterventionScoreCard({required this.report});
+
+  final _BrandIntelligenceReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = report.averageInterventionScore / 100;
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE0E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.speed_outlined, color: MarkaKalkanTheme.teal),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Müdahale Skoru',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            '${report.averageInterventionScore}/100',
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(
+            value: ratio.clamp(0.0, 1.0),
+            minHeight: 10,
+            borderRadius: BorderRadius.circular(99),
+            backgroundColor: const Color(0xFFE9EEF1),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'En yüksek bulgu skoru: ${report.highestInterventionScore}/100',
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Risk seviyesi, saha önerisi, uzman doğrulaması, arşivlenmiş '
+            'delil ve ihlal sinyalleri birlikte değerlendirilir.',
+            style: TextStyle(color: Color(0xFF687580), height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatusGrid extends StatelessWidget {
   const _StatusGrid({required this.report});
 
@@ -1111,6 +1411,317 @@ class _StatusGrid extends StatelessWidget {
   }
 }
 
+class _InterventionScorePart {
+  const _InterventionScorePart({required this.label, required this.points});
+
+  final String label;
+  final int points;
+}
+
+class _EvidenceChecklistItem {
+  const _EvidenceChecklistItem({required this.label, required this.completed});
+
+  final String label;
+  final bool completed;
+}
+
+List<_InterventionScorePart> _interventionScoreParts(
+  Map<String, dynamic> data,
+) {
+  final violationCount = _findingViolationCount(data);
+  final violationPoints = (violationCount * 2).clamp(0, 10);
+
+  return [
+    _InterventionScorePart(
+      label: 'Yüksek risk',
+      points: _isHighRisk(data) ? 35 : 0,
+    ),
+    _InterventionScorePart(
+      label: 'Saha incelemesi önerisi',
+      points: data['fieldRecommended'] == true ? 20 : 0,
+    ),
+    _InterventionScorePart(
+      label: 'Uzman doğrulaması',
+      points: _isConfirmedFinding(data) ? 20 : 0,
+    ),
+    _InterventionScorePart(
+      label: 'Arşivlenmiş delil',
+      points: _isArchivedEvidence(data) ? 15 : 0,
+    ),
+    _InterventionScorePart(
+      label: '$violationCount ihlal sinyali',
+      points: violationPoints,
+    ),
+  ];
+}
+
+List<_EvidenceChecklistItem> _evidenceChecklist(Map<String, dynamic> data) {
+  return [
+    _EvidenceChecklistItem(
+      label: 'Kaynak bağlantısı',
+      completed: _hasValidHttpUrl(data['sourceUrl']),
+    ),
+    _EvidenceChecklistItem(
+      label: 'Sayfa başlığı',
+      completed: _hasEvidenceText(data['pageTitle']),
+    ),
+    _EvidenceChecklistItem(
+      label: 'Yakalama tarihi',
+      completed: _hasCapturedAt(data['capturedAt']),
+    ),
+    _EvidenceChecklistItem(
+      label: 'Ekran görüntüsü',
+      completed: _hasValidHttpUrl(data['screenshotUrl']),
+    ),
+    _EvidenceChecklistItem(
+      label: 'İçerik hash’i',
+      completed: _hasEvidenceText(data['contentHash']),
+    ),
+    _EvidenceChecklistItem(
+      label: 'Delil arşivleme',
+      completed: _isArchivedEvidence(data),
+    ),
+  ];
+}
+
+String _interventionReadinessLabel(int score) {
+  if (score >= 85) {
+    return 'Acil Müdahale';
+  }
+
+  if (score >= 70) {
+    return 'Müdahaleye Hazır';
+  }
+
+  if (score >= 40) {
+    return 'İnceleme Önceliği';
+  }
+
+  return 'İzleme';
+}
+
+void _showInterventionDetails(BuildContext context, Map<String, dynamic> data) {
+  final score = _interventionScore(data);
+  final evidencePercent = _evidenceCompletionPercent(data);
+  final scoreParts = _interventionScoreParts(data);
+  final checklist = _evidenceChecklist(data);
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.analytics_outlined, color: MarkaKalkanTheme.teal),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Skor ve Delil Ayrıntısı',
+                style: TextStyle(
+                  color: MarkaKalkanTheme.navy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data['productTitle']?.toString().trim().isNotEmpty == true
+                      ? data['productTitle'].toString()
+                      : 'Dijital bulgu',
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F7F9),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Müdahale Skoru',
+                        style: TextStyle(
+                          color: Color(0xFF687580),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            '$score/100',
+                            style: const TextStyle(
+                              color: MarkaKalkanTheme.navy,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE5F3F1),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              _interventionReadinessLabel(score),
+                              style: const TextStyle(
+                                color: MarkaKalkanTheme.teal,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                        value: (score / 100).clamp(0.0, 1.0),
+                        minHeight: 9,
+                        borderRadius: BorderRadius.circular(99),
+                        backgroundColor: const Color(0xFFDCE5E9),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Skor Bileşenleri',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...scoreParts.map(
+                  (part) => Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            part.label,
+                            style: const TextStyle(
+                              color: Color(0xFF4F5D68),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '+${part.points}',
+                          style: TextStyle(
+                            color: part.points > 0
+                                ? MarkaKalkanTheme.teal
+                                : const Color(0xFF98A2AA),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 30),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Delil Kontrol Listesi',
+                        style: TextStyle(
+                          color: MarkaKalkanTheme.navy,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '%$evidencePercent',
+                      style: const TextStyle(
+                        color: MarkaKalkanTheme.teal,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: (evidencePercent / 100).clamp(0.0, 1.0),
+                  minHeight: 9,
+                  borderRadius: BorderRadius.circular(99),
+                  backgroundColor: const Color(0xFFE9EEF1),
+                ),
+                const SizedBox(height: 16),
+                ...checklist.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Icon(
+                          item.completed
+                              ? Icons.check_circle_rounded
+                              : Icons.cancel_rounded,
+                          color: item.completed
+                              ? const Color(0xFF16866F)
+                              : const Color(0xFFB42318),
+                          size: 21,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            item.label,
+                            style: TextStyle(
+                              color: item.completed
+                                  ? MarkaKalkanTheme.navy
+                                  : const Color(0xFF687580),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          item.completed ? 'Tamamlandı' : 'Eksik',
+                          style: TextStyle(
+                            color: item.completed
+                                ? const Color(0xFF16866F)
+                                : const Color(0xFFB42318),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Kapat'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 class _PriorityFindingsCard extends StatelessWidget {
   const _PriorityFindingsCard({required this.findings});
 
@@ -1141,6 +1752,8 @@ class _PriorityFindingsCard extends StatelessWidget {
                 return Column(
                   children: [
                     ListTile(
+                      isThreeLine: true,
+                      minVerticalPadding: 12,
                       onTap: () =>
                           DigitalDetectiveFindingsPage.showFindingDetails(
                             context,
@@ -1160,10 +1773,34 @@ class _PriorityFindingsCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      subtitle: Text(
-                        '${data['sourcePlatform'] ?? 'Kaynak belirtilmedi'} · '
-                        '${data['sellerName'] ?? 'Satıcı belirtilmedi'}\n'
-                        '${finding.taskName}',
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${data['sourcePlatform'] ?? 'Kaynak belirtilmedi'} · '
+                            '${data['sellerName'] ?? 'Satıcı belirtilmedi'}\n'
+                            '${finding.taskName} · '
+                            'Müdahale skoru: ${_interventionScore(data)}/100',
+                          ),
+                          const SizedBox(height: 5),
+                          TextButton.icon(
+                            onPressed: () =>
+                                _showInterventionDetails(context, data),
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 34),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            icon: const Icon(
+                              Icons.analytics_outlined,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'Skor ve delil ayrıntısını gör',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
