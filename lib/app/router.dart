@@ -10,6 +10,7 @@ import 'package:markakalkan/features/verification/presentation/qr_scanner_page.d
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
+import 'package:markakalkan/features/detective/presentation/ai_field_detectives_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_task_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_tasks_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_findings_page.dart';
@@ -60,6 +61,12 @@ abstract final class AppRouter {
   static Future<void> openDigitalDetectiveTask(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const DigitalDetectiveTaskPage()),
+    );
+  }
+
+  static Future<void> openAiFieldDetectivesHub(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const AiFieldDetectivesHubPage()),
     );
   }
 

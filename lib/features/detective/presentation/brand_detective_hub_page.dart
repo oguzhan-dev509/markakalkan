@@ -39,14 +39,14 @@ class BrandDetectiveHubPage extends StatelessWidget {
     ),
     _DetectiveModule(
       id: 'field',
-      title: 'Saha Dedektifi',
+      title: 'Yapay Zekâ Saha Dedektifleri',
       description:
-          'Mağaza, pazar, fuar ve izinli saha noktalarında inceleme '
-          'görevlerini oluşturun, yetkili saha görevlilerine atayın ve '
-          'görev sürecini takip edin.',
-      icon: Icons.location_searching_outlined,
-      status: _DetectiveStatus.soon,
-      actionText: 'Yakında',
+          'On iki uzman görev birimiyle dijital sahayı tarayın; değişimleri, '
+          'görselleri, metinleri, satıcı bağlantılarını, ağları, fiyat '
+          'anomalilerini ve delil bütünlüğünü birlikte analiz edin.',
+      icon: Icons.psychology_alt_outlined,
+      status: _DetectiveStatus.pilot,
+      actionText: 'Ajan Merkezini Aç',
     ),
   ];
 
@@ -242,13 +242,7 @@ class _DetectiveModuleCard extends StatelessWidget {
         AppRouter.openDigitalBrandIntelligenceReport(context);
         return;
       case 'field':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Saha Dedektifi hizmeti yakında kullanıma açılacaktır.',
-            ),
-          ),
-        );
+        AppRouter.openAiFieldDetectivesHub(context);
         return;
     }
   }
