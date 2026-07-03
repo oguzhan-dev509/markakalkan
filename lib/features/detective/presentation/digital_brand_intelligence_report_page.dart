@@ -16,6 +16,14 @@ class _DigitalBrandIntelligenceReportPageState
     extends State<DigitalBrandIntelligenceReportPage> {
   late Future<_BrandIntelligenceReport> _reportFuture;
 
+  String _selectedRisk = 'all';
+  String _selectedPlatform = 'all';
+  String _selectedCountry = 'all';
+  String _selectedCity = 'all';
+  String _selectedReviewStatus = 'all';
+  String _selectedFieldRecommendation = 'all';
+  RangeValues _interventionScoreRange = const RangeValues(0, 100);
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +86,126 @@ class _DigitalBrandIntelligenceReportPageState
     });
   }
 
+  List<String> _uniqueFindingValues(
+    List<_ReportFinding> findings,
+    String field,
+  ) {
+    final values =
+        findings
+            .map((finding) => finding.data[field]?.toString().trim() ?? '')
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    return values;
+  }
+
+  bool _matchesRiskFilter(Map<String, dynamic> data) {
+    if (_selectedRisk == 'all') {
+      return true;
+    }
+
+    final risk = data['riskLevel']?.toString().trim().toLowerCase() ?? '';
+
+    return switch (_selectedRisk) {
+      'high' => risk == 'high' || risk == 'yüksek',
+      'medium' => risk == 'medium' || risk == 'orta',
+      'low' => risk == 'low' || risk == 'düşük',
+      'unknown' =>
+        risk.isEmpty ||
+            !{
+              'high',
+              'yüksek',
+              'medium',
+              'orta',
+              'low',
+              'düşük',
+            }.contains(risk),
+      _ => true,
+    };
+  }
+
+  bool _matchesReviewFilter(Map<String, dynamic> data) {
+    if (_selectedReviewStatus == 'all') {
+      return true;
+    }
+
+    final status = data['reviewStatus']?.toString().trim().toLowerCase() ?? '';
+
+    return switch (_selectedReviewStatus) {
+      'pending' =>
+        status == 'pending' || status == 'in_review' || status == 'reviewing',
+      'confirmed' => status == 'confirmed' || status == 'approved',
+      'unreviewed' => status.isEmpty,
+      _ => true,
+    };
+  }
+
+  bool _matchesFieldRecommendation(Map<String, dynamic> data) {
+    return switch (_selectedFieldRecommendation) {
+      'recommended' => data['fieldRecommended'] == true,
+      'not_recommended' => data['fieldRecommended'] != true,
+      _ => true,
+    };
+  }
+
+  bool _matchesTextFilter(
+    Map<String, dynamic> data,
+    String field,
+    String selectedValue,
+  ) {
+    if (selectedValue == 'all') {
+      return true;
+    }
+
+    return data[field]?.toString().trim() == selectedValue;
+  }
+
+  bool _matchesInterventionScore(Map<String, dynamic> data) {
+    final score = _interventionScore(data);
+
+    return score >= _interventionScoreRange.start.round() &&
+        score <= _interventionScoreRange.end.round();
+  }
+
+  List<_ReportFinding> _applyFilters(List<_ReportFinding> findings) {
+    return findings.where((finding) {
+      final data = finding.data;
+
+      return _matchesRiskFilter(data) &&
+          _matchesTextFilter(data, 'sourcePlatform', _selectedPlatform) &&
+          _matchesTextFilter(data, 'country', _selectedCountry) &&
+          _matchesTextFilter(data, 'city', _selectedCity) &&
+          _matchesReviewFilter(data) &&
+          _matchesFieldRecommendation(data) &&
+          _matchesInterventionScore(data);
+    }).toList();
+  }
+
+  bool get _hasActiveFilters {
+    return _selectedRisk != 'all' ||
+        _selectedPlatform != 'all' ||
+        _selectedCountry != 'all' ||
+        _selectedCity != 'all' ||
+        _selectedReviewStatus != 'all' ||
+        _selectedFieldRecommendation != 'all' ||
+        _interventionScoreRange.start > 0 ||
+        _interventionScoreRange.end < 100;
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _selectedRisk = 'all';
+      _selectedPlatform = 'all';
+      _selectedCountry = 'all';
+      _selectedCity = 'all';
+      _selectedReviewStatus = 'all';
+      _selectedFieldRecommendation = 'all';
+      _interventionScoreRange = const RangeValues(0, 100);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,7 +251,27 @@ class _DigitalBrandIntelligenceReportPageState
             return const Center(child: CircularProgressIndicator());
           }
 
-          final report = snapshot.data!;
+          final baseReport = snapshot.data!;
+          final filteredFindings = _applyFilters(baseReport.allFindings);
+
+          final report = _BrandIntelligenceReport.fromData(
+            taskCount: baseReport.taskCount,
+            processedPageCount: baseReport.processedPageCount,
+            findings: filteredFindings,
+          );
+
+          final platformOptions = _uniqueFindingValues(
+            baseReport.allFindings,
+            'sourcePlatform',
+          );
+          final countryOptions = _uniqueFindingValues(
+            baseReport.allFindings,
+            'country',
+          );
+          final cityOptions = _uniqueFindingValues(
+            baseReport.allFindings,
+            'city',
+          );
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -134,6 +282,47 @@ class _DigitalBrandIntelligenceReportPageState
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _ReportHeader(report: report),
+                    const SizedBox(height: 18),
+                    _IntelligenceFilterPanel(
+                      totalFindingCount: baseReport.allFindings.length,
+                      filteredFindingCount: filteredFindings.length,
+                      selectedRisk: _selectedRisk,
+                      selectedPlatform: _selectedPlatform,
+                      selectedCountry: _selectedCountry,
+                      selectedCity: _selectedCity,
+                      selectedReviewStatus: _selectedReviewStatus,
+                      selectedFieldRecommendation: _selectedFieldRecommendation,
+                      interventionScoreRange: _interventionScoreRange,
+                      platformOptions: platformOptions,
+                      countryOptions: countryOptions,
+                      cityOptions: cityOptions,
+                      hasActiveFilters: _hasActiveFilters,
+                      onRiskChanged: (value) {
+                        setState(() => _selectedRisk = value);
+                      },
+                      onPlatformChanged: (value) {
+                        setState(() => _selectedPlatform = value);
+                      },
+                      onCountryChanged: (value) {
+                        setState(() {
+                          _selectedCountry = value;
+                          _selectedCity = 'all';
+                        });
+                      },
+                      onCityChanged: (value) {
+                        setState(() => _selectedCity = value);
+                      },
+                      onReviewStatusChanged: (value) {
+                        setState(() => _selectedReviewStatus = value);
+                      },
+                      onFieldRecommendationChanged: (value) {
+                        setState(() => _selectedFieldRecommendation = value);
+                      },
+                      onScoreRangeChanged: (value) {
+                        setState(() => _interventionScoreRange = value);
+                      },
+                      onClearFilters: _clearFilters,
+                    ),
                     const SizedBox(height: 24),
                     _SectionTitle(
                       title: 'Yönetici Özeti',
@@ -418,6 +607,7 @@ class _BrandIntelligenceReport {
     required this.violationDistribution,
     required this.priceSummaries,
     required this.priorityFindings,
+    required this.allFindings,
   });
 
   factory _BrandIntelligenceReport.fromData({
@@ -626,6 +816,7 @@ class _BrandIntelligenceReport {
       violationDistribution: _sortMap(violationCounts),
       priceSummaries: priceSummaries,
       priorityFindings: priorityFindings.take(10).toList(),
+      allFindings: List.unmodifiable(findings),
     );
   }
 
@@ -655,6 +846,7 @@ class _BrandIntelligenceReport {
   final Map<String, int> violationDistribution;
   final List<_CurrencyPriceSummary> priceSummaries;
   final List<_ReportFinding> priorityFindings;
+  final List<_ReportFinding> allFindings;
 }
 
 class _CurrencyPriceSummary {
@@ -749,6 +941,326 @@ class _ReportHeader extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IntelligenceFilterPanel extends StatelessWidget {
+  const _IntelligenceFilterPanel({
+    required this.totalFindingCount,
+    required this.filteredFindingCount,
+    required this.selectedRisk,
+    required this.selectedPlatform,
+    required this.selectedCountry,
+    required this.selectedCity,
+    required this.selectedReviewStatus,
+    required this.selectedFieldRecommendation,
+    required this.interventionScoreRange,
+    required this.platformOptions,
+    required this.countryOptions,
+    required this.cityOptions,
+    required this.hasActiveFilters,
+    required this.onRiskChanged,
+    required this.onPlatformChanged,
+    required this.onCountryChanged,
+    required this.onCityChanged,
+    required this.onReviewStatusChanged,
+    required this.onFieldRecommendationChanged,
+    required this.onScoreRangeChanged,
+    required this.onClearFilters,
+  });
+
+  final int totalFindingCount;
+  final int filteredFindingCount;
+  final String selectedRisk;
+  final String selectedPlatform;
+  final String selectedCountry;
+  final String selectedCity;
+  final String selectedReviewStatus;
+  final String selectedFieldRecommendation;
+  final RangeValues interventionScoreRange;
+  final List<String> platformOptions;
+  final List<String> countryOptions;
+  final List<String> cityOptions;
+  final bool hasActiveFilters;
+  final ValueChanged<String> onRiskChanged;
+  final ValueChanged<String> onPlatformChanged;
+  final ValueChanged<String> onCountryChanged;
+  final ValueChanged<String> onCityChanged;
+  final ValueChanged<String> onReviewStatusChanged;
+  final ValueChanged<String> onFieldRecommendationChanged;
+  final ValueChanged<RangeValues> onScoreRangeChanged;
+  final VoidCallback onClearFilters;
+
+  List<DropdownMenuItem<String>> _items(String allLabel, List<String> values) {
+    return [
+      DropdownMenuItem(value: 'all', child: Text(allLabel)),
+      ...values.map(
+        (value) => DropdownMenuItem(value: value, child: Text(value)),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(19),
+        border: Border.all(color: const Color(0xFFDCE5EA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.filter_alt_outlined,
+                color: MarkaKalkanTheme.teal,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Rapor Filtreleri',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F6F4),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  '$filteredFindingCount / $totalFindingCount bulgu',
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.teal,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (hasActiveFilters) ...[
+                const SizedBox(width: 10),
+                TextButton.icon(
+                  onPressed: onClearFilters,
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: const Text('Filtreleri Temizle'),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth < 650
+                  ? constraints.maxWidth
+                  : constraints.maxWidth < 1050
+                  ? (constraints.maxWidth - 14) / 2
+                  : (constraints.maxWidth - 28) / 3;
+
+              return Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: [
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedRisk,
+                      decoration: const InputDecoration(
+                        labelText: 'Risk seviyesi',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'all',
+                          child: Text('Tüm risk seviyeleri'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'high',
+                          child: Text('Yüksek risk'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'medium',
+                          child: Text('Orta risk'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'low',
+                          child: Text('Düşük risk'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'unknown',
+                          child: Text('İnceleniyor'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          onRiskChanged(value);
+                        }
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedPlatform,
+                      decoration: const InputDecoration(
+                        labelText: 'Platform',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _items('Tüm platformlar', platformOptions),
+                      onChanged: (value) {
+                        if (value != null) {
+                          onPlatformChanged(value);
+                        }
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedCountry,
+                      decoration: const InputDecoration(
+                        labelText: 'Ülke',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _items('Tüm ülkeler', countryOptions),
+                      onChanged: (value) {
+                        if (value != null) {
+                          onCountryChanged(value);
+                        }
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedCity,
+                      decoration: const InputDecoration(
+                        labelText: 'Şehir',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _items('Tüm şehirler', cityOptions),
+                      onChanged: (value) {
+                        if (value != null) {
+                          onCityChanged(value);
+                        }
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedReviewStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Uzman incelemesi',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'all',
+                          child: Text('Tüm inceleme durumları'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pending',
+                          child: Text('İnceleme bekliyor'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'confirmed',
+                          child: Text('Doğrulandı'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'unreviewed',
+                          child: Text('Durum girilmemiş'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          onReviewStatusChanged(value);
+                        }
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: selectedFieldRecommendation,
+                      decoration: const InputDecoration(
+                        labelText: 'Saha önerisi',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'all',
+                          child: Text('Tüm saha durumları'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'recommended',
+                          child: Text('Saha incelemesi önerildi'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'not_recommended',
+                          child: Text('Saha incelemesi önerilmedi'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          onFieldRecommendationChanged(value);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Icon(
+                Icons.speed_outlined,
+                size: 20,
+                color: MarkaKalkanTheme.teal,
+              ),
+              const SizedBox(width: 9),
+              const Text(
+                'Müdahale skoru',
+                style: TextStyle(
+                  color: MarkaKalkanTheme.navy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${interventionScoreRange.start.round()} – '
+                '${interventionScoreRange.end.round()}',
+                style: const TextStyle(
+                  color: MarkaKalkanTheme.teal,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          RangeSlider(
+            values: interventionScoreRange,
+            min: 0,
+            max: 100,
+            divisions: 20,
+            labels: RangeLabels(
+              interventionScoreRange.start.round().toString(),
+              interventionScoreRange.end.round().toString(),
+            ),
+            onChanged: onScoreRangeChanged,
           ),
         ],
       ),
