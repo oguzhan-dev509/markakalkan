@@ -75,7 +75,9 @@ class CorporateHubPage extends StatelessWidget {
       id: 'cases',
       title: 'Vaka ve Delil Merkezi',
       description:
-          'Fotoğraf, fatura, numune, satıcı ve değiştirilemez delil kayıtlarını yönetin.',
+          'Fotoğraf, fiş, ürün kodu, numune, konum ve tarih kayıtlarını '
+          'görev ve vaka bazında güvenli biçimde yönetin; delil '
+          'bütünlüğünü ve işlem geçmişini koruyun.',
       icon: Icons.folder_copy_outlined,
       status: _ModuleStatus.soon,
     ),
@@ -83,7 +85,9 @@ class CorporateHubPage extends StatelessWidget {
       id: 'legal',
       title: 'Müdahale ve Hukuk',
       description:
-          'İhlal bildirimi, kaldırma talebi, ihtar ve hukuki süreçleri takip edin.',
+          'Doğrulanmış ihlalleri marka vekiline veya hukuk bürosuna '
+          'aktarın; platform şikâyetlerini, kaldırma taleplerini ve '
+          'resmî süreçleri takip edin.',
       icon: Icons.gavel_outlined,
       status: _ModuleStatus.soon,
     ),
@@ -306,14 +310,16 @@ class _CorporateModuleCard extends StatelessWidget {
         AppRouter.openBrandOperations(context);
         return;
       case 'detective':
-        AppRouter.openProductVerification(context);
+        AppRouter.openBrandDetectiveHub(context);
         return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '${module.title} merkezi ${module.status.label.toLowerCase()} durumundadır.',
+          module.status == _ModuleStatus.soon
+              ? '${module.title} modülü yakında kullanıma açılacaktır.'
+              : '${module.title} merkezi ${module.status.label.toLowerCase()} durumundadır.',
         ),
       ),
     );
@@ -387,19 +393,21 @@ class _CorporateModuleCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 22),
-                    const Row(
+                    Row(
                       children: [
                         Expanded(
                           child: Text(
-                            'Merkezi Aç',
-                            style: TextStyle(
+                            module.status == _ModuleStatus.soon
+                                ? 'Yakında'
+                                : 'Merkezi Aç',
+                            style: const TextStyle(
                               color: MarkaKalkanTheme.blue,
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
-                        Icon(
+                        const Icon(
                           Icons.arrow_forward_rounded,
                           color: MarkaKalkanTheme.blue,
                         ),

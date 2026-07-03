@@ -9,12 +9,64 @@ import 'package:markakalkan/features/verification/presentation/product_verificat
 import 'package:markakalkan/features/verification/presentation/qr_scanner_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
+import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
+import 'package:markakalkan/features/detective/presentation/digital_detective_task_page.dart';
+import 'package:markakalkan/features/detective/presentation/digital_detective_tasks_page.dart';
+import 'package:markakalkan/features/detective/presentation/digital_detective_findings_page.dart';
+import 'package:markakalkan/features/detective/presentation/digital_brand_intelligence_report_page.dart';
 
 abstract final class AppRouter {
   static Future<void> openBrandLogin(BuildContext context) {
     return Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const BrandLoginPage()));
+  }
+
+  static Future<void> openDigitalDetectiveTasks(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DigitalDetectiveTasksPage(),
+      ),
+    );
+  }
+
+  static Future<void> openDigitalDetectiveFindings(
+    BuildContext context, {
+    required String taskId,
+    required String taskName,
+    required String brandName,
+    required String productName,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DigitalDetectiveFindingsPage(
+          taskId: taskId,
+          taskName: taskName,
+          brandName: brandName,
+          productName: productName,
+        ),
+      ),
+    );
+  }
+
+  static Future<void> openDigitalBrandIntelligenceReport(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DigitalBrandIntelligenceReportPage(),
+      ),
+    );
+  }
+
+  static Future<void> openDigitalDetectiveTask(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const DigitalDetectiveTaskPage()),
+    );
+  }
+
+  static Future<void> openBrandDetectiveHub(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const BrandDetectiveHubPage()),
+    );
   }
 
   static Future<void> openBrandAccountCreation(BuildContext context) {

@@ -268,6 +268,132 @@ match /brands/{brandUid}/productionBatches/{batchId} {
       && request.auth.uid == brandUid
       && resource.data.ownerUid == request.auth.uid;
 }
+match /brands/{brandUid}/digitalDetectiveTasks/{taskId} {
+  allow read: if request.auth != null
+      && request.auth.uid == brandUid;
+
+  allow create: if request.auth != null
+      && request.auth.uid == brandUid
+      && request.resource.data.keys().hasAll([
+        'taskName',
+        'brandName',
+        'productName',
+        'categoryId',
+        'subcategory',
+        'violationIds',
+        'sources',
+        'searchTerms',
+        'excludedTerms',
+        'countries',
+        'cities',
+        'minimumPrice',
+        'maximumPrice',
+        'currency',
+        'frequency',
+        'riskLevel',
+        'startDate',
+        'endDate',
+        'status',
+        'ownerUid',
+        'ownerEmail',
+        'resultCount',
+        'processedCount',
+        'createdAt',
+        'updatedAt'
+      ])
+      && request.resource.data.keys().hasOnly([
+        'taskName',
+        'brandName',
+        'productName',
+        'categoryId',
+        'subcategory',
+        'violationIds',
+        'sources',
+        'searchTerms',
+        'excludedTerms',
+        'countries',
+        'cities',
+        'minimumPrice',
+        'maximumPrice',
+        'currency',
+        'frequency',
+        'riskLevel',
+        'startDate',
+        'endDate',
+        'status',
+        'ownerUid',
+        'ownerEmail',
+        'resultCount',
+        'processedCount',
+        'createdAt',
+        'updatedAt'
+      ])
+      && request.resource.data.ownerUid == request.auth.uid
+      && request.resource.data.taskName is string
+      && request.resource.data.taskName.size() >= 2
+      && request.resource.data.taskName.size() <= 180
+      && request.resource.data.brandName is string
+      && request.resource.data.brandName.size() >= 2
+      && request.resource.data.brandName.size() <= 160
+      && request.resource.data.productName is string
+      && request.resource.data.productName.size() >= 2
+      && request.resource.data.productName.size() <= 240
+      && request.resource.data.categoryId is string
+      && request.resource.data.categoryId.size() > 0
+      && (
+        request.resource.data.subcategory == null
+        || request.resource.data.subcategory is string
+      )
+      && request.resource.data.violationIds is list
+      && request.resource.data.violationIds.size() > 0
+      && request.resource.data.sources is list
+      && request.resource.data.sources.size() > 0
+      && request.resource.data.searchTerms is list
+      && request.resource.data.excludedTerms is list
+      && request.resource.data.countries is list
+      && request.resource.data.countries.size() > 0
+      && request.resource.data.cities is list
+      && (
+        request.resource.data.minimumPrice == null
+        || request.resource.data.minimumPrice is number
+      )
+      && (
+        request.resource.data.maximumPrice == null
+        || request.resource.data.maximumPrice is number
+      )
+      && request.resource.data.currency is string
+      && request.resource.data.frequency is string
+      && request.resource.data.riskLevel is string
+      && request.resource.data.startDate is timestamp
+      && request.resource.data.endDate is timestamp
+      && request.resource.data.endDate >= request.resource.data.startDate
+      && request.resource.data.status == 'queued'
+      && (
+        request.resource.data.ownerEmail == null
+        || request.resource.data.ownerEmail is string
+      )
+      && request.resource.data.resultCount == 0
+      && request.resource.data.processedCount == 0
+      && request.resource.data.createdAt == request.time
+      && request.resource.data.updatedAt == request.time;
+
+  // Görev sonuçlarını ileride n8n/Admin SDK güncelleyecek.
+  allow update: if false;
+
+  allow delete: if request.auth != null
+      && request.auth.uid == brandUid
+      && resource.data.ownerUid == request.auth.uid;
+
+  match /findings/{findingId} {
+    // Marka hesabı yalnız kendi Dijital Dedektif bulgularını okuyabilir.
+    allow read: if request.auth != null
+        && request.auth.uid == brandUid;
+
+    // Bulgular yalnız güvenilir sunucu servisleriyle yazılır.
+    allow create, update, delete: if false;
+  }
+}
+
 match /productCodes/{codeId} {
   // Tüketici yalnız bildiği tekil kodu doğrudan sorgulayabilir.
   // Tüm kod koleksiyonu herkese açık şekilde listelenemez.
@@ -428,3 +554,4 @@ match /publicProductCodes/{codeId} {
     }
   }
 }
+
