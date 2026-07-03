@@ -151,21 +151,174 @@ class DigitalBrandIntelligencePdfService {
 
     final regularStyle = pw.TextStyle(
       font: regularFont,
-      fontSize: 9,
+      fontSize: 8.5,
       color: PdfColors.blueGrey900,
+    );
+
+    final mutedStyle = pw.TextStyle(
+      font: regularFont,
+      fontSize: 7.5,
+      color: PdfColors.blueGrey600,
     );
 
     final boldStyle = pw.TextStyle(
       font: boldFont,
-      fontSize: 9,
+      fontSize: 8.5,
       color: PdfColors.blueGrey900,
     );
+
+    pw.Widget sectionTitle(String title, {String? description}) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(top: 15, bottom: 7),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              title,
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 14,
+                color: PdfColors.blueGrey900,
+              ),
+            ),
+            if (description != null) ...[
+              pw.SizedBox(height: 2),
+              pw.Text(description, style: mutedStyle),
+            ],
+          ],
+        ),
+      );
+    }
+
+    pw.Widget metricCard(String label, String value) {
+      return pw.Container(
+        width: 118,
+        padding: const pw.EdgeInsets.all(9),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.grey100,
+          border: pw.Border.all(color: PdfColors.grey300),
+          borderRadius: pw.BorderRadius.circular(5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              value,
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 15,
+                color: PdfColors.teal700,
+              ),
+            ),
+            pw.SizedBox(height: 3),
+            pw.Text(label, style: regularStyle),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget distributionCard(
+      String title,
+      Map<String, int> values, {
+      int limit = 10,
+    }) {
+      final entries = values.entries.take(limit).toList();
+
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey300),
+          borderRadius: pw.BorderRadius.circular(5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(title, style: boldStyle),
+            pw.SizedBox(height: 7),
+            if (entries.isEmpty)
+              pw.Text('Kayıt bulunmuyor.', style: mutedStyle)
+            else
+              ...entries.map(
+                (entry) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 4),
+                  child: pw.Row(
+                    children: [
+                      pw.Expanded(
+                        child: pw.Text(entry.key, style: regularStyle),
+                      ),
+                      pw.Text('${entry.value}', style: boldStyle),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget filterBox() {
+      return pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.teal50,
+          border: pw.Border.all(color: PdfColors.teal100),
+          borderRadius: pw.BorderRadius.circular(5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: data.activeFilters
+              .map(
+                (filter) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 3),
+                  child: pw.Text('• $filter', style: regularStyle),
+                ),
+              )
+              .toList(),
+        ),
+      );
+    }
 
     document.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.fromLTRB(34, 34, 34, 42),
         theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
+        header: (context) {
+          if (context.pageNumber == 1) {
+            return pw.SizedBox();
+          }
+
+          return pw.Container(
+            padding: const pw.EdgeInsets.only(bottom: 6),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(color: PdfColors.grey300),
+              ),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'MarkaKalkan Dijital Dedektif',
+                  style: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 7.5,
+                    color: PdfColors.blueGrey700,
+                  ),
+                ),
+                pw.Text(
+                  'Türkiye Dijital Marka İhlali Görünüm Raporu',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 7.5,
+                    color: PdfColors.blueGrey700,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
         footer: (context) => pw.Container(
           padding: const pw.EdgeInsets.only(top: 6),
           decoration: const pw.BoxDecoration(
@@ -221,39 +374,283 @@ class DigitalBrandIntelligencePdfService {
                     color: PdfColors.white,
                   ),
                 ),
-                pw.SizedBox(height: 7),
+                pw.SizedBox(height: 6),
+                pw.Text(
+                  'Dijital araştırmaların risk, coğrafya, delil ve '
+                  'müdahale önceliği görünümü.',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 9,
+                    color: PdfColors.grey200,
+                  ),
+                ),
+                pw.SizedBox(height: 11),
                 pw.Text(
                   '${data.filteredFindingCount} / '
-                  '${data.totalAvailableFindings} bulgu',
+                  '${data.totalAvailableFindings} bulgu rapora dâhil edildi.',
                   style: pw.TextStyle(
                     font: boldFont,
-                    fontSize: 10,
+                    fontSize: 9,
                     color: PdfColors.white,
                   ),
                 ),
               ],
             ),
           ),
-          pw.SizedBox(height: 16),
-          pw.Text(
-            'PDF servis bağlantı testi',
-            style: pw.TextStyle(font: boldFont, fontSize: 15),
+
+          sectionTitle('Uygulanan Filtreler'),
+          filterBox(),
+
+          sectionTitle(
+            'Yönetici Özeti',
+            description:
+                'Filtrelenmiş dijital bulgular üzerinden hesaplanan '
+                'operasyonel göstergeler.',
           ),
-          pw.SizedBox(height: 6),
-          pw.Text(
-            'Bu ilk sürüm veri modelini ve PDF üretim altyapısını '
-            'doğrulamak için oluşturulmuştur.',
-            style: regularStyle,
+          pw.Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              metricCard('Araştırma görevi', '${data.taskCount}'),
+              metricCard('İşlenen sayfa', '${data.processedPageCount}'),
+              metricCard('Toplam bulgu', '${data.filteredFindingCount}'),
+              metricCard('Yüksek risk', '${data.highRiskCount}'),
+              metricCard('Platform', '${data.platformCount}'),
+              metricCard('Benzersiz satıcı', '${data.uniqueSellerCount}'),
+              metricCard('Şehir', '${data.cityCount}'),
+              metricCard('Saha önerisi', '${data.fieldRecommendedCount}'),
+              metricCard('İnceleme bekleyen', '${data.pendingReviewCount}'),
+              metricCard('Doğrulanan', '${data.confirmedCount}'),
+              metricCard(
+                'Ortalama delil',
+                '%${data.averageEvidenceCompletionPercent}',
+              ),
+              metricCard(
+                'Ortalama skor',
+                '${data.averageInterventionScore}/100',
+              ),
+            ],
           ),
-          pw.SizedBox(height: 12),
-          pw.Text('Aktif filtreler', style: boldStyle),
-          pw.SizedBox(height: 5),
-          ...data.activeFilters.map(
-            (filter) => pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 3),
-              child: pw.Text('• $filter', style: regularStyle),
+
+          sectionTitle('Risk Dağılımı'),
+          pw.Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              metricCard('Yüksek risk', '${data.highRiskCount}'),
+              metricCard('Orta risk', '${data.mediumRiskCount}'),
+              metricCard('Düşük risk', '${data.lowRiskCount}'),
+              metricCard('İnceleniyor', '${data.unknownRiskCount}'),
+            ],
+          ),
+
+          sectionTitle('Kaynak ve Coğrafya Analizi'),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: distributionCard('Platformlar', data.sourceDistribution),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: distributionCard('Ülkeler', data.countryDistribution),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: distributionCard('Şehirler', data.cityDistribution),
+              ),
+            ],
+          ),
+
+          sectionTitle(
+            'İhlâl Türleri',
+            description:
+                'Bulgularda tespit edilen ihlâl göstergelerinin dağılımı.',
+          ),
+          distributionCard(
+            'Tespit edilen ihlâl göstergeleri',
+            data.violationDistribution,
+            limit: 15,
+          ),
+
+          sectionTitle('Delil ve Müdahale Hazırlığı'),
+          pw.Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              metricCard('Arşivlenen delil', '${data.archivedEvidenceCount}'),
+              metricCard('Tam delil paketi', '${data.completeEvidenceCount}'),
+              metricCard(
+                'Delil tamamlama',
+                '%${data.averageEvidenceCompletionPercent}',
+              ),
+              metricCard(
+                'Ortalama skor',
+                '${data.averageInterventionScore}/100',
+              ),
+              metricCard(
+                'En yüksek skor',
+                '${data.highestInterventionScore}/100',
+              ),
+              metricCard('İhlâl sinyali', '${data.totalViolationSignals}'),
+            ],
+          ),
+
+          sectionTitle('Fiyat Analizi'),
+          if (data.priceSummaries.isEmpty)
+            pw.Text('Fiyat kaydı bulunmuyor.', style: mutedStyle)
+          else
+            ...data.priceSummaries.map(
+              (summary) => pw.Container(
+                margin: const pw.EdgeInsets.only(bottom: 8),
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(5),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      '${summary.currency} · '
+                      '${summary.recordCount} fiyat kaydı',
+                      style: boldStyle,
+                    ),
+                    pw.SizedBox(height: 5),
+                    pw.Text(
+                      'Ortalama: '
+                      '${summary.averagePrice.toStringAsFixed(2)} '
+                      '${summary.currency}  |  '
+                      'En düşük: '
+                      '${summary.minimumPrice.toStringAsFixed(2)} '
+                      '${summary.currency}  |  '
+                      'En yüksek: '
+                      '${summary.maximumPrice.toStringAsFixed(2)} '
+                      '${summary.currency}',
+                      style: regularStyle,
+                    ),
+                    if (summary.currency == 'TRY') ...[
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        '0–499 TL: ${summary.upTo500Count}  |  '
+                        '500–1499 TL: ${summary.from500To1500Count}  |  '
+                        '1500–2999 TL: ${summary.from1500To3000Count}  |  '
+                        '3000 TL ve üzeri: ${summary.above3000Count}',
+                        style: mutedStyle,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
+
+          sectionTitle(
+            'Müdahale Öncelikli Bulgular',
+            description:
+                'Yüksek risk veya saha incelemesi önerisi taşıyan kayıtlar.',
           ),
+          if (data.priorityFindings.isEmpty)
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(5),
+              ),
+              child: pw.Text(
+                'Aktif filtrelere uygun öncelikli bulgu bulunmuyor.',
+                style: regularStyle,
+              ),
+            )
+          else
+            ...data.priorityFindings.asMap().entries.map((entry) {
+              final finding = entry.value;
+
+              return pw.Container(
+                margin: const pw.EdgeInsets.only(bottom: 8),
+                padding: const pw.EdgeInsets.all(11),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(5),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Container(
+                          width: 22,
+                          height: 22,
+                          alignment: pw.Alignment.center,
+                          decoration: const pw.BoxDecoration(
+                            color: PdfColors.teal700,
+                            shape: pw.BoxShape.circle,
+                          ),
+                          child: pw.Text(
+                            '${entry.key + 1}',
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: 8,
+                              color: PdfColors.white,
+                            ),
+                          ),
+                        ),
+                        pw.SizedBox(width: 8),
+                        pw.Expanded(
+                          child: pw.Text(
+                            finding.title,
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: 10,
+                              color: PdfColors.blueGrey900,
+                            ),
+                          ),
+                        ),
+                        pw.Text(
+                          '${finding.interventionScore}/100',
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            fontSize: 10,
+                            color: PdfColors.teal700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 7),
+                    pw.Text(
+                      'Platform: ${finding.platform}  |  '
+                      'Satıcı: ${finding.seller}',
+                      style: regularStyle,
+                    ),
+                    pw.Text(
+                      'Risk: ${finding.riskLabel}  |  '
+                      'İnceleme: ${finding.reviewLabel}',
+                      style: regularStyle,
+                    ),
+                    pw.Text(
+                      'Konum: ${finding.location}  |  '
+                      'Fiyat: ${finding.priceLabel}',
+                      style: regularStyle,
+                    ),
+                    pw.Text(
+                      'Delil tamamlama: '
+                      '%${finding.evidenceCompletionPercent}  |  '
+                      'Saha önerisi: '
+                      '${finding.fieldRecommended ? 'Evet' : 'Hayır'}',
+                      style: regularStyle,
+                    ),
+                    if (finding.violations.isNotEmpty)
+                      pw.Text(
+                        'İhlâl göstergeleri: '
+                        '${finding.violations.join(', ')}',
+                        style: regularStyle,
+                      ),
+                    pw.Text('Görev: ${finding.taskName}', style: mutedStyle),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
