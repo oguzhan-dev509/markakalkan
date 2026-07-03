@@ -394,6 +394,284 @@ match /brands/{brandUid}/digitalDetectiveTasks/{taskId} {
   }
 }
 
+match /brands/{brandUid}/aiFieldOperations/{operationId} {
+  allow read: if request.auth != null
+      && request.auth.uid == brandUid;
+
+  allow create: if request.auth != null
+      && request.auth.uid == brandUid
+      && request.resource.data.keys().hasAll([
+        'title',
+        'objective',
+        'status',
+        'priority',
+        'createdAt',
+        'updatedAt',
+        'currentAgentId',
+        'requiresHumanApproval'
+      ])
+      && request.resource.data.keys().hasOnly([
+        'title',
+        'objective',
+        'status',
+        'priority',
+        'createdAt',
+        'updatedAt',
+        'currentAgentId',
+        'requiresHumanApproval'
+      ])
+      && request.resource.data.title is string
+      && request.resource.data.title.size() >= 2
+      && request.resource.data.title.size() <= 180
+      && request.resource.data.objective is string
+      && request.resource.data.objective.size() >= 3
+      && request.resource.data.objective.size() <= 2000
+      && request.resource.data.status == 'queued'
+      && request.resource.data.priority in [
+        'low',
+        'normal',
+        'high',
+        'critical'
+      ]
+      && request.resource.data.currentAgentId == 'task_planner'
+      && request.resource.data.requiresHumanApproval == true
+      && request.resource.data.createdAt == request.time
+      && request.resource.data.updatedAt == request.time;
+
+  allow update: if request.auth != null
+      && request.auth.uid == brandUid
+      && request.resource.data.keys().hasAll([
+        'title',
+        'objective',
+        'status',
+        'priority',
+        'createdAt',
+        'updatedAt',
+        'currentAgentId',
+        'requiresHumanApproval'
+      ])
+      && request.resource.data.keys().hasOnly([
+        'title',
+        'objective',
+        'status',
+        'priority',
+        'createdAt',
+        'updatedAt',
+        'currentAgentId',
+        'requiresHumanApproval'
+      ])
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'updatedAt',
+        'currentAgentId'
+      ])
+      && request.resource.data.title == resource.data.title
+      && request.resource.data.objective == resource.data.objective
+      && request.resource.data.priority == resource.data.priority
+      && request.resource.data.createdAt == resource.data.createdAt
+      && request.resource.data.requiresHumanApproval
+          == resource.data.requiresHumanApproval
+      && request.resource.data.status in [
+        'draft',
+        'queued',
+        'running',
+        'waiting_human_approval',
+        'completed',
+        'failed',
+        'cancelled'
+      ]
+      && request.resource.data.currentAgentId in [
+        'task_planner',
+        'digital_field_scanner',
+        'page_change_monitor',
+        'visual_matcher',
+        'text_language_analyst',
+        'seller_entity_resolver',
+        'network_analyst',
+        'price_anomaly_analyst',
+        'evidence_custodian',
+        'risk_intervention_analyst',
+        'reporting_agent',
+        'human_expert_gate'
+      ]
+      && request.resource.data.updatedAt == request.time;
+
+  allow delete: if request.auth != null
+      && request.auth.uid == brandUid;
+
+  match /agentTasks/{taskId} {
+    allow read: if request.auth != null
+        && request.auth.uid == brandUid;
+
+    allow create: if request.auth != null
+        && request.auth.uid == brandUid
+        && request.resource.data.keys().hasAll([
+          'agentId',
+          'agentName',
+          'agentOrder',
+          'status',
+          'input',
+          'output',
+          'startedAt',
+          'completedAt',
+          'errorMessage',
+          'handoffToAgentId'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'agentId',
+          'agentName',
+          'agentOrder',
+          'status',
+          'input',
+          'output',
+          'startedAt',
+          'completedAt',
+          'errorMessage',
+          'handoffToAgentId'
+        ])
+        && request.resource.data.agentId == taskId
+        && request.resource.data.agentId in [
+          'task_planner',
+          'digital_field_scanner',
+          'page_change_monitor',
+          'visual_matcher',
+          'text_language_analyst',
+          'seller_entity_resolver',
+          'network_analyst',
+          'price_anomaly_analyst',
+          'evidence_custodian',
+          'risk_intervention_analyst',
+          'reporting_agent',
+          'human_expert_gate'
+        ]
+        && request.resource.data.agentName is string
+        && request.resource.data.agentName.size() >= 2
+        && request.resource.data.agentName.size() <= 160
+        && request.resource.data.agentOrder is int
+        && request.resource.data.agentOrder >= 1
+        && request.resource.data.agentOrder <= 12
+        && request.resource.data.status in [
+          'pending',
+          'queued'
+        ]
+        && (
+          (
+            request.resource.data.agentId == 'task_planner'
+            && request.resource.data.status == 'queued'
+          )
+          ||
+          (
+            request.resource.data.agentId != 'task_planner'
+            && request.resource.data.status == 'pending'
+          )
+        )
+        && request.resource.data.input is map
+        && request.resource.data.output is map
+        && request.resource.data.startedAt == null
+        && request.resource.data.completedAt == null
+        && request.resource.data.errorMessage is string
+        && request.resource.data.errorMessage.size() == 0
+        && request.resource.data.handoffToAgentId is string
+        && (
+          request.resource.data.handoffToAgentId == ''
+          || request.resource.data.handoffToAgentId in [
+            'task_planner',
+            'digital_field_scanner',
+            'page_change_monitor',
+            'visual_matcher',
+            'text_language_analyst',
+            'seller_entity_resolver',
+            'network_analyst',
+            'price_anomaly_analyst',
+            'evidence_custodian',
+            'risk_intervention_analyst',
+            'reporting_agent',
+            'human_expert_gate'
+          ]
+        );
+
+    allow update: if request.auth != null
+        && request.auth.uid == brandUid
+        && request.resource.data.keys().hasAll([
+          'agentId',
+          'agentName',
+          'agentOrder',
+          'status',
+          'input',
+          'output',
+          'startedAt',
+          'completedAt',
+          'errorMessage',
+          'handoffToAgentId'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'agentId',
+          'agentName',
+          'agentOrder',
+          'status',
+          'input',
+          'output',
+          'startedAt',
+          'completedAt',
+          'errorMessage',
+          'handoffToAgentId'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'output',
+          'startedAt',
+          'completedAt',
+          'errorMessage',
+          'handoffToAgentId'
+        ])
+        && request.resource.data.agentId == resource.data.agentId
+        && request.resource.data.agentName == resource.data.agentName
+        && request.resource.data.agentOrder == resource.data.agentOrder
+        && request.resource.data.input == resource.data.input
+        && request.resource.data.status in [
+          'pending',
+          'queued',
+          'running',
+          'completed',
+          'failed',
+          'skipped',
+          'waiting_handoff',
+          'waiting_human_approval'
+        ]
+        && request.resource.data.output is map
+        && (
+          request.resource.data.startedAt == null
+          || request.resource.data.startedAt is timestamp
+        )
+        && (
+          request.resource.data.completedAt == null
+          || request.resource.data.completedAt is timestamp
+        )
+        && request.resource.data.errorMessage is string
+        && request.resource.data.errorMessage.size() <= 2000
+        && request.resource.data.handoffToAgentId is string
+        && (
+          request.resource.data.handoffToAgentId == ''
+          || request.resource.data.handoffToAgentId in [
+            'task_planner',
+            'digital_field_scanner',
+            'page_change_monitor',
+            'visual_matcher',
+            'text_language_analyst',
+            'seller_entity_resolver',
+            'network_analyst',
+            'price_anomaly_analyst',
+            'evidence_custodian',
+            'risk_intervention_analyst',
+            'reporting_agent',
+            'human_expert_gate'
+          ]
+        );
+
+    allow delete: if request.auth != null
+        && request.auth.uid == brandUid;
+  }
+}
 match /productCodes/{codeId} {
   // Tüketici yalnız bildiği tekil kodu doğrudan sorgulayabilir.
   // Tüm kod koleksiyonu herkese açık şekilde listelenemez.
@@ -554,4 +832,5 @@ match /publicProductCodes/{codeId} {
     }
   }
 }
+
 
