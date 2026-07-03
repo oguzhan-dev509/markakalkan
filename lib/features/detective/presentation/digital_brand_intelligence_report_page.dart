@@ -231,6 +231,26 @@ class _DigitalBrandIntelligenceReportPageState
                             .toList(),
                       ),
                     ),
+                    const SizedBox(height: 14),
+                    _ResponsiveTwoColumn(
+                      left: _DistributionCard(
+                        title: 'Ülkelere Göre Dağılım',
+                        icon: Icons.flag_outlined,
+                        entries: report.countryDistribution.entries
+                            .take(8)
+                            .map(
+                              (entry) => _DistributionEntry(
+                                label: entry.key,
+                                value: entry.value,
+                                total: report.totalFindings,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      right: _PriceAnalysisCard(
+                        summaries: report.priceSummaries,
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     _SectionTitle(
                       title: 'Delil ve İnceleme Durumu',
@@ -278,11 +298,13 @@ class _BrandIntelligenceReport {
     required this.pendingReviewCount,
     required this.confirmedCount,
     required this.archivedEvidenceCount,
-    required this.totalEstimatedValue,
+    required this.priceRecordCount,
     required this.totalViolationSignals,
     required this.sourceDistribution,
+    required this.countryDistribution,
     required this.cityDistribution,
     required this.violationDistribution,
+    required this.priceSummaries,
     required this.priorityFindings,
   });
 
@@ -292,8 +314,10 @@ class _BrandIntelligenceReport {
     required List<_ReportFinding> findings,
   }) {
     final sourceCounts = <String, int>{};
+    final countryCounts = <String, int>{};
     final cityCounts = <String, int>{};
     final violationCounts = <String, int>{};
+    final pricesByCurrency = <String, List<double>>{};
     final sellers = <String>{};
 
     var highRiskCount = 0;
@@ -304,7 +328,7 @@ class _BrandIntelligenceReport {
     var pendingReviewCount = 0;
     var confirmedCount = 0;
     var archivedEvidenceCount = 0;
-    var totalEstimatedValue = 0.0;
+    var priceRecordCount = 0;
     var totalViolationSignals = 0;
 
     for (final finding in findings) {
@@ -328,6 +352,11 @@ class _BrandIntelligenceReport {
       final source = data['sourcePlatform']?.toString().trim() ?? '';
       if (source.isNotEmpty) {
         sourceCounts[source] = (sourceCounts[source] ?? 0) + 1;
+      }
+
+      final country = data['country']?.toString().trim() ?? '';
+      if (country.isNotEmpty) {
+        countryCounts[country] = (countryCounts[country] ?? 0) + 1;
       }
 
       final city = data['city']?.toString().trim() ?? '';
@@ -374,9 +403,41 @@ class _BrandIntelligenceReport {
 
       final price = data['price'];
       if (price is num) {
-        totalEstimatedValue += price.toDouble();
+        final rawCurrency =
+            data['currency']?.toString().trim().toUpperCase() ?? '';
+        final currency = rawCurrency.isEmpty ? 'TRY' : rawCurrency;
+
+        pricesByCurrency
+            .putIfAbsent(currency, () => <double>[])
+            .add(price.toDouble());
+
+        priceRecordCount++;
       }
     }
+
+    final priceSummaries = pricesByCurrency.entries.map((entry) {
+      final prices = [...entry.value]..sort();
+      final total = prices.fold<double>(
+        0,
+        (totalSoFar, value) => totalSoFar + value,
+      );
+
+      return _CurrencyPriceSummary(
+        currency: entry.key,
+        recordCount: prices.length,
+        averagePrice: prices.isEmpty ? 0 : total / prices.length,
+        minimumPrice: prices.isEmpty ? 0 : prices.first,
+        maximumPrice: prices.isEmpty ? 0 : prices.last,
+        upTo500Count: prices.where((price) => price < 500).length,
+        from500To1500Count: prices
+            .where((price) => price >= 500 && price < 1500)
+            .length,
+        from1500To3000Count: prices
+            .where((price) => price >= 1500 && price < 3000)
+            .length,
+        above3000Count: prices.where((price) => price >= 3000).length,
+      );
+    }).toList()..sort((a, b) => a.currency.compareTo(b.currency));
 
     final priorityFindings =
         findings.where((finding) {
@@ -414,11 +475,13 @@ class _BrandIntelligenceReport {
       pendingReviewCount: pendingReviewCount,
       confirmedCount: confirmedCount,
       archivedEvidenceCount: archivedEvidenceCount,
-      totalEstimatedValue: totalEstimatedValue,
+      priceRecordCount: priceRecordCount,
       totalViolationSignals: totalViolationSignals,
       sourceDistribution: _sortMap(sourceCounts),
+      countryDistribution: _sortMap(countryCounts),
       cityDistribution: _sortMap(cityCounts),
       violationDistribution: _sortMap(violationCounts),
+      priceSummaries: priceSummaries,
       priorityFindings: priorityFindings.take(10).toList(),
     );
   }
@@ -437,12 +500,38 @@ class _BrandIntelligenceReport {
   final int pendingReviewCount;
   final int confirmedCount;
   final int archivedEvidenceCount;
-  final double totalEstimatedValue;
+  final int priceRecordCount;
   final int totalViolationSignals;
   final Map<String, int> sourceDistribution;
+  final Map<String, int> countryDistribution;
   final Map<String, int> cityDistribution;
   final Map<String, int> violationDistribution;
+  final List<_CurrencyPriceSummary> priceSummaries;
   final List<_ReportFinding> priorityFindings;
+}
+
+class _CurrencyPriceSummary {
+  const _CurrencyPriceSummary({
+    required this.currency,
+    required this.recordCount,
+    required this.averagePrice,
+    required this.minimumPrice,
+    required this.maximumPrice,
+    required this.upTo500Count,
+    required this.from500To1500Count,
+    required this.from1500To3000Count,
+    required this.above3000Count,
+  });
+
+  final String currency;
+  final int recordCount;
+  final double averagePrice;
+  final double minimumPrice;
+  final double maximumPrice;
+  final int upTo500Count;
+  final int from500To1500Count;
+  final int from1500To3000Count;
+  final int above3000Count;
 }
 
 class _ReportFinding {
@@ -560,8 +649,8 @@ class _MetricGrid extends StatelessWidget {
         Icons.verified_outlined,
       ),
       _MetricData(
-        'Tahmini Bulgu Değeri',
-        '${report.totalEstimatedValue.toStringAsFixed(2)} TRY',
+        'Fiyat Kaydı',
+        '${report.priceRecordCount}',
         Icons.payments_outlined,
       ),
     ];
@@ -810,6 +899,158 @@ class _DistributionCard extends StatelessWidget {
                 ),
               );
             }),
+        ],
+      ),
+    );
+  }
+}
+
+class _PriceAnalysisCard extends StatelessWidget {
+  const _PriceAnalysisCard({required this.summaries});
+
+  final List<_CurrencyPriceSummary> summaries;
+
+  String _formatPrice(double value, String currency) {
+    return '${value.toStringAsFixed(2)} $currency';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(21),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE0E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.price_check_outlined, color: MarkaKalkanTheme.teal),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Ürün ve Fiyat Dağılımı',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (summaries.isEmpty)
+            const Text(
+              'Fiyat analizi için henüz yeterli veri oluşmadı.',
+              style: TextStyle(color: Color(0xFF687580)),
+            )
+          else
+            ...summaries.indexed.map((entry) {
+              final index = entry.$1;
+              final summary = entry.$2;
+              final isTry = summary.currency == 'TRY';
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    summary.currency,
+                    style: const TextStyle(
+                      color: MarkaKalkanTheme.blue,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _PriceSummaryRow(
+                    label: 'Fiyat kaydı',
+                    value: '${summary.recordCount}',
+                  ),
+                  _PriceSummaryRow(
+                    label: 'Ortalama fiyat',
+                    value: _formatPrice(summary.averagePrice, summary.currency),
+                  ),
+                  _PriceSummaryRow(
+                    label: 'En düşük fiyat',
+                    value: _formatPrice(summary.minimumPrice, summary.currency),
+                  ),
+                  _PriceSummaryRow(
+                    label: 'En yüksek fiyat',
+                    value: _formatPrice(summary.maximumPrice, summary.currency),
+                  ),
+                  if (isTry) ...[
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Fiyat segmentleri',
+                      style: TextStyle(
+                        color: MarkaKalkanTheme.navy,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _PriceSummaryRow(
+                      label: '0–500 TL',
+                      value: '${summary.upTo500Count}',
+                    ),
+                    _PriceSummaryRow(
+                      label: '500–1.500 TL',
+                      value: '${summary.from500To1500Count}',
+                    ),
+                    _PriceSummaryRow(
+                      label: '1.500–3.000 TL',
+                      value: '${summary.from1500To3000Count}',
+                    ),
+                    _PriceSummaryRow(
+                      label: '3.000 TL üzeri',
+                      value: '${summary.above3000Count}',
+                    ),
+                  ],
+                  if (index != summaries.length - 1)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Divider(height: 1),
+                    ),
+                ],
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _PriceSummaryRow extends StatelessWidget {
+  const _PriceSummaryRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF687580),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );
