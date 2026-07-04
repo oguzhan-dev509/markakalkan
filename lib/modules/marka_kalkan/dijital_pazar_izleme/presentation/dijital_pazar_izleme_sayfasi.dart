@@ -1,53 +1,75 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
-class BrandDashboardPage extends StatelessWidget {
-  const BrandDashboardPage({super.key});
+class DijitalPazarIzlemeSayfasi extends StatelessWidget {
+  const DijitalPazarIzlemeSayfasi({super.key});
 
-  static const List<_DashboardModule> _modules = [
-    _DashboardModule(
-      title: 'Dijital Pazar İzleme',
+  static const List<_MonitoringModule> _modules = [
+    _MonitoringModule(
+      title: 'Marka İzleme Profili',
       description:
-          'Pazaryerlerini, satıcıları, ürün ilanlarını ve dijital sayfa değişikliklerini izleyin.',
-      icon: Icons.travel_explore_outlined,
-      statusText: 'İzleme merkezi',
+          'İzlenecek marka, ürün, kategori, anahtar kelime ve risk önceliklerini tanımlayın.',
+      icon: Icons.manage_search_outlined,
+      statusText: 'İzleme kapsamı',
+      isActive: true,
     ),
-    _DashboardModule(
-      title: 'Ürünler',
+    _MonitoringModule(
+      title: 'Kaynak Yönetimi',
       description:
-          'Markanıza ait ürün modellerini oluşturun ve ürün bilgilerini yönetin.',
-      icon: Icons.inventory_2_outlined,
-      statusText: 'Ürün kataloğu',
+          'Pazaryeri, web sitesi, sosyal medya ve diğer dijital kaynakları yönetin.',
+      icon: Icons.hub_outlined,
+      statusText: 'Kaynak merkezi',
+      isActive: true,
     ),
-    _DashboardModule(
-      title: 'Üretim Partileri',
+    _MonitoringModule(
+      title: 'İzlenen Sayfalar',
       description:
-          'Üretim, ithalat, fason üretim ve sevk partilerini kayıt altına alın.',
-      icon: Icons.factory_outlined,
-      statusText: 'Parti yönetimi',
+          'Ürün ilanlarını, satıcı mağazalarını ve takip edilen sayfaları inceleyin.',
+      icon: Icons.language_outlined,
+      statusText: 'Sayfa takibi',
+      isActive: true,
     ),
-    _DashboardModule(
-      title: 'Tekil Kodlar',
+    _MonitoringModule(
+      title: 'Tarama Görevleri',
       description:
-          'Her fiziksel ürün için benzersiz kodlar oluşturun ve durumlarını izleyin.',
-      icon: Icons.qr_code_2_outlined,
-      statusText: 'Kod merkezi',
+          'Planlanan taramaları, çalışma geçmişini ve veri toplama durumunu izleyin.',
+      icon: Icons.radar_outlined,
+      statusText: 'Tarama operasyonu',
+      isActive: true,
     ),
-    _DashboardModule(
-      title: 'Şüpheli Taramalar',
+    _MonitoringModule(
+      title: 'İzleme Olayları',
       description:
-          'Aynı kodun farklı cihaz ve bölgelerdeki olağan dışı kullanımını inceleyin.',
-      icon: Icons.warning_amber_rounded,
-      statusText: 'Risk takibi',
+          'Fiyat, stok, satıcı, içerik ve sayfa değişikliklerini olay akışında görün.',
+      icon: Icons.timeline_outlined,
+      statusText: 'Değişim akışı',
+      isActive: true,
     ),
-    _DashboardModule(
-      title: 'Vaka Dosyaları',
+    _MonitoringModule(
+      title: 'Risk Sinyalleri',
       description:
-          'Sahtecilik bildirimlerini, fotoğrafları, faturaları ve satıcı kayıtlarını yönetin.',
-      icon: Icons.folder_copy_outlined,
-      statusText: 'İnceleme dosyaları',
+          'Kural motorunun ürettiği düşük, orta, yüksek ve kritik sinyalleri yönetin.',
+      icon: Icons.notification_important_outlined,
+      statusText: 'Sinyal merkezi',
+      isActive: true,
+    ),
+    _MonitoringModule(
+      title: 'Ana Panel',
+      description:
+          'Kaynak sağlığı, tarama operasyonu, olaylar ve risk sinyallerini tek görünümde izleyin.',
+      icon: Icons.dashboard_outlined,
+      statusText: 'Yönetici görünümü',
+      isActive: true,
+    ),
+    _MonitoringModule(
+      title: 'Rapor Merkezi',
+      description:
+          'Yönetici özeti, marka risk ve vaka/kanıt raporlarını oluşturun.',
+      icon: Icons.assessment_outlined,
+      statusText: 'Kurumsal raporlar',
+      isActive: true,
     ),
   ];
 
@@ -61,7 +83,7 @@ class BrandDashboardPage extends StatelessWidget {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         title: const Text(
-          'Marka Paneli',
+          'Dijital Pazar İzleme',
           style: TextStyle(
             color: MarkaKalkanTheme.navy,
             fontWeight: FontWeight.w800,
@@ -90,10 +112,10 @@ class BrandDashboardPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _DashboardHeader(email: user?.email),
-                const SizedBox(height: 26),
+                _MonitoringHeader(email: user?.email),
+                const SizedBox(height: 28),
                 const Text(
-                  'Yönetim Modülleri',
+                  'İzleme Operasyonları',
                   style: TextStyle(
                     color: MarkaKalkanTheme.navy,
                     fontSize: 25,
@@ -102,7 +124,8 @@ class BrandDashboardPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Ürün kimliği ve marka koruma operasyonlarınızı tek panelden yönetin.',
+                  'Dijital pazardaki ürün, satıcı ve sayfa hareketlerini '
+                  'tek merkezden yönetin.',
                   style: TextStyle(color: Color(0xFF687580), fontSize: 15),
                 ),
                 const SizedBox(height: 22),
@@ -130,7 +153,7 @@ class BrandDashboardPage extends StatelessWidget {
                           .map(
                             (module) => SizedBox(
                               width: cardWidth,
-                              child: _DashboardModuleCard(module: module),
+                              child: _MonitoringModuleCard(module: module),
                             ),
                           )
                           .toList(),
@@ -146,10 +169,10 @@ class BrandDashboardPage extends StatelessWidget {
   }
 }
 
-class _DashboardHeader extends StatelessWidget {
+class _MonitoringHeader extends StatelessWidget {
   final String? email;
 
-  const _DashboardHeader({required this.email});
+  const _MonitoringHeader({required this.email});
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +180,7 @@ class _DashboardHeader extends StatelessWidget {
       padding: const EdgeInsets.all(30),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [MarkaKalkanTheme.navy, Color(0xFF183B4E)],
+          colors: [MarkaKalkanTheme.navy, Color(0xFF17445A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -165,17 +188,17 @@ class _DashboardHeader extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 650;
+          final isNarrow = constraints.maxWidth < 680;
 
           final icon = Container(
-            width: 72,
-            height: 72,
+            width: 74,
+            height: 74,
             decoration: BoxDecoration(
-              color: const Color(0xFF254D60),
+              color: const Color(0xFF25576B),
               borderRadius: BorderRadius.circular(20),
             ),
             child: const Icon(
-              Icons.shield_outlined,
+              Icons.travel_explore_outlined,
               size: 42,
               color: MarkaKalkanTheme.teal,
             ),
@@ -187,7 +210,7 @@ class _DashboardHeader extends StatelessWidget {
                 : CrossAxisAlignment.start,
             children: [
               const Text(
-                'MarkaKalkan Yönetim Paneli',
+                'Dijital Pazar İzleme Merkezi',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -206,8 +229,8 @@ class _DashboardHeader extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Ürünlerinizi, üretim partilerinizi, tekil kodlarınızı ve '
-                'şüpheli hareketleri buradan yönetin.',
+                'Pazaryerlerini, satıcıları, ürün ilanlarını ve sayfa '
+                'değişikliklerini sürekli izleyen operasyon katmanı.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Color(0xFFD9E5EA), height: 1.5),
               ),
@@ -233,49 +256,73 @@ class _DashboardHeader extends StatelessWidget {
   }
 }
 
-class _DashboardModuleCard extends StatelessWidget {
-  final _DashboardModule module;
+class _MonitoringModuleCard extends StatelessWidget {
+  final _MonitoringModule module;
 
-  const _DashboardModuleCard({required this.module});
+  const _MonitoringModuleCard({required this.module});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () {
-        if (module.title == 'Dijital Pazar İzleme') {
-          AppRouter.openDijitalPazarIzleme(context);
-          return;
-        }
-        if (module.title == 'Ürünler') {
-          AppRouter.openProducts(context);
+        if (module.title == 'Marka İzleme Profili') {
+          AppRouter.openMarkaIzlemeProfili(context);
           return;
         }
 
-        if (module.title == 'Üretim Partileri') {
-          AppRouter.openProductionBatches(context);
+        if (module.title == 'Kaynak Yönetimi') {
+          AppRouter.openKaynakYonetimi(context);
           return;
         }
 
-        if (module.title == 'Tekil Kodlar') {
-          AppRouter.openProductCodes(context);
+        if (module.title == 'İzlenen Sayfalar') {
+          AppRouter.openIzlenenSayfalar(context);
           return;
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${module.title} modülü bir sonraki aşamada aktif edilecektir.',
-            ),
-          ),
-        );
+        if (module.title == 'Tarama Görevleri') {
+          AppRouter.openTaramaGorevleri(context);
+          return;
+        }
+
+        if (module.title == 'İzleme Olayları') {
+          AppRouter.openIzlemeOlaylari(context);
+          return;
+        }
+
+        if (module.title == 'Risk Sinyalleri') {
+          AppRouter.openRiskSinyalleri(context);
+          return;
+        }
+
+        if (module.title == 'Ana Panel') {
+          AppRouter.openDijitalPazarAnaPaneli(context);
+          return;
+        }
+
+        if (module.title == 'Rapor Merkezi') {
+          AppRouter.openRaporMerkezi(context);
+          return;
+        }
+
+        final message =
+            '${module.title} modülü izleme profili tamamlandıktan sonra aktif edilecektir.';
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       },
       child: Container(
         constraints: const BoxConstraints(minHeight: 245),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE0E7EC)),
+          border: Border.all(
+            color: module.isActive
+                ? MarkaKalkanTheme.teal
+                : const Color(0xFFE0E7EC),
+          ),
           boxShadow: const [
             BoxShadow(
               color: Color(0x0C000000),
@@ -289,7 +336,12 @@ class _DashboardModuleCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(height: 5, color: MarkaKalkanTheme.navy),
+              Container(
+                height: 5,
+                color: module.isActive
+                    ? MarkaKalkanTheme.teal
+                    : MarkaKalkanTheme.navy,
+              ),
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -338,8 +390,10 @@ class _DashboardModuleCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const Icon(
-                          Icons.arrow_forward_rounded,
+                        Icon(
+                          module.isActive
+                              ? Icons.arrow_forward_rounded
+                              : Icons.lock_clock_outlined,
                           color: MarkaKalkanTheme.blue,
                         ),
                       ],
@@ -355,16 +409,18 @@ class _DashboardModuleCard extends StatelessWidget {
   }
 }
 
-class _DashboardModule {
+class _MonitoringModule {
   final String title;
   final String description;
   final IconData icon;
   final String statusText;
+  final bool isActive;
 
-  const _DashboardModule({
+  const _MonitoringModule({
     required this.title,
     required this.description,
     required this.icon,
     required this.statusText,
+    required this.isActive,
   });
 }

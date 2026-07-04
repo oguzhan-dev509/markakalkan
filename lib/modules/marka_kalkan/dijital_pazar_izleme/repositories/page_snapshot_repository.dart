@@ -1,6 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../constants/monitoring_enums.dart';
 import '../models/page_snapshot_model.dart';
-import 'monitoring_repository_ports.dart';
+import '../services/snapshot_fingerprint_service.dart';
 import 'monitoring_firestore_refs.dart';
+import 'monitoring_repository_ports.dart';
 
 class PageSnapshotRepository implements PageSnapshotRepositoryPort {
   const PageSnapshotRepository({required MonitoringFirestoreRefs refs})
@@ -16,21 +20,115 @@ class PageSnapshotRepository implements PageSnapshotRepositoryPort {
 
   @override
   Future<String> create(PageSnapshotModel snapshot) async {
+    final result = await createVersioned(snapshot);
+    return result.snapshotId;
+  }
+
+  @override
+  Future<PageSnapshotCreateResult> createVersioned(
+    PageSnapshotModel snapshot,
+  ) async {
     _validateTenant(snapshot.tenantId);
 
-    if (snapshot.id.trim().isNotEmpty) {
-      final document = _refs.pageSnapshotDocument(snapshot.id);
+    final prepared = SnapshotFingerprintService.prepare(snapshot);
 
-      await document.set(snapshot.toCreateMap());
+    final snapshotId = SnapshotFingerprintService.deterministicSnapshotId(
+      tenantId: prepared.tenantId,
+      pageId: prepared.pageId,
+      crawlRunId: prepared.crawlRunId,
+    );
 
-      return document.id;
-    }
+    final snapshotDocument = _refs.pageSnapshotDocument(snapshotId);
+    final pageDocument = _refs.monitoredPageDocument(prepared.pageId);
 
-    final document = _refs.pageSnapshots.doc();
+    return _refs.pageSnapshots.firestore.runTransaction((transaction) async {
+      final pageRead = await transaction.get(pageDocument);
 
-    await document.set(snapshot.toCreateMap());
+      if (!pageRead.exists || pageRead.data() == null) {
+        throw StateError(
+          'Snapshot için izlenen sayfa bulunamadı: ${prepared.pageId}',
+        );
+      }
 
-    return document.id;
+      final pageData = pageRead.data()!;
+
+      if (pageData['tenantId']?.toString().trim() != _refs.tenantId) {
+        throw StateError('İzlenen sayfa farklı tenant kaydına ait.');
+      }
+
+      final existingRead = await transaction.get(snapshotDocument);
+
+      if (existingRead.exists && existingRead.data() != null) {
+        final existing = PageSnapshotModel.fromDocument(existingRead);
+
+        _validateTenant(existing.tenantId);
+
+        PageSnapshotModel? previous;
+
+        if (existing.previousSnapshotId != null) {
+          final previousRead = await transaction.get(
+            _refs.pageSnapshotDocument(existing.previousSnapshotId!),
+          );
+
+          if (previousRead.exists && previousRead.data() != null) {
+            previous = PageSnapshotModel.fromDocument(previousRead);
+          }
+        }
+
+        return PageSnapshotCreateResult(
+          snapshot: existing,
+          previousSnapshot: previous,
+          wasCreated: false,
+        );
+      }
+
+      final previousSnapshotId = _nullableString(pageData['lastSnapshotId']);
+
+      PageSnapshotModel? previousSnapshot;
+      var versionNumber = 1;
+
+      if (previousSnapshotId != null) {
+        final previousRead = await transaction.get(
+          _refs.pageSnapshotDocument(previousSnapshotId),
+        );
+
+        if (previousRead.exists && previousRead.data() != null) {
+          previousSnapshot = PageSnapshotModel.fromDocument(previousRead);
+          _validateTenant(previousSnapshot.tenantId);
+          versionNumber = previousSnapshot.versionNumber + 1;
+        }
+      }
+
+      final persisted = _copySnapshot(
+        prepared,
+        id: snapshotId,
+        previousSnapshotId: previousSnapshot?.id,
+        versionNumber: versionNumber,
+      );
+
+      transaction.set(snapshotDocument, persisted.toCreateMap());
+
+      transaction.update(pageDocument, <String, dynamic>{
+        'previousSnapshotId': previousSnapshot?.id,
+        'lastSnapshotId': snapshotId,
+        'lastCrawlRunId': prepared.crawlRunId,
+        'lastScannedAt': Timestamp.fromDate(prepared.capturedAt),
+        'lastSuccessfulScanAt': Timestamp.fromDate(prepared.capturedAt),
+        'lastFailedScanAt': null,
+        'consecutiveFailureCount': 0,
+        'status': prepared.pageStatus.value,
+        'sellerName': prepared.sellerName,
+        'storeName': prepared.storeName,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': null,
+      });
+
+      return PageSnapshotCreateResult(
+        snapshot: persisted,
+        previousSnapshot: previousSnapshot,
+        wasCreated: true,
+      );
+    });
   }
 
   Future<PageSnapshotModel?> getById(String snapshotId) async {
@@ -54,7 +152,7 @@ class PageSnapshotRepository implements PageSnapshotRepositoryPort {
     final query = await _refs
         .tenantQuery(_refs.pageSnapshots)
         .where('pageId', isEqualTo: cleanedPageId)
-        .orderBy('capturedAt', descending: true)
+        .orderBy('versionNumber', descending: true)
         .limit(1)
         .get();
 
@@ -70,13 +168,12 @@ class PageSnapshotRepository implements PageSnapshotRepositoryPort {
     int limit = 50,
   }) async {
     final cleanedPageId = _validateRequiredId(pageId, fieldName: 'pageId');
-
     final safeLimit = _validateLimit(limit);
 
     final query = await _refs
         .tenantQuery(_refs.pageSnapshots)
         .where('pageId', isEqualTo: cleanedPageId)
-        .orderBy('capturedAt', descending: true)
+        .orderBy('versionNumber', descending: true)
         .limit(safeLimit)
         .get();
 
@@ -90,13 +187,12 @@ class PageSnapshotRepository implements PageSnapshotRepositoryPort {
     int limit = 50,
   }) {
     final cleanedPageId = _validateRequiredId(pageId, fieldName: 'pageId');
-
     final safeLimit = _validateLimit(limit);
 
     return _refs
         .tenantQuery(_refs.pageSnapshots)
         .where('pageId', isEqualTo: cleanedPageId)
-        .orderBy('capturedAt', descending: true)
+        .orderBy('versionNumber', descending: true)
         .limit(safeLimit)
         .snapshots()
         .map(
@@ -120,7 +216,7 @@ class PageSnapshotRepository implements PageSnapshotRepositoryPort {
     final query = await _refs
         .tenantQuery(_refs.pageSnapshots)
         .where('crawlRunId', isEqualTo: cleanedRunId)
-        .orderBy('capturedAt', descending: false)
+        .orderBy('capturedAt')
         .limit(safeLimit)
         .get();
 
@@ -133,6 +229,48 @@ class PageSnapshotRepository implements PageSnapshotRepositoryPort {
     if (modelTenantId.trim() != _refs.tenantId) {
       throw StateError('Snapshot tenantId ile repository tenantId eşleşmiyor.');
     }
+  }
+
+  static PageSnapshotModel _copySnapshot(
+    PageSnapshotModel source, {
+    required String id,
+    required String? previousSnapshotId,
+    required int versionNumber,
+  }) {
+    return PageSnapshotModel(
+      id: id,
+      tenantId: source.tenantId,
+      brandId: source.brandId,
+      sourceId: source.sourceId,
+      pageId: source.pageId,
+      crawlRunId: source.crawlRunId,
+      previousSnapshotId: previousSnapshotId,
+      versionNumber: versionNumber,
+      capturedAt: source.capturedAt,
+      pageStatus: source.pageStatus,
+      title: source.title,
+      description: source.description,
+      price: source.price,
+      currency: source.currency,
+      stockStatus: source.stockStatus,
+      sellerName: source.sellerName,
+      storeName: source.storeName,
+      imageUrls: source.imageUrls,
+      mediaAssetIds: source.mediaAssetIds,
+      contactSummary: source.contactSummary,
+      textHash: source.textHash,
+      contentHash: source.contentHash,
+      imageSetHash: source.imageSetHash,
+      htmlArchivePath: source.htmlArchivePath,
+      screenshotAssetId: source.screenshotAssetId,
+      parserVersion: source.parserVersion,
+      createdAt: source.createdAt,
+    );
+  }
+
+  static String? _nullableString(dynamic value) {
+    final cleaned = value?.toString().trim();
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
   }
 
   static String _validateRequiredId(String value, {required String fieldName}) {

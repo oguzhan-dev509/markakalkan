@@ -53,7 +53,7 @@ class CorporateHubPage extends StatelessWidget {
       description:
           'Pazaryeri, sosyal medya, sahte site, alan adı ve yetkisiz satıcıları izleyin.',
       icon: Icons.public_outlined,
-      status: _ModuleStatus.soon,
+      status: _ModuleStatus.active,
     ),
     _CorporateModule(
       id: 'supply_security',
@@ -311,6 +311,9 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'detective':
         AppRouter.openBrandDetectiveHub(context);
+        return;
+      case 'digital_market':
+        AppRouter.openDijitalPazarIzleme(context);
         return;
     }
 

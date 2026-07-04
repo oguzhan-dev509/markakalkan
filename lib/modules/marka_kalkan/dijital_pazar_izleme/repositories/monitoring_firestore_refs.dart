@@ -145,6 +145,22 @@ class MonitoringFirestoreRefs {
     );
   }
 
+  DocumentReference<Map<String, dynamic>> brandMonitoringProfileDocument(
+    String profileId,
+  ) {
+    return brandMonitoringProfiles.doc(
+      _validateRequiredId(profileId, fieldName: 'profileId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> monitoringSourceDocument(
+    String sourceId,
+  ) {
+    return monitoringSources.doc(
+      _validateRequiredId(sourceId, fieldName: 'sourceId'),
+    );
+  }
+
   static String _validateRequiredId(String value, {required String fieldName}) {
     final cleaned = value.trim();
 

@@ -833,7 +833,7 @@ match /publicProductCodes/{codeId} {
     // tenantId, mevcut marka hesabının Firebase Auth UID değeridir.
     // ============================================================
 
-    match /monitoring_page_snapshots/{snapshotId} {
+    match /monitoring_pages/{pageId} {
       allow read: if request.auth != null
           && resource.data.tenantId == request.auth.uid;
 
@@ -841,45 +841,337 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.tenantId == request.auth.uid
           && request.resource.data.tenantId is string
           && request.resource.data.tenantId.size() > 0
+
           && request.resource.data.brandId is string
           && request.resource.data.brandId.size() > 0
+
           && request.resource.data.sourceId is string
           && request.resource.data.sourceId.size() > 0
-          && request.resource.data.pageId is string
-          && request.resource.data.pageId.size() > 0
-          && request.resource.data.crawlRunId is string
-          && request.resource.data.crawlRunId.size() > 0
-          && request.resource.data.capturedAt is timestamp
-          && request.resource.data.createdAt is timestamp;
 
-      // Snapshot kayıtları tarihsel delildir; değiştirilemez ve silinemez.
-      allow update, delete: if false;
-    }
+          && request.resource.data.pageType in [
+            'product_listing',
+            'seller_store',
+            'seller_profile',
+            'search_result',
+            'category_page',
+            'social_profile',
+            'social_post',
+            'website_home',
+            'website_product',
+            'independent_website',
+            'suspicious_domain',
+            'domain_record',
+            'other'
+          ]
 
-    match /monitoring_events/{eventId} {
-      allow read: if request.auth != null
-          && resource.data.tenantId == request.auth.uid;
+          && request.resource.data.url is string
+          && request.resource.data.url.size() >= 4
+          && request.resource.data.url.size() <= 3000
 
-      allow create: if request.auth != null
-          && request.resource.data.tenantId == request.auth.uid
-          && request.resource.data.tenantId is string
-          && request.resource.data.brandId is string
-          && request.resource.data.sourceId is string
-          && request.resource.data.pageId is string
-          && request.resource.data.previousSnapshotId is string
-          && request.resource.data.currentSnapshotId is string
-          && request.resource.data.eventType is string
-          && request.resource.data.eventCategory is string
-          && request.resource.data.severity in [
+          && request.resource.data.normalizedUrl is string
+          && request.resource.data.normalizedUrl.size() >= 4
+          && request.resource.data.normalizedUrl.size() <= 3000
+
+          && (
+            request.resource.data.title == null
+            || (
+              request.resource.data.title is string
+              && request.resource.data.title.size() <= 300
+            )
+          )
+
+          && (
+            request.resource.data.domain == null
+            || request.resource.data.domain is string
+          )
+
+          && request.resource.data.status in [
+            'active',
+            'inactive',
+            'removed',
+            'blocked',
+            'redirected',
+            'republished',
+            'unreachable',
+            'error',
+            'unknown'
+          ]
+
+          && request.resource.data.trackingStatus in [
+            'pending',
+            'active',
+            'paused',
+            'archived'
+          ]
+
+          && request.resource.data.discoveryMethod in [
+            'manual',
+            'source_scan',
+            'keyword_scan',
+            'seller_scan',
+            'domain_scan',
+            'image_match',
+            'event_match',
+            'signal_match',
+            'import'
+          ]
+
+          && request.resource.data.scanFrequency in [
+            'hourly',
+            'every_6_hours',
+            'daily',
+            'weekly',
+            'manual'
+          ]
+
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+
+          && request.resource.data.riskScore is int
+          && request.resource.data.riskScore >= 0
+          && request.resource.data.riskScore <= 100
+
+          && request.resource.data.riskLevel in [
+            'info',
             'low',
             'medium',
             'high',
             'critical'
           ]
-          && request.resource.data.status is string
-          && request.resource.data.detectedAt is timestamp
-          && request.resource.data.createdAt is timestamp;
 
+          && request.resource.data.eventCount is int
+          && request.resource.data.eventCount >= 0
+
+          && request.resource.data.signalCount is int
+          && request.resource.data.signalCount >= 0
+
+          && request.resource.data.openSignalCount is int
+          && request.resource.data.openSignalCount >= 0
+
+          && request.resource.data.consecutiveFailureCount is int
+          && request.resource.data.consecutiveFailureCount >= 0
+
+          && request.resource.data.tags is list
+
+          && (
+            request.resource.data.notes == null
+            || (
+              request.resource.data.notes is string
+              && request.resource.data.notes.size() <= 3000
+            )
+          )
+
+          && (
+            request.resource.data.createdBy == null
+            || request.resource.data.createdBy == request.auth.uid
+          )
+
+          && request.resource.data.createdAt is timestamp
+
+          && (
+            request.resource.data.updatedAt == null
+            || request.resource.data.updatedAt is timestamp
+          )
+
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.sourceId == resource.data.sourceId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'pageType',
+            'title',
+            'url',
+            'normalizedUrl',
+            'domain',
+            'platform',
+            'marketplace',
+            'externalPageId',
+            'listingId',
+            'sellerId',
+            'storeId',
+            'sellerName',
+            'storeName',
+            'productName',
+            'productBrand',
+            'status',
+            'trackingStatus',
+            'discoveryMethod',
+            'scanFrequency',
+            'priority',
+            'firstSeenAt',
+            'lastSeenAt',
+            'lastScannedAt',
+            'nextScanAt',
+            'removedAt',
+            'republishedAt',
+            'lastSnapshotId',
+            'previousSnapshotId',
+            'lastCrawlJobId',
+            'lastCrawlRunId',
+            'lastSuccessfulScanAt',
+            'lastFailedScanAt',
+            'consecutiveFailureCount',
+            'riskScore',
+            'riskLevel',
+            'eventCount',
+            'signalCount',
+            'openSignalCount',
+            'tags',
+            'notes',
+            'updatedAt',
+            'updatedBy'
+          ])
+
+          && request.resource.data.pageType in [
+            'product_listing',
+            'seller_store',
+            'seller_profile',
+            'search_result',
+            'category_page',
+            'social_profile',
+            'social_post',
+            'website_home',
+            'website_product',
+            'independent_website',
+            'suspicious_domain',
+            'domain_record',
+            'other'
+          ]
+
+          && request.resource.data.url is string
+          && request.resource.data.url.size() >= 4
+          && request.resource.data.url.size() <= 3000
+
+          && request.resource.data.normalizedUrl is string
+          && request.resource.data.normalizedUrl.size() >= 4
+          && request.resource.data.normalizedUrl.size() <= 3000
+
+          && request.resource.data.status in [
+            'active',
+            'inactive',
+            'removed',
+            'blocked',
+            'redirected',
+            'republished',
+            'unreachable',
+            'error',
+            'unknown'
+          ]
+
+          && request.resource.data.trackingStatus in [
+            'pending',
+            'active',
+            'paused',
+            'archived'
+          ]
+
+          && request.resource.data.discoveryMethod in [
+            'manual',
+            'source_scan',
+            'keyword_scan',
+            'seller_scan',
+            'domain_scan',
+            'image_match',
+            'event_match',
+            'signal_match',
+            'import'
+          ]
+
+          && request.resource.data.scanFrequency in [
+            'hourly',
+            'every_6_hours',
+            'daily',
+            'weekly',
+            'manual'
+          ]
+
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+
+          && request.resource.data.riskScore is int
+          && request.resource.data.riskScore >= 0
+          && request.resource.data.riskScore <= 100
+
+          && request.resource.data.riskLevel in [
+            'info',
+            'low',
+            'medium',
+            'high',
+            'critical'
+          ]
+
+          && request.resource.data.eventCount is int
+          && request.resource.data.eventCount >= 0
+
+          && request.resource.data.signalCount is int
+          && request.resource.data.signalCount >= 0
+
+          && request.resource.data.openSignalCount is int
+          && request.resource.data.openSignalCount >= 0
+
+          && request.resource.data.consecutiveFailureCount is int
+          && request.resource.data.consecutiveFailureCount >= 0
+
+          && request.resource.data.tags is list
+
+          && (
+            request.resource.data.notes == null
+            || (
+              request.resource.data.notes is string
+              && request.resource.data.notes.size() <= 3000
+            )
+          )
+
+          && request.resource.data.updatedAt is timestamp
+
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.eventCount == 0
+          && resource.data.signalCount == 0
+          && resource.data.lastSnapshotId == null;
+    }
+    match /monitoring_page_snapshots/{snapshotId} {
+      // Marka kullanıcısı yalnız kendi tenant snapshot kayıtlarını okuyabilir.
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      // Snapshot tarihsel delildir. Yalnız güvenilir n8n/worker,
+      // Admin SDK üzerinden oluşturabilir.
+      allow create, update, delete: if false;
+    }
+
+    match /monitoring_events/{eventId} {
+      // Marka kullanıcısı yalnız kendi tenant olaylarını okuyabilir.
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      // Olay üretimi yalnız güvenilir n8n/worker tarafından yapılır.
+      allow create: if false;
+
+      // Kullanıcı yalnız olay inceleme durumunu değiştirebilir.
       allow update: if request.auth != null
           && resource.data.tenantId == request.auth.uid
           && request.resource.data.tenantId == resource.data.tenantId
@@ -899,12 +1191,18 @@ match /publicProductCodes/{codeId} {
             'status',
             'reviewedAt'
           ])
-          && request.resource.data.status is string
+          && request.resource.data.status in [
+            'new',
+            'reviewed',
+            'suppressed',
+            'forwarded',
+            'resolved',
+            'archived'
+          ]
           && request.resource.data.reviewedAt is timestamp;
 
       allow delete: if false;
     }
-
     match /monitoring_signal_rules/{ruleId} {
       allow read: if request.auth != null
           && resource.data.tenantId == request.auth.uid;
@@ -983,66 +1281,1069 @@ match /publicProductCodes/{codeId} {
           && resource.data.tenantId == request.auth.uid;
     }
 
-    match /monitoring_signals/{signalId} {
+    match /monitoring_sources/{sourceId} {
       allow read: if request.auth != null
           && resource.data.tenantId == request.auth.uid;
 
       allow create: if request.auth != null
+          && request.resource.data.keys().hasAll([
+            'tenantId',
+            'brandId',
+            'name',
+            'sourceType',
+            'baseUrl',
+            'accessMethod',
+            'healthStatus',
+            'termsReviewStatus',
+            'status',
+            'priority',
+            'scanFrequency',
+            'notes',
+            'lastCheckedAt',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'tenantId',
+            'brandId',
+            'name',
+            'sourceType',
+            'baseUrl',
+            'accessMethod',
+            'healthStatus',
+            'termsReviewStatus',
+            'status',
+            'priority',
+            'scanFrequency',
+            'notes',
+            'lastCheckedAt',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
           && request.resource.data.tenantId == request.auth.uid
           && request.resource.data.tenantId is string
+          && request.resource.data.tenantId.size() > 0
           && request.resource.data.brandId is string
-          && request.resource.data.sourceId is string
-          && request.resource.data.pageId is string
-          && request.resource.data.eventId is string
-          && request.resource.data.eventId.size() > 0
-          && request.resource.data.ruleId is string
-          && request.resource.data.ruleId.size() > 0
-          && request.resource.data.signalLevel in [
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 2
+          && request.resource.data.name.size() <= 180
+          && request.resource.data.baseUrl is string
+          && request.resource.data.baseUrl.size() >= 4
+          && request.resource.data.baseUrl.size() <= 2000
+          && request.resource.data.sourceType in [
+            'marketplace',
+            'ecommerce_site',
+            'social_media',
+            'search_engine',
+            'classified_site',
+            'domain',
+            'mobile_app',
+            'manual_source'
+          ]
+          && request.resource.data.accessMethod in [
+            'public_web',
+            'official_api',
+            'partner_api',
+            'manual_upload',
+            'webhook'
+          ]
+          && request.resource.data.healthStatus in [
+            'healthy',
+            'degraded',
+            'failed',
+            'blocked',
+            'unknown'
+          ]
+          && request.resource.data.termsReviewStatus in [
+            'pending',
+            'approved',
+            'restricted',
+            'rejected'
+          ]
+          && request.resource.data.status in [
+            'active',
+            'paused',
+            'archived'
+          ]
+          && request.resource.data.priority in [
             'low',
-            'medium',
+            'normal',
             'high',
             'critical'
           ]
-          && request.resource.data.status is string
-          && request.resource.data.forwardingStatus is string
-          && request.resource.data.title is string
-          && request.resource.data.title.size() > 0
-          && request.resource.data.summary is string
-          && request.resource.data.detectedAt is timestamp
-          && request.resource.data.createdAt is timestamp;
+          && request.resource.data.scanFrequency is string
+          && request.resource.data.scanFrequency.size() > 0
+          && (
+            request.resource.data.notes == null
+            || (
+              request.resource.data.notes is string
+              && request.resource.data.notes.size() <= 3000
+            )
+          )
+          && (
+            request.resource.data.lastCheckedAt == null
+            || request.resource.data.lastCheckedAt is timestamp
+          )
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdBy == request.auth.uid
+          && (
+            request.resource.data.updatedAt == null
+            || request.resource.data.updatedAt is timestamp
+          )
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
 
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name',
+            'sourceType',
+            'baseUrl',
+            'accessMethod',
+            'healthStatus',
+            'termsReviewStatus',
+            'status',
+            'priority',
+            'scanFrequency',
+            'notes',
+            'lastCheckedAt',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 2
+          && request.resource.data.name.size() <= 180
+          && request.resource.data.baseUrl is string
+          && request.resource.data.baseUrl.size() >= 4
+          && request.resource.data.baseUrl.size() <= 2000
+          && request.resource.data.sourceType in [
+            'marketplace',
+            'ecommerce_site',
+            'social_media',
+            'search_engine',
+            'classified_site',
+            'domain',
+            'mobile_app',
+            'manual_source'
+          ]
+          && request.resource.data.accessMethod in [
+            'public_web',
+            'official_api',
+            'partner_api',
+            'manual_upload',
+            'webhook'
+          ]
+          && request.resource.data.healthStatus in [
+            'healthy',
+            'degraded',
+            'failed',
+            'blocked',
+            'unknown'
+          ]
+          && request.resource.data.termsReviewStatus in [
+            'pending',
+            'approved',
+            'restricted',
+            'rejected'
+          ]
+          && request.resource.data.status in [
+            'active',
+            'paused',
+            'archived'
+          ]
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.scanFrequency is string
+          && request.resource.data.scanFrequency.size() > 0
+          && (
+            request.resource.data.notes == null
+            || (
+              request.resource.data.notes is string
+              && request.resource.data.notes.size() <= 3000
+            )
+          )
+          && (
+            request.resource.data.lastCheckedAt == null
+            || request.resource.data.lastCheckedAt is timestamp
+          )
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+    }
+    match /brand_monitoring_profiles/{profileId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.keys().hasAll([
+            'tenantId',
+            'brandId',
+            'profileName',
+            'brandName',
+            'productIds',
+            'categories',
+            'includeKeywords',
+            'excludeKeywords',
+            'riskTypes',
+            'prioritySourceIds',
+            'targetRegions',
+            'minimumPrice',
+            'maximumPrice',
+            'currency',
+            'status',
+            'priority',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId is string
+          && request.resource.data.tenantId.size() > 0
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.profileName is string
+          && request.resource.data.profileName.size() >= 2
+          && request.resource.data.profileName.size() <= 180
+          && request.resource.data.brandName is string
+          && request.resource.data.brandName.size() >= 2
+          && request.resource.data.brandName.size() <= 180
+          && request.resource.data.productIds is list
+          && request.resource.data.categories is list
+          && request.resource.data.includeKeywords is list
+          && request.resource.data.excludeKeywords is list
+          && request.resource.data.riskTypes is list
+          && request.resource.data.prioritySourceIds is list
+          && request.resource.data.targetRegions is list
+          && (
+            request.resource.data.minimumPrice == null
+            || request.resource.data.minimumPrice is number
+          )
+          && (
+            request.resource.data.maximumPrice == null
+            || request.resource.data.maximumPrice is number
+          )
+          && (
+            request.resource.data.minimumPrice == null
+            || request.resource.data.minimumPrice >= 0
+          )
+          && (
+            request.resource.data.maximumPrice == null
+            || request.resource.data.maximumPrice >= 0
+          )
+          && (
+            request.resource.data.minimumPrice == null
+            || request.resource.data.maximumPrice == null
+            || request.resource.data.minimumPrice
+                <= request.resource.data.maximumPrice
+          )
+          && request.resource.data.currency is string
+          && request.resource.data.currency.size() == 3
+          && request.resource.data.status in [
+            'active',
+            'paused',
+            'archived'
+          ]
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdBy == request.auth.uid
+          && (
+            request.resource.data.updatedAt == null
+            || request.resource.data.updatedAt is timestamp
+          )
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'profileName',
+            'brandName',
+            'productIds',
+            'categories',
+            'includeKeywords',
+            'excludeKeywords',
+            'riskTypes',
+            'prioritySourceIds',
+            'targetRegions',
+            'minimumPrice',
+            'maximumPrice',
+            'currency',
+            'status',
+            'priority',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.profileName is string
+          && request.resource.data.profileName.size() >= 2
+          && request.resource.data.profileName.size() <= 180
+          && request.resource.data.brandName is string
+          && request.resource.data.brandName.size() >= 2
+          && request.resource.data.brandName.size() <= 180
+          && request.resource.data.productIds is list
+          && request.resource.data.categories is list
+          && request.resource.data.includeKeywords is list
+          && request.resource.data.excludeKeywords is list
+          && request.resource.data.riskTypes is list
+          && request.resource.data.prioritySourceIds is list
+          && request.resource.data.targetRegions is list
+          && (
+            request.resource.data.minimumPrice == null
+            || request.resource.data.minimumPrice is number
+          )
+          && (
+            request.resource.data.maximumPrice == null
+            || request.resource.data.maximumPrice is number
+          )
+          && (
+            request.resource.data.minimumPrice == null
+            || request.resource.data.minimumPrice >= 0
+          )
+          && (
+            request.resource.data.maximumPrice == null
+            || request.resource.data.maximumPrice >= 0
+          )
+          && (
+            request.resource.data.minimumPrice == null
+            || request.resource.data.maximumPrice == null
+            || request.resource.data.minimumPrice
+                <= request.resource.data.maximumPrice
+          )
+          && request.resource.data.currency is string
+          && request.resource.data.currency.size() == 3
+          && request.resource.data.status in [
+            'active',
+            'paused',
+            'archived'
+          ]
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+    }
+
+    // ============================================================
+    // TARAMA GÖREVLERİ VE ÇALIŞMA KUYRUĞU
+    // tenantId, marka hesabının Firebase Auth UID değeridir.
+    // Worker ve n8n sonuç güncellemeleri Admin SDK ile yapılır.
+    // ============================================================
+
+    match /monitoring_crawl_jobs/{jobId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.keys().hasAll([
+            'tenantId',
+            'brandId',
+            'profileId',
+            'sourceId',
+            'name',
+            'description',
+            'jobType',
+            'targetType',
+            'targetId',
+            'pageId',
+            'targetUrl',
+            'scheduleType',
+            'triggerType',
+            'executionMode',
+            'priority',
+            'status',
+            'nextRunAt',
+            'lastRunAt',
+            'lastRunId',
+            'lastRunStatus',
+            'totalRunCount',
+            'successCount',
+            'partialSuccessCount',
+            'failureCount',
+            'blockedCount',
+            'consecutiveFailureCount',
+            'maxRetryCount',
+            'retryDelayMinutes',
+            'leaseOwner',
+            'leaseAcquiredAt',
+            'leaseExpiresAt',
+            'lastRequestedAt',
+            'lastRequestedBy',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'tenantId',
+            'brandId',
+            'profileId',
+            'sourceId',
+            'name',
+            'description',
+            'jobType',
+            'targetType',
+            'targetId',
+            'pageId',
+            'targetUrl',
+            'scheduleType',
+            'triggerType',
+            'executionMode',
+            'priority',
+            'status',
+            'nextRunAt',
+            'lastRunAt',
+            'lastRunId',
+            'lastRunStatus',
+            'totalRunCount',
+            'successCount',
+            'partialSuccessCount',
+            'failureCount',
+            'blockedCount',
+            'consecutiveFailureCount',
+            'maxRetryCount',
+            'retryDelayMinutes',
+            'leaseOwner',
+            'leaseAcquiredAt',
+            'leaseExpiresAt',
+            'lastRequestedAt',
+            'lastRequestedBy',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId is string
+          && request.resource.data.tenantId.size() > 0
+
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.profileId is string
+          && request.resource.data.profileId.size() > 0
+          && request.resource.data.sourceId is string
+          && request.resource.data.sourceId.size() > 0
+
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 2
+          && request.resource.data.name.size() <= 200
+
+          && (
+            request.resource.data.description == null
+            || (
+              request.resource.data.description is string
+              && request.resource.data.description.size() <= 2000
+            )
+          )
+
+          && request.resource.data.jobType in [
+            'source_discovery',
+            'keyword_search',
+            'page_scan',
+            'seller_scan',
+            'store_scan',
+            'price_scan',
+            'manual_scan'
+          ]
+
+          && request.resource.data.targetType in [
+            'source',
+            'page',
+            'seller',
+            'store',
+            'query',
+            'listing'
+          ]
+
+          && request.resource.data.targetId is string
+          && request.resource.data.targetId.size() > 0
+
+          && (
+            request.resource.data.pageId == null
+            || (
+              request.resource.data.pageId is string
+              && request.resource.data.pageId.size() > 0
+            )
+          )
+
+          && (
+            request.resource.data.targetUrl == null
+            || (
+              request.resource.data.targetUrl is string
+              && request.resource.data.targetUrl.size() <= 3000
+            )
+          )
+
+          && request.resource.data.scheduleType in [
+            'manual',
+            'hourly',
+            'every_6_hours',
+            'daily',
+            'weekly',
+            'custom'
+          ]
+
+          && request.resource.data.triggerType in [
+            'scheduled',
+            'manual',
+            'retry',
+            'webhook',
+            'system_recovery'
+          ]
+
+          && request.resource.data.executionMode in [
+            'queue',
+            'n8n',
+            'worker',
+            'manual'
+          ]
+
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+
+          && request.resource.data.status in [
+            'draft',
+            'active',
+            'paused',
+            'disabled',
+            'archived'
+          ]
+
+          && request.resource.data.lastRunStatus == 'never_run'
+          && request.resource.data.lastRunAt == null
+          && request.resource.data.lastRunId == null
+
+          && request.resource.data.totalRunCount == 0
+          && request.resource.data.successCount == 0
+          && request.resource.data.partialSuccessCount == 0
+          && request.resource.data.failureCount == 0
+          && request.resource.data.blockedCount == 0
+          && request.resource.data.consecutiveFailureCount == 0
+
+          && request.resource.data.maxRetryCount is int
+          && request.resource.data.maxRetryCount >= 0
+          && request.resource.data.maxRetryCount <= 20
+
+          && request.resource.data.retryDelayMinutes is int
+          && request.resource.data.retryDelayMinutes >= 1
+          && request.resource.data.retryDelayMinutes <= 1440
+
+          && request.resource.data.leaseOwner == null
+          && request.resource.data.leaseAcquiredAt == null
+          && request.resource.data.leaseExpiresAt == null
+          && request.resource.data.lastRequestedAt == null
+          && request.resource.data.lastRequestedBy == null
+
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdBy == request.auth.uid
+
+          && (
+            request.resource.data.updatedAt == null
+            || request.resource.data.updatedAt is timestamp
+          )
+
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      // Görev tanımının marka kullanıcısı tarafından düzenlenebilen alanları.
+      // Operasyon sayaçları, çalışma sonucu ve lease alanları bu dalda değişemez.
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.profileId == resource.data.profileId
+          && request.resource.data.sourceId == resource.data.sourceId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+
+          && (
+            (
+              request.resource.data.diff(resource.data)
+                  .affectedKeys()
+                  .hasOnly([
+                    'name',
+                    'description',
+                    'jobType',
+                    'targetType',
+                    'targetId',
+                    'pageId',
+                    'targetUrl',
+                    'scheduleType',
+                    'triggerType',
+                    'executionMode',
+                    'priority',
+                    'status',
+                    'nextRunAt',
+                    'maxRetryCount',
+                    'retryDelayMinutes',
+                    'updatedAt',
+                    'updatedBy'
+                  ])
+
+              && request.resource.data.name is string
+              && request.resource.data.name.size() >= 2
+              && request.resource.data.name.size() <= 200
+
+              && (
+                request.resource.data.description == null
+                || (
+                  request.resource.data.description is string
+                  && request.resource.data.description.size() <= 2000
+                )
+              )
+
+              && request.resource.data.jobType in [
+                'source_discovery',
+                'keyword_search',
+                'page_scan',
+                'seller_scan',
+                'store_scan',
+                'price_scan',
+                'manual_scan'
+              ]
+
+              && request.resource.data.targetType in [
+                'source',
+                'page',
+                'seller',
+                'store',
+                'query',
+                'listing'
+              ]
+
+              && request.resource.data.targetId is string
+              && request.resource.data.targetId.size() > 0
+
+              && request.resource.data.scheduleType in [
+                'manual',
+                'hourly',
+                'every_6_hours',
+                'daily',
+                'weekly',
+                'custom'
+              ]
+
+              && request.resource.data.triggerType in [
+                'scheduled',
+                'manual',
+                'retry',
+                'webhook',
+                'system_recovery'
+              ]
+
+              && request.resource.data.executionMode in [
+                'queue',
+                'n8n',
+                'worker',
+                'manual'
+              ]
+
+              && request.resource.data.priority in [
+                'low',
+                'normal',
+                'high',
+                'critical'
+              ]
+
+              && request.resource.data.status in [
+                'draft',
+                'active',
+                'paused',
+                'disabled',
+                'archived'
+              ]
+
+              && (
+                request.resource.data.status == resource.data.status
+                || resource.data.leaseExpiresAt == null
+                || resource.data.leaseExpiresAt <= request.time
+              )
+
+              && request.resource.data.maxRetryCount is int
+              && request.resource.data.maxRetryCount >= 0
+              && request.resource.data.maxRetryCount <= 20
+
+              && request.resource.data.retryDelayMinutes is int
+              && request.resource.data.retryDelayMinutes >= 1
+              && request.resource.data.retryDelayMinutes <= 1440
+
+              && request.resource.data.updatedAt == request.time
+              && request.resource.data.updatedBy == request.auth.uid
+            )
+
+            ||
+
+            // Manuel veya planlı kuyruk talebi.
+            // Yalnız rezervasyon ve talep alanları değiştirilebilir.
+            (
+              request.resource.data.diff(resource.data)
+                  .affectedKeys()
+                  .hasOnly([
+                    'triggerType',
+                    'leaseOwner',
+                    'leaseAcquiredAt',
+                    'leaseExpiresAt',
+                    'lastRequestedAt',
+                    'lastRequestedBy',
+                    'updatedAt',
+                    'updatedBy'
+                  ])
+
+              && resource.data.status == 'active'
+
+              && (
+                resource.data.leaseExpiresAt == null
+                || resource.data.leaseExpiresAt <= request.time
+              )
+
+              && request.resource.data.triggerType in [
+                'scheduled',
+                'manual',
+                'retry',
+                'webhook',
+                'system_recovery'
+              ]
+
+              && request.resource.data.leaseOwner is string
+              && request.resource.data.leaseOwner.matches('^queue:.+')
+
+              && request.resource.data.leaseAcquiredAt is timestamp
+              && request.resource.data.leaseAcquiredAt == request.time
+
+              && request.resource.data.leaseExpiresAt is timestamp
+              && request.resource.data.leaseExpiresAt > request.time
+
+              && request.resource.data.lastRequestedAt is timestamp
+              && request.resource.data.lastRequestedAt == request.time
+
+              && request.resource.data.lastRequestedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time
+              && request.resource.data.updatedBy == request.auth.uid
+            )
+          );
+
+      // Geçmişi bulunan görevler silinmez; arşivlenir.
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.totalRunCount == 0
+          && resource.data.lastRunId == null
+          && (
+            resource.data.leaseExpiresAt == null
+            || resource.data.leaseExpiresAt <= request.time
+          );
+    }
+
+    match /monitoring_crawl_runs/{runId} {
+      // Deterministik tenant-safe belge kimliği sayesinde, henüz mevcut
+      // olmayan run kaydı idempotency kontrolü için okunabilir.
+      allow get: if request.auth != null
+          && runId.matches('^' + request.auth.uid + '__.+$');
+
+      // Koleksiyon sorguları mutlaka tenantId filtresiyle yapılmalıdır.
+      allow list: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      // Marka istemcisi yalnız queued çalışma talebi oluşturabilir.
+      // Running ve sonuç durumları güvenilir worker/Admin SDK tarafından yazılır.
+      allow create: if request.auth != null
+          && request.resource.data.keys().hasAll([
+            'tenantId',
+            'brandId',
+            'profileId',
+            'jobId',
+            'sourceId',
+            'targetId',
+            'pageId',
+            'triggerType',
+            'triggeredBy',
+            'requestKey',
+            'queuedAt',
+            'startedAt',
+            'completedAt',
+            'runStatus',
+            'workerId',
+            'executionAttempt',
+            'httpStatus',
+            'itemsFound',
+            'snapshotsCreated',
+            'eventsCreated',
+            'signalsCreated',
+            'bytesDownloaded',
+            'durationMs',
+            'errorCode',
+            'errorMessage',
+            'collectorVersion',
+            'parserVersion',
+            'createdAt'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'tenantId',
+            'brandId',
+            'profileId',
+            'jobId',
+            'sourceId',
+            'targetId',
+            'pageId',
+            'triggerType',
+            'triggeredBy',
+            'requestKey',
+            'queuedAt',
+            'startedAt',
+            'completedAt',
+            'runStatus',
+            'workerId',
+            'executionAttempt',
+            'httpStatus',
+            'itemsFound',
+            'snapshotsCreated',
+            'eventsCreated',
+            'signalsCreated',
+            'bytesDownloaded',
+            'durationMs',
+            'errorCode',
+            'errorMessage',
+            'collectorVersion',
+            'parserVersion',
+            'createdAt'
+          ])
+
+          && request.resource.data.tenantId == request.auth.uid
+          && runId.matches('^' + request.auth.uid + '__.+$')
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.profileId is string
+          && request.resource.data.profileId.size() > 0
+          && request.resource.data.jobId is string
+          && request.resource.data.jobId.size() > 0
+          && request.resource.data.sourceId is string
+          && request.resource.data.sourceId.size() > 0
+          && request.resource.data.targetId is string
+          && request.resource.data.targetId.size() > 0
+
+          && request.resource.data.triggerType in [
+            'scheduled',
+            'manual',
+            'retry',
+            'webhook',
+            'system_recovery'
+          ]
+
+          && request.resource.data.triggeredBy == request.auth.uid
+          && request.resource.data.requestKey is string
+          && request.resource.data.requestKey.size() > 0
+          && request.resource.data.requestKey.size() <= 240
+
+          && request.resource.data.queuedAt is timestamp
+          && request.resource.data.queuedAt == request.time
+          && request.resource.data.runStatus == 'queued'
+
+          && request.resource.data.startedAt == null
+          && request.resource.data.completedAt == null
+          && request.resource.data.workerId == null
+          && request.resource.data.httpStatus == null
+
+          && request.resource.data.executionAttempt == 1
+          && request.resource.data.itemsFound == 0
+          && request.resource.data.snapshotsCreated == 0
+          && request.resource.data.eventsCreated == 0
+          && request.resource.data.signalsCreated == 0
+
+          && request.resource.data.bytesDownloaded == null
+          && request.resource.data.durationMs == null
+          && request.resource.data.errorCode == null
+          && request.resource.data.errorMessage == null
+
+          && request.resource.data.collectorVersion == 'pending'
+          && request.resource.data.parserVersion == null
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdAt == request.time
+
+          // Run talebi ile aynı transaction içinde görev rezervasyonu zorunludur.
+          && exists(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          )
+
+          && get(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          ).data.tenantId == request.auth.uid
+
+          && get(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          ).data.status == 'active'
+
+          && getAfter(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          ).data.leaseOwner == 'queue:' + runId
+
+          && getAfter(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          ).data.lastRequestedBy == request.auth.uid
+
+          && request.resource.data.brandId == get(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          ).data.brandId
+
+          && request.resource.data.profileId == get(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          ).data.profileId
+
+          && request.resource.data.sourceId == get(
+            /databases/$(database)/documents/monitoring_crawl_jobs/$(request.resource.data.jobId)
+          ).data.sourceId;
+
+      allow update, delete: if false;
+    }
+    match /monitoring_signals/{signalId} {
+      // Marka kullanıcısı yalnız kendi tenant sinyallerini okuyabilir.
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      // Sinyaller yalnız güvenilir n8n/worker tarafından,
+      // Admin SDK üzerinden oluşturulur.
+      allow create: if false;
+
+      // 1. Kullanıcı inceleme durumunu değiştirebilir.
+      //
+      // Değiştirilebilen durumlar:
+      // under_review, confirmed, dismissed, escalated, archived
       allow update: if request.auth != null
           && resource.data.tenantId == request.auth.uid
           && request.resource.data.tenantId == resource.data.tenantId
           && request.resource.data.brandId == resource.data.brandId
           && request.resource.data.sourceId == resource.data.sourceId
           && request.resource.data.pageId == resource.data.pageId
+          && request.resource.data.listingId == resource.data.listingId
+          && request.resource.data.sellerId == resource.data.sellerId
+          && request.resource.data.storeId == resource.data.storeId
           && request.resource.data.eventId == resource.data.eventId
           && request.resource.data.ruleId == resource.data.ruleId
+          && request.resource.data.ruleName == resource.data.ruleName
+          && request.resource.data.eventType == resource.data.eventType
+          && request.resource.data.eventCategory
+              == resource.data.eventCategory
+          && request.resource.data.signalLevel == resource.data.signalLevel
+          && request.resource.data.forwardingStatus
+              == resource.data.forwardingStatus
+          && request.resource.data.forwardedAt == resource.data.forwardedAt
+          && request.resource.data.forwardingError
+              == resource.data.forwardingError
+          && request.resource.data.title == resource.data.title
+          && request.resource.data.summary == resource.data.summary
           && request.resource.data.detectedAt == resource.data.detectedAt
           && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.resolvedAt == resource.data.resolvedAt
+          && request.resource.data.resolvedBy == resource.data.resolvedBy
+          && request.resource.data.resolutionNote
+              == resource.data.resolutionNote
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status',
             'reviewedAt',
             'reviewedBy',
-            'forwardingStatus',
-            'forwardedAt',
-            'forwardingError',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.status in [
+            'under_review',
+            'confirmed',
+            'dismissed',
+            'escalated',
+            'archived'
+          ]
+          && request.resource.data.reviewedAt is timestamp
+          && request.resource.data.reviewedBy == request.auth.uid
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      // 2. Kullanıcı sinyali açıklama notuyla çözebilir.
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.sourceId == resource.data.sourceId
+          && request.resource.data.pageId == resource.data.pageId
+          && request.resource.data.listingId == resource.data.listingId
+          && request.resource.data.sellerId == resource.data.sellerId
+          && request.resource.data.storeId == resource.data.storeId
+          && request.resource.data.eventId == resource.data.eventId
+          && request.resource.data.ruleId == resource.data.ruleId
+          && request.resource.data.ruleName == resource.data.ruleName
+          && request.resource.data.eventType == resource.data.eventType
+          && request.resource.data.eventCategory
+              == resource.data.eventCategory
+          && request.resource.data.signalLevel == resource.data.signalLevel
+          && request.resource.data.forwardingStatus
+              == resource.data.forwardingStatus
+          && request.resource.data.forwardedAt == resource.data.forwardedAt
+          && request.resource.data.forwardingError
+              == resource.data.forwardingError
+          && request.resource.data.title == resource.data.title
+          && request.resource.data.summary == resource.data.summary
+          && request.resource.data.detectedAt == resource.data.detectedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.reviewedAt == resource.data.reviewedAt
+          && request.resource.data.reviewedBy == resource.data.reviewedBy
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
             'resolvedAt',
             'resolvedBy',
             'resolutionNote',
             'updatedAt',
             'updatedBy'
-          ]);
+          ])
+          && request.resource.data.status == 'resolved'
+          && request.resource.data.resolvedAt is timestamp
+          && request.resource.data.resolvedBy == request.auth.uid
+          && request.resource.data.resolutionNote is string
+          && request.resource.data.resolutionNote.size() > 0
+          && request.resource.data.resolutionNote.size() <= 1000
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.updatedBy == request.auth.uid;
 
+      // Sinyaller tarihsel kayıt olarak silinemez.
       allow delete: if false;
     }
-
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
-
-
-

@@ -1,6 +1,7 @@
 import '../constants/monitoring_enums.dart';
 import '../models/monitoring_event_model.dart';
 import '../models/page_snapshot_model.dart';
+import 'snapshot_fingerprint_service.dart';
 
 abstract final class SnapshotDiffService {
   static List<MonitoringEventModel> compare({
@@ -494,7 +495,12 @@ abstract final class SnapshotDiffService {
     double? changeRate,
   }) {
     return MonitoringEventModel(
-      id: '',
+      id: SnapshotFingerprintService.deterministicEventId(
+        tenantId: current.tenantId,
+        pageId: current.pageId,
+        currentSnapshotId: current.id,
+        eventType: eventType.value,
+      ),
       tenantId: current.tenantId,
       brandId: current.brandId,
       sourceId: current.sourceId,

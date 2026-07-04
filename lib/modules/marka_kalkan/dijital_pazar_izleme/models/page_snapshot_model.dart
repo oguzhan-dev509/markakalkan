@@ -18,6 +18,7 @@ class PageSnapshotModel {
     required this.contactSummary,
     required this.parserVersion,
     required this.createdAt,
+    this.versionNumber = 1,
     this.previousSnapshotId,
     this.title,
     this.description,
@@ -40,6 +41,7 @@ class PageSnapshotModel {
   final String pageId;
   final String crawlRunId;
   final String? previousSnapshotId;
+  final int versionNumber;
   final DateTime capturedAt;
   final MonitoringPageStatus pageStatus;
   final String? title;
@@ -95,6 +97,7 @@ class PageSnapshotModel {
       pageId: _requiredString(data['pageId']),
       crawlRunId: _requiredString(data['crawlRunId']),
       previousSnapshotId: _nullableString(data['previousSnapshotId']),
+      versionNumber: _positiveInt(data['versionNumber']),
       capturedAt: capturedAt,
       pageStatus: MonitoringPageStatusX.fromValue(
         data['pageStatus']?.toString(),
@@ -131,6 +134,7 @@ class PageSnapshotModel {
       'pageId': pageId,
       'crawlRunId': crawlRunId,
       'previousSnapshotId': _cleanNullable(previousSnapshotId),
+      'versionNumber': versionNumber < 1 ? 1 : versionNumber,
       'capturedAt': Timestamp.fromDate(capturedAt),
       'pageStatus': pageStatus.value,
       'title': _cleanNullable(title),
@@ -209,6 +213,11 @@ class PageSnapshotModel {
     };
   }
 
+  static int _positiveInt(dynamic value) {
+    final parsed = _intFromValue(value);
+    return parsed < 1 ? 1 : parsed;
+  }
+
   static int _intFromValue(dynamic value) {
     if (value is int) {
       return value;
@@ -220,4 +229,22 @@ class PageSnapshotModel {
 
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
+}
+
+class PageSnapshotCreateResult {
+  const PageSnapshotCreateResult({
+    required this.snapshot,
+    required this.previousSnapshot,
+    required this.wasCreated,
+  });
+
+  final PageSnapshotModel snapshot;
+  final PageSnapshotModel? previousSnapshot;
+  final bool wasCreated;
+
+  String get snapshotId => snapshot.id;
+
+  String? get previousSnapshotId => previousSnapshot?.id;
+
+  bool get isFirstSnapshot => previousSnapshot == null;
 }

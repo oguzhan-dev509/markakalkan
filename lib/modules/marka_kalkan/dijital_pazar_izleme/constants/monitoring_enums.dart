@@ -521,11 +521,15 @@ extension MonitoringStoreStatusX on MonitoringStoreStatus {
 enum MonitoringPageType {
   productListing,
   sellerStore,
+  sellerProfile,
   searchResult,
+  categoryPage,
   socialProfile,
   socialPost,
   websiteHome,
   websiteProduct,
+  independentWebsite,
+  suspiciousDomain,
   domainRecord,
   other,
 }
@@ -536,8 +540,24 @@ enum MonitoringPageStatus {
   removed,
   blocked,
   redirected,
+  republished,
+  unreachable,
   error,
   unknown,
+}
+
+enum MonitoringPageTrackingStatus { pending, active, paused, archived }
+
+enum MonitoringPageDiscoveryMethod {
+  manual,
+  sourceScan,
+  keywordScan,
+  sellerScan,
+  domainScan,
+  imageMatch,
+  eventMatch,
+  signalMatch,
+  import,
 }
 
 extension MonitoringPageTypeX on MonitoringPageType {
@@ -547,8 +567,12 @@ extension MonitoringPageTypeX on MonitoringPageType {
         return 'product_listing';
       case MonitoringPageType.sellerStore:
         return 'seller_store';
+      case MonitoringPageType.sellerProfile:
+        return 'seller_profile';
       case MonitoringPageType.searchResult:
         return 'search_result';
+      case MonitoringPageType.categoryPage:
+        return 'category_page';
       case MonitoringPageType.socialProfile:
         return 'social_profile';
       case MonitoringPageType.socialPost:
@@ -557,6 +581,10 @@ extension MonitoringPageTypeX on MonitoringPageType {
         return 'website_home';
       case MonitoringPageType.websiteProduct:
         return 'website_product';
+      case MonitoringPageType.independentWebsite:
+        return 'independent_website';
+      case MonitoringPageType.suspiciousDomain:
+        return 'suspicious_domain';
       case MonitoringPageType.domainRecord:
         return 'domain_record';
       case MonitoringPageType.other:
@@ -570,8 +598,12 @@ extension MonitoringPageTypeX on MonitoringPageType {
         return MonitoringPageType.productListing;
       case 'seller_store':
         return MonitoringPageType.sellerStore;
+      case 'seller_profile':
+        return MonitoringPageType.sellerProfile;
       case 'search_result':
         return MonitoringPageType.searchResult;
+      case 'category_page':
+        return MonitoringPageType.categoryPage;
       case 'social_profile':
         return MonitoringPageType.socialProfile;
       case 'social_post':
@@ -580,6 +612,10 @@ extension MonitoringPageTypeX on MonitoringPageType {
         return MonitoringPageType.websiteHome;
       case 'website_product':
         return MonitoringPageType.websiteProduct;
+      case 'independent_website':
+        return MonitoringPageType.independentWebsite;
+      case 'suspicious_domain':
+        return MonitoringPageType.suspiciousDomain;
       case 'domain_record':
         return MonitoringPageType.domainRecord;
       case 'other':
@@ -602,6 +638,10 @@ extension MonitoringPageStatusX on MonitoringPageStatus {
         return 'blocked';
       case MonitoringPageStatus.redirected:
         return 'redirected';
+      case MonitoringPageStatus.republished:
+        return 'republished';
+      case MonitoringPageStatus.unreachable:
+        return 'unreachable';
       case MonitoringPageStatus.error:
         return 'error';
       case MonitoringPageStatus.unknown:
@@ -621,11 +661,165 @@ extension MonitoringPageStatusX on MonitoringPageStatus {
         return MonitoringPageStatus.blocked;
       case 'redirected':
         return MonitoringPageStatus.redirected;
+      case 'republished':
+        return MonitoringPageStatus.republished;
+      case 'unreachable':
+        return MonitoringPageStatus.unreachable;
       case 'error':
         return MonitoringPageStatus.error;
       case 'unknown':
       default:
         return MonitoringPageStatus.unknown;
+    }
+  }
+}
+
+extension MonitoringPageTrackingStatusX on MonitoringPageTrackingStatus {
+  String get value {
+    switch (this) {
+      case MonitoringPageTrackingStatus.pending:
+        return 'pending';
+      case MonitoringPageTrackingStatus.active:
+        return 'active';
+      case MonitoringPageTrackingStatus.paused:
+        return 'paused';
+      case MonitoringPageTrackingStatus.archived:
+        return 'archived';
+    }
+  }
+
+  static MonitoringPageTrackingStatus fromValue(String? value) {
+    switch (value) {
+      case 'pending':
+        return MonitoringPageTrackingStatus.pending;
+      case 'paused':
+        return MonitoringPageTrackingStatus.paused;
+      case 'archived':
+        return MonitoringPageTrackingStatus.archived;
+      case 'active':
+      default:
+        return MonitoringPageTrackingStatus.active;
+    }
+  }
+}
+
+extension MonitoringPageDiscoveryMethodX on MonitoringPageDiscoveryMethod {
+  String get value {
+    switch (this) {
+      case MonitoringPageDiscoveryMethod.manual:
+        return 'manual';
+      case MonitoringPageDiscoveryMethod.sourceScan:
+        return 'source_scan';
+      case MonitoringPageDiscoveryMethod.keywordScan:
+        return 'keyword_scan';
+      case MonitoringPageDiscoveryMethod.sellerScan:
+        return 'seller_scan';
+      case MonitoringPageDiscoveryMethod.domainScan:
+        return 'domain_scan';
+      case MonitoringPageDiscoveryMethod.imageMatch:
+        return 'image_match';
+      case MonitoringPageDiscoveryMethod.eventMatch:
+        return 'event_match';
+      case MonitoringPageDiscoveryMethod.signalMatch:
+        return 'signal_match';
+      case MonitoringPageDiscoveryMethod.import:
+        return 'import';
+    }
+  }
+
+  static MonitoringPageDiscoveryMethod fromValue(String? value) {
+    switch (value) {
+      case 'source_scan':
+        return MonitoringPageDiscoveryMethod.sourceScan;
+      case 'keyword_scan':
+        return MonitoringPageDiscoveryMethod.keywordScan;
+      case 'seller_scan':
+        return MonitoringPageDiscoveryMethod.sellerScan;
+      case 'domain_scan':
+        return MonitoringPageDiscoveryMethod.domainScan;
+      case 'image_match':
+        return MonitoringPageDiscoveryMethod.imageMatch;
+      case 'event_match':
+        return MonitoringPageDiscoveryMethod.eventMatch;
+      case 'signal_match':
+        return MonitoringPageDiscoveryMethod.signalMatch;
+      case 'import':
+        return MonitoringPageDiscoveryMethod.import;
+      case 'manual':
+      default:
+        return MonitoringPageDiscoveryMethod.manual;
+    }
+  }
+}
+
+enum MonitoringCrawlTriggerType {
+  scheduled,
+  manual,
+  retry,
+  webhook,
+  systemRecovery,
+}
+
+extension MonitoringCrawlTriggerTypeX on MonitoringCrawlTriggerType {
+  String get value {
+    switch (this) {
+      case MonitoringCrawlTriggerType.scheduled:
+        return 'scheduled';
+      case MonitoringCrawlTriggerType.manual:
+        return 'manual';
+      case MonitoringCrawlTriggerType.retry:
+        return 'retry';
+      case MonitoringCrawlTriggerType.webhook:
+        return 'webhook';
+      case MonitoringCrawlTriggerType.systemRecovery:
+        return 'system_recovery';
+    }
+  }
+
+  static MonitoringCrawlTriggerType fromValue(String? value) {
+    switch (value) {
+      case 'manual':
+        return MonitoringCrawlTriggerType.manual;
+      case 'retry':
+        return MonitoringCrawlTriggerType.retry;
+      case 'webhook':
+        return MonitoringCrawlTriggerType.webhook;
+      case 'system_recovery':
+        return MonitoringCrawlTriggerType.systemRecovery;
+      case 'scheduled':
+      default:
+        return MonitoringCrawlTriggerType.scheduled;
+    }
+  }
+}
+
+enum MonitoringCrawlExecutionMode { queue, n8n, worker, manual }
+
+extension MonitoringCrawlExecutionModeX on MonitoringCrawlExecutionMode {
+  String get value {
+    switch (this) {
+      case MonitoringCrawlExecutionMode.queue:
+        return 'queue';
+      case MonitoringCrawlExecutionMode.n8n:
+        return 'n8n';
+      case MonitoringCrawlExecutionMode.worker:
+        return 'worker';
+      case MonitoringCrawlExecutionMode.manual:
+        return 'manual';
+    }
+  }
+
+  static MonitoringCrawlExecutionMode fromValue(String? value) {
+    switch (value) {
+      case 'n8n':
+        return MonitoringCrawlExecutionMode.n8n;
+      case 'worker':
+        return MonitoringCrawlExecutionMode.worker;
+      case 'manual':
+        return MonitoringCrawlExecutionMode.manual;
+      case 'queue':
+      default:
+        return MonitoringCrawlExecutionMode.queue;
     }
   }
 }

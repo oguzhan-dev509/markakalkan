@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  crypto: ^3.0.7
   flutter:
     sdk: flutter
 
@@ -44,6 +45,7 @@ dependencies:
   printing: ^5.14.3
 
 dev_dependencies:
+  crypto: ^3.0.7
   flutter_test:
     sdk: flutter
 

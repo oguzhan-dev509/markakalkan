@@ -16,8 +16,100 @@ import 'package:markakalkan/features/detective/presentation/digital_detective_ta
 import 'package:markakalkan/features/detective/presentation/digital_detective_tasks_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_detective_findings_page.dart';
 import 'package:markakalkan/features/detective/presentation/digital_brand_intelligence_report_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/dijital_pazar_izleme_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/marka_izleme_profili_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/kaynak_yonetimi_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/izlenen_sayfalar_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/tarama_gorevleri_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/izleme_olaylari_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/risk_sinyalleri_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/dijital_pazar_ana_paneli_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/rapor_merkezi_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/yonetici_ozeti_raporu_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/marka_risk_raporu_sayfasi.dart';
+import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/vaka_kanit_raporu_sayfasi.dart';
 
 abstract final class AppRouter {
+  static Future<void> openVakaKanitRaporu(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const VakaKanitRaporuSayfasi()),
+    );
+  }
+
+  static Future<void> openMarkaRiskRaporu(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const MarkaRiskRaporuSayfasi()),
+    );
+  }
+
+  static Future<void> openYoneticiOzetiRaporu(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const YoneticiOzetiRaporuSayfasi(),
+      ),
+    );
+  }
+
+  static Future<void> openRaporMerkezi(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const RaporMerkeziSayfasi()),
+    );
+  }
+
+  static Future<void> openDijitalPazarAnaPaneli(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DijitalPazarAnaPaneliSayfasi(),
+      ),
+    );
+  }
+
+  static Future<void> openRiskSinyalleri(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const RiskSinyalleriSayfasi()),
+    );
+  }
+
+  static Future<void> openIzlemeOlaylari(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const IzlemeOlaylariSayfasi()),
+    );
+  }
+
+  static Future<void> openTaramaGorevleri(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const TaramaGorevleriSayfasi()),
+    );
+  }
+
+  static Future<void> openIzlenenSayfalar(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const IzlenenSayfalarSayfasi()),
+    );
+  }
+
+  static Future<void> openKaynakYonetimi(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const KaynakYonetimiSayfasi()),
+    );
+  }
+
+  static Future<void> openMarkaIzlemeProfili(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const MarkaIzlemeProfiliSayfasi(),
+      ),
+    );
+  }
+
+  static Future<void> openDijitalPazarIzleme(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DijitalPazarIzlemeSayfasi(),
+      ),
+    );
+  }
+
   static Future<void> openBrandLogin(BuildContext context) {
     return Navigator.of(
       context,

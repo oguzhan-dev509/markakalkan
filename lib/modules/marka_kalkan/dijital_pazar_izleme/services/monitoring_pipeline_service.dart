@@ -67,18 +67,22 @@ class MonitoringPipelineService {
     String? sellerId,
     String? storeId,
   }) async {
-    final previousSnapshot = await _snapshotRepository.getLatestForPage(
-      snapshot.pageId,
-    );
+    final createResult = await _snapshotRepository.createVersioned(snapshot);
 
-    final snapshotForCreate = _copySnapshot(
-      snapshot,
-      previousSnapshotId: previousSnapshot?.id,
-    );
+    final persistedSnapshot = createResult.snapshot;
+    final previousSnapshot = createResult.previousSnapshot;
+    final snapshotId = persistedSnapshot.id;
 
-    final snapshotId = await _snapshotRepository.create(snapshotForCreate);
-
-    final persistedSnapshot = _copySnapshot(snapshotForCreate, id: snapshotId);
+    // Aynı tenant + page + crawlRun daha önce işlendiğinde yeni olay veya
+    // sinyal üretme. Deterministik snapshot kaydı mevcut haliyle döndürülür.
+    if (!createResult.wasCreated) {
+      return MonitoringPipelineResult(
+        snapshotId: snapshotId,
+        previousSnapshotId: previousSnapshot?.id,
+        eventIds: const <String>[],
+        signalIds: const <String>[],
+      );
+    }
 
     if (previousSnapshot == null) {
       return MonitoringPipelineResult(
@@ -146,41 +150,6 @@ class MonitoringPipelineService {
       previousSnapshotId: previousSnapshot.id,
       eventIds: List<String>.unmodifiable(eventIds),
       signalIds: List<String>.unmodifiable(signalIds),
-    );
-  }
-
-  static PageSnapshotModel _copySnapshot(
-    PageSnapshotModel source, {
-    String? id,
-    String? previousSnapshotId,
-  }) {
-    return PageSnapshotModel(
-      id: id ?? source.id,
-      tenantId: source.tenantId,
-      brandId: source.brandId,
-      sourceId: source.sourceId,
-      pageId: source.pageId,
-      crawlRunId: source.crawlRunId,
-      previousSnapshotId: previousSnapshotId ?? source.previousSnapshotId,
-      capturedAt: source.capturedAt,
-      pageStatus: source.pageStatus,
-      title: source.title,
-      description: source.description,
-      price: source.price,
-      currency: source.currency,
-      stockStatus: source.stockStatus,
-      sellerName: source.sellerName,
-      storeName: source.storeName,
-      imageUrls: source.imageUrls,
-      mediaAssetIds: source.mediaAssetIds,
-      contactSummary: source.contactSummary,
-      textHash: source.textHash,
-      contentHash: source.contentHash,
-      imageSetHash: source.imageSetHash,
-      htmlArchivePath: source.htmlArchivePath,
-      screenshotAssetId: source.screenshotAssetId,
-      parserVersion: source.parserVersion,
-      createdAt: source.createdAt,
     );
   }
 
