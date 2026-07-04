@@ -827,10 +827,222 @@ match /publicProductCodes/{codeId} {
 
   allow update, delete: if false;
 }
+
+    // ============================================================
+    // DİJİTAL PAZAR İZLEME
+    // tenantId, mevcut marka hesabının Firebase Auth UID değeridir.
+    // ============================================================
+
+    match /monitoring_page_snapshots/{snapshotId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId is string
+          && request.resource.data.tenantId.size() > 0
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.sourceId is string
+          && request.resource.data.sourceId.size() > 0
+          && request.resource.data.pageId is string
+          && request.resource.data.pageId.size() > 0
+          && request.resource.data.crawlRunId is string
+          && request.resource.data.crawlRunId.size() > 0
+          && request.resource.data.capturedAt is timestamp
+          && request.resource.data.createdAt is timestamp;
+
+      // Snapshot kayıtları tarihsel delildir; değiştirilemez ve silinemez.
+      allow update, delete: if false;
+    }
+
+    match /monitoring_events/{eventId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId is string
+          && request.resource.data.brandId is string
+          && request.resource.data.sourceId is string
+          && request.resource.data.pageId is string
+          && request.resource.data.previousSnapshotId is string
+          && request.resource.data.currentSnapshotId is string
+          && request.resource.data.eventType is string
+          && request.resource.data.eventCategory is string
+          && request.resource.data.severity in [
+            'low',
+            'medium',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.status is string
+          && request.resource.data.detectedAt is timestamp
+          && request.resource.data.createdAt is timestamp;
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.sourceId == resource.data.sourceId
+          && request.resource.data.pageId == resource.data.pageId
+          && request.resource.data.previousSnapshotId
+              == resource.data.previousSnapshotId
+          && request.resource.data.currentSnapshotId
+              == resource.data.currentSnapshotId
+          && request.resource.data.eventType == resource.data.eventType
+          && request.resource.data.eventCategory
+              == resource.data.eventCategory
+          && request.resource.data.detectedAt == resource.data.detectedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'reviewedAt'
+          ])
+          && request.resource.data.status is string
+          && request.resource.data.reviewedAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    match /monitoring_signal_rules/{ruleId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId is string
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 180
+          && request.resource.data.eventTypes is list
+          && request.resource.data.sourceIds is list
+          && request.resource.data.conditions is list
+          && request.resource.data.signalLevel in [
+            'low',
+            'medium',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.status is string
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.stopOnMatch is bool
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdBy is string
+          && request.resource.data.createdBy.size() > 0;
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'brandId',
+            'name',
+            'description',
+            'eventTypes',
+            'sourceIds',
+            'conditions',
+            'signalLevel',
+            'status',
+            'priority',
+            'signalTitleTemplate',
+            'signalSummaryTemplate',
+            'stopOnMatch',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 180
+          && request.resource.data.eventTypes is list
+          && request.resource.data.sourceIds is list
+          && request.resource.data.conditions is list
+          && request.resource.data.signalLevel in [
+            'low',
+            'medium',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.status is string
+          && request.resource.data.priority in [
+            'low',
+            'normal',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.stopOnMatch is bool
+          && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+    }
+
+    match /monitoring_signals/{signalId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId is string
+          && request.resource.data.brandId is string
+          && request.resource.data.sourceId is string
+          && request.resource.data.pageId is string
+          && request.resource.data.eventId is string
+          && request.resource.data.eventId.size() > 0
+          && request.resource.data.ruleId is string
+          && request.resource.data.ruleId.size() > 0
+          && request.resource.data.signalLevel in [
+            'low',
+            'medium',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.status is string
+          && request.resource.data.forwardingStatus is string
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.summary is string
+          && request.resource.data.detectedAt is timestamp
+          && request.resource.data.createdAt is timestamp;
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.sourceId == resource.data.sourceId
+          && request.resource.data.pageId == resource.data.pageId
+          && request.resource.data.eventId == resource.data.eventId
+          && request.resource.data.ruleId == resource.data.ruleId
+          && request.resource.data.detectedAt == resource.data.detectedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'reviewedAt',
+            'reviewedBy',
+            'forwardingStatus',
+            'forwardedAt',
+            'forwardingError',
+            'resolvedAt',
+            'resolvedBy',
+            'resolutionNote',
+            'updatedAt',
+            'updatedBy'
+          ]);
+
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
+
 
 
