@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+.firebase/
+backups/
+firebase.json.backup_*
+firestore.indexes.before_*.bak
+firestore.rules.before_*.bak
