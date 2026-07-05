@@ -37,6 +37,56 @@ class IpFirestoreRefs {
     return _firestore.collection(IpCollections.tradeSecrets);
   }
 
+  CollectionReference<Map<String, dynamic>> get tradeSecretComponents {
+    return _firestore.collection(IpCollections.tradeSecretComponents);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretAccessGrants {
+    return _firestore.collection(IpCollections.tradeSecretAccessGrants);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretDisclosures {
+    return _firestore.collection(IpCollections.tradeSecretDisclosures);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretIncidents {
+    return _firestore.collection(IpCollections.tradeSecretIncidents);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretProtectionControls {
+    return _firestore.collection(IpCollections.tradeSecretProtectionControls);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretRiskAssessments {
+    return _firestore.collection(IpCollections.tradeSecretRiskAssessments);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretResilienceProfiles {
+    return _firestore.collection(IpCollections.tradeSecretResilienceProfiles);
+  }
+
+  CollectionReference<Map<String, dynamic>>
+  get tradeSecretDefensibilityRecords {
+    return _firestore.collection(IpCollections.tradeSecretDefensibilityRecords);
+  }
+
+  CollectionReference<Map<String, dynamic>>
+  get tradeSecretLifecycleTransitions {
+    return _firestore.collection(IpCollections.tradeSecretLifecycleTransitions);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretRemediationActions {
+    return _firestore.collection(IpCollections.tradeSecretRemediationActions);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretAlertRules {
+    return _firestore.collection(IpCollections.tradeSecretAlertRules);
+  }
+
+  CollectionReference<Map<String, dynamic>> get tradeSecretManagementDecisions {
+    return _firestore.collection(IpCollections.tradeSecretManagementDecisions);
+  }
+
   CollectionReference<Map<String, dynamic>> get relationships {
     return _firestore.collection(IpCollections.relationships);
   }
@@ -106,6 +156,100 @@ class IpFirestoreRefs {
   ) {
     return tradeSecrets.doc(
       _validateRequiredId(tradeSecretId, fieldName: 'tradeSecretId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretComponentDocument(
+    String id,
+  ) {
+    return tradeSecretComponents.doc(
+      _validateRequiredId(id, fieldName: 'componentId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretAccessGrantDocument(
+    String id,
+  ) {
+    return tradeSecretAccessGrants.doc(
+      _validateRequiredId(id, fieldName: 'accessGrantId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretDisclosureDocument(
+    String id,
+  ) {
+    return tradeSecretDisclosures.doc(
+      _validateRequiredId(id, fieldName: 'disclosureId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretIncidentDocument(
+    String id,
+  ) {
+    return tradeSecretIncidents.doc(
+      _validateRequiredId(id, fieldName: 'incidentId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretProtectionControlDocument(
+    String id,
+  ) {
+    return tradeSecretProtectionControls.doc(
+      _validateRequiredId(id, fieldName: 'protectionControlId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretRiskAssessmentDocument(
+    String id,
+  ) {
+    return tradeSecretRiskAssessments.doc(
+      _validateRequiredId(id, fieldName: 'riskAssessmentId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretResilienceProfileDocument(
+    String id,
+  ) {
+    return tradeSecretResilienceProfiles.doc(
+      _validateRequiredId(id, fieldName: 'resilienceProfileId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>>
+  tradeSecretDefensibilityRecordDocument(String id) {
+    return tradeSecretDefensibilityRecords.doc(
+      _validateRequiredId(id, fieldName: 'defensibilityRecordId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>>
+  tradeSecretLifecycleTransitionDocument(String id) {
+    return tradeSecretLifecycleTransitions.doc(
+      _validateRequiredId(id, fieldName: 'lifecycleTransitionId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretRemediationActionDocument(
+    String id,
+  ) {
+    return tradeSecretRemediationActions.doc(
+      _validateRequiredId(id, fieldName: 'remediationActionId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretAlertRuleDocument(
+    String id,
+  ) {
+    return tradeSecretAlertRules.doc(
+      _validateRequiredId(id, fieldName: 'alertRuleId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretManagementDecisionDocument(
+    String id,
+  ) {
+    return tradeSecretManagementDecisions.doc(
+      _validateRequiredId(id, fieldName: 'managementDecisionId'),
     );
   }
 
