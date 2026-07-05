@@ -49,3 +49,4 @@ backups/
 firebase.json.backup_*
 firestore.indexes.before_*.bak
 firestore.rules.before_*.bak
+analysis_options.before_backups_exclude_*.yaml

@@ -2342,6 +2342,258 @@ match /publicProductCodes/{codeId} {
       // Sinyaller tarihsel kayıt olarak silinemez.
       allow delete: if false;
     }
+
+    // ============================================================
+    // FİKRİ MÜLKİYET VE BELGELER — ÇEKİRDEK VERİ KATMANI
+    // tenantId, marka hesabının Firebase Auth UID değeridir.
+    // Bu fazda yalnız dört aktif koleksiyon istemci erişimine açıktır.
+    // ============================================================
+
+    match /ip_assets/{assetId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.assetCode is string
+          && request.resource.data.assetCode.size() > 0
+          && request.resource.data.assetCode.size() <= 100
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 300
+          && request.resource.data.rightStrengthScore is int
+          && request.resource.data.rightStrengthScore >= 0
+          && request.resource.data.rightStrengthScore <= 100
+          && request.resource.data.secretSecurityScore is int
+          && request.resource.data.secretSecurityScore >= 0
+          && request.resource.data.secretSecurityScore <= 100
+          && request.resource.data.responseReadinessScore is int
+          && request.resource.data.responseReadinessScore >= 0
+          && request.resource.data.responseReadinessScore <= 100
+          && request.resource.data.resilienceScore is int
+          && request.resource.data.resilienceScore >= 0
+          && request.resource.data.resilienceScore <= 100
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.assetCode == resource.data.assetCode
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.rightStrengthScore is int
+          && request.resource.data.rightStrengthScore >= 0
+          && request.resource.data.rightStrengthScore <= 100
+          && request.resource.data.secretSecurityScore is int
+          && request.resource.data.secretSecurityScore >= 0
+          && request.resource.data.secretSecurityScore <= 100
+          && request.resource.data.responseReadinessScore is int
+          && request.resource.data.responseReadinessScore >= 0
+          && request.resource.data.responseReadinessScore <= 100
+          && request.resource.data.resilienceScore is int
+          && request.resource.data.resilienceScore >= 0
+          && request.resource.data.resilienceScore <= 100
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.rightIds.size() == 0
+          && resource.data.documentIds.size() == 0
+          && resource.data.relationshipIds.size() == 0
+          && resource.data.monitoringProfileIds.size() == 0;
+    }
+
+    match /ip_rights/{rightId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.assetId is string
+          && request.resource.data.assetId.size() > 0
+          && request.resource.data.rightCode is string
+          && request.resource.data.rightCode.size() > 0
+          && request.resource.data.rightCode.size() <= 100
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 300
+          && request.resource.data.rightStrengthScore is int
+          && request.resource.data.rightStrengthScore >= 0
+          && request.resource.data.rightStrengthScore <= 100
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.assetId == resource.data.assetId
+          && request.resource.data.rightCode == resource.data.rightCode
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.rightStrengthScore is int
+          && request.resource.data.rightStrengthScore >= 0
+          && request.resource.data.rightStrengthScore <= 100
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.documentIds.size() == 0
+          && resource.data.relationshipIds.size() == 0
+          && resource.data.relatedRightIds.size() == 0
+          && resource.data.patentFamilyIds.size() == 0
+          && resource.data.oppositionActive == false
+          && resource.data.disputeActive == false
+          && resource.data.customsProtectionActive == false;
+    }
+
+    match /ip_documents/{documentId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.documentCode is string
+          && request.resource.data.documentCode.size() > 0
+          && request.resource.data.documentCode.size() <= 100
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 300
+          && request.resource.data.fileSizeBytes is int
+          && request.resource.data.fileSizeBytes >= 0
+          && request.resource.data.versionNumber is int
+          && request.resource.data.versionNumber >= 1
+          && (
+            request.resource.data.sha256Hash == null
+            || (
+              request.resource.data.sha256Hash is string
+              && request.resource.data.sha256Hash.matches(
+                '^[A-Fa-f0-9]{64}$'
+              )
+            )
+          )
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.documentCode == resource.data.documentCode
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.fileSizeBytes is int
+          && request.resource.data.fileSizeBytes >= 0
+          && request.resource.data.versionNumber is int
+          && request.resource.data.versionNumber >= 1
+          && (
+            request.resource.data.sha256Hash == null
+            || (
+              request.resource.data.sha256Hash is string
+              && request.resource.data.sha256Hash.matches(
+                '^[A-Fa-f0-9]{64}$'
+              )
+            )
+          )
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.legalHoldActive == false
+          && resource.data.isLocked == false
+          && resource.data.parentDocumentId == null
+          && resource.data.previousVersionId == null
+          && resource.data.supersedingDocumentId == null
+          && resource.data.caseIds.size() == 0
+          && resource.data.relatedAssetIds.size() == 0
+          && resource.data.relatedRightIds.size() == 0
+          && resource.data.relationshipIds.size() == 0;
+    }
+
+    match /ip_relationships/{relationshipId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.relationshipCode is string
+          && request.resource.data.relationshipCode.size() > 0
+          && request.resource.data.relationshipCode.size() <= 100
+          && request.resource.data.subjectName is string
+          && request.resource.data.subjectName.size() > 0
+          && request.resource.data.subjectName.size() <= 300
+          && request.resource.data.riskScore is int
+          && request.resource.data.riskScore >= 0
+          && request.resource.data.riskScore <= 100
+          && request.resource.data.trustScore is int
+          && request.resource.data.trustScore >= 0
+          && request.resource.data.trustScore <= 100
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.relationshipCode
+              == resource.data.relationshipCode
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.riskScore is int
+          && request.resource.data.riskScore >= 0
+          && request.resource.data.riskScore <= 100
+          && request.resource.data.trustScore is int
+          && request.resource.data.trustScore >= 0
+          && request.resource.data.trustScore <= 100
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.accessRevoked == true
+          && resource.data.accessLevel == 'none'
+          && resource.data.relatedAssetIds.size() == 0
+          && resource.data.relatedRightIds.size() == 0
+          && resource.data.relatedDocumentIds.size() == 0
+          && resource.data.relatedProductIds.size() == 0
+          && resource.data.relatedCaseIds.size() == 0
+          && resource.data.status != 'active'
+          && resource.data.status != 'high_risk'
+          && resource.data.status != 'under_review';
+    }
     match /{document=**} {
       allow read, write: if false;
     }

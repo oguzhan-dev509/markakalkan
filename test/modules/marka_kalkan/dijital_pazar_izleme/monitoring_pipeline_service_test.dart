@@ -126,12 +126,14 @@ void main() {
 
         expect(result.snapshotId, 'snapshot-2');
         expect(result.previousSnapshotId, 'snapshot-1');
-        expect(result.eventIds, <String>['event-1']);
-        expect(result.signalIds, <String>['signal-1']);
 
         final event = environment.events.saved.single;
+        final signal = environment.signals.saved.single;
 
-        expect(event.id, 'event-1');
+        expect(event.id, startsWith('evt_'));
+        expect(result.eventIds, <String>[event.id]);
+        expect(result.signalIds, <String>[signal.id]);
+
         expect(event.previousSnapshotId, 'snapshot-1');
         expect(event.currentSnapshotId, 'snapshot-2');
         expect(event.eventType, MonitoringEventType.priceDecreased);
@@ -142,10 +144,8 @@ void main() {
         expect(event.sellerId, 'seller-1');
         expect(event.storeId, 'store-1');
 
-        final signal = environment.signals.saved.single;
-
-        expect(signal.id, 'signal-1');
-        expect(signal.eventId, 'event-1');
+        expect(signal.id, isNotEmpty);
+        expect(signal.eventId, event.id);
         expect(signal.ruleId, 'rule-price-drop');
         expect(signal.signalLevel, MonitoringSignalLevel.high);
         expect(signal.status, MonitoringSignalStatus.newSignal);
@@ -245,9 +245,12 @@ void main() {
         <String>{'rule-general', 'rule-source'},
       );
 
+      final persistedEventId = environment.events.saved.single.id;
+
+      expect(persistedEventId, startsWith('evt_'));
       expect(
         environment.signals.saved.every(
-          (signal) => signal.eventId == 'event-1',
+          (signal) => signal.eventId == persistedEventId,
         ),
         isTrue,
       );
@@ -292,6 +295,22 @@ class _FakePageSnapshotRepository implements PageSnapshotRepositoryPort {
     saved.add(_copySnapshot(snapshot, id: id));
 
     return id;
+  }
+
+  @override
+  Future<PageSnapshotCreateResult> createVersioned(
+    PageSnapshotModel snapshot,
+  ) async {
+    final previousSnapshot = await getLatestForPage(snapshot.pageId);
+    final snapshotId = await create(snapshot);
+
+    final persistedSnapshot = saved.lastWhere((item) => item.id == snapshotId);
+
+    return PageSnapshotCreateResult(
+      snapshot: persistedSnapshot,
+      previousSnapshot: previousSnapshot,
+      wasCreated: true,
+    );
   }
 
   @override
