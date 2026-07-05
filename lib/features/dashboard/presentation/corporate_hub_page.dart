@@ -29,7 +29,7 @@ class CorporateHubPage extends StatelessWidget {
       description:
           'Marka tescili, patent, tasarım, lisans ve yetki belgelerini yönetin.',
       icon: Icons.workspace_premium_outlined,
-      status: _ModuleStatus.soon,
+      status: _ModuleStatus.active,
     ),
     _CorporateModule(
       id: 'traceability',
@@ -305,6 +305,9 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'new_brand':
         AppRouter.openBrandApplication(context);
+        return;
+      case 'ip_documents':
+        AppRouter.openIpDocumentVault(context);
         return;
       case 'traceability':
         AppRouter.openBrandOperations(context);
