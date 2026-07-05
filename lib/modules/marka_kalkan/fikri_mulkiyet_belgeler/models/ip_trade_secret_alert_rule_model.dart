@@ -282,6 +282,37 @@ class IpTradeSecretAlertRuleModel {
     };
   }
 
+  Map<String, dynamic> toCreateMap() {
+    final map = toMap();
+    map['createdAt'] = FieldValue.serverTimestamp();
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    return map;
+  }
+
+  Map<String, dynamic> toUpdateMap({required String actorId}) {
+    final cleanedActorId = actorId.trim();
+
+    if (cleanedActorId.isEmpty) {
+      throw ArgumentError.value(
+        actorId,
+        'actorId',
+        'Güncelleme aktörü boş olamaz.',
+      );
+    }
+
+    final map = toMap();
+    map.remove('tenantId');
+    map.remove('brandId');
+    map.remove('tradeSecretId');
+    map.remove('sourceRecordId');
+    map.remove('ruleCode');
+    map.remove('createdAt');
+    map.remove('createdBy');
+    map['updatedAt'] = FieldValue.serverTimestamp();
+    map['updatedBy'] = cleanedActorId;
+    return map;
+  }
+
   bool get hasCompleteIdentity {
     return tenantId.trim().isNotEmpty &&
         brandId.trim().isNotEmpty &&
