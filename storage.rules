@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isTenantOwner(tenantId) {
+      return signedIn() && request.auth.uid == tenantId;
+    }
+
+    function isAllowedMimeType() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'text/plain',
+        'text/csv',
+        'application/zip',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.oasis.opendocument.text',
+        'application/vnd.oasis.opendocument.spreadsheet',
+        'application/vnd.oasis.opendocument.presentation'
+      ];
+    }
+
+    function hasRequiredMetadata() {
+      return request.resource.metadata != null
+          && 'tenantId' in request.resource.metadata
+          && 'documentId' in request.resource.metadata
+          && 'uploadedBy' in request.resource.metadata
+          && 'originalFileName' in request.resource.metadata
+          && 'sha256' in request.resource.metadata
+          && 'hashAlgorithm' in request.resource.metadata;
+    }
+
+    function hasValidMetadata(tenantId, documentId, fileName) {
+      return hasRequiredMetadata()
+          && request.resource.metadata.tenantId == tenantId
+          && request.resource.metadata.documentId == documentId
+          && request.resource.metadata.uploadedBy == request.auth.uid
+          && request.resource.metadata.originalFileName is string
+          && request.resource.metadata.originalFileName.size() > 0
+          && request.resource.metadata.originalFileName.size() <= 160
+          && request.resource.metadata.hashAlgorithm == 'SHA-256'
+          && request.resource.metadata.sha256 is string
+          && request.resource.metadata.sha256.matches('^[a-f0-9]{64}$')
+          && fileName.matches(
+            '^' + request.resource.metadata.sha256
+            + '\\.(pdf|jpg|png|webp|txt|csv|zip|docx|xlsx|pptx|odt|ods|odp)$'
+          );
+    }
+
+    match /tenants/{tenantId}/ip_documents/{documentId}/{fileName} {
+      allow get: if isTenantOwner(tenantId)
+          && resource.metadata.tenantId == tenantId
+          && resource.metadata.documentId == documentId;
+
+      allow list: if isTenantOwner(tenantId);
+
+      allow create: if resource == null
+          && isTenantOwner(tenantId)
+          && request.resource.size > 0
+          && request.resource.size <= 25 * 1024 * 1024
+          && isAllowedMimeType()
+          && hasValidMetadata(tenantId, documentId, fileName);
+
+      allow update: if false;
+
+      allow delete: if isTenantOwner(tenantId)
+          && resource.metadata.tenantId == tenantId
+          && resource.metadata.documentId == documentId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
