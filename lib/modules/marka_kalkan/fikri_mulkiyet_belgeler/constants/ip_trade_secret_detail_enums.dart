@@ -274,3 +274,120 @@ enum IpTradeSecretDisclosurePurpose {
     );
   }
 }
+
+enum IpTradeSecretIncidentType {
+  unauthorizedAccess('unauthorized_access', 'Yetkisiz Erişim'),
+  suspectedLeak('suspected_leak', 'Sızıntı Şüphesi'),
+  confirmedLeak('confirmed_leak', 'Teyitli Sızıntı'),
+  wrongRecipient('wrong_recipient', 'Yanlış Alıcıya Gönderim'),
+  lostDocument('lost_document', 'Kayıp Belge'),
+  lostDevice('lost_device', 'Kayıp Cihaz'),
+  stolenDevice('stolen_device', 'Çalınan Cihaz'),
+  credentialCompromise('credential_compromise', 'Kimlik Bilgisi İhlali'),
+  malware('malware', 'Zararlı Yazılım'),
+  phishing('phishing', 'Kimlik Avı'),
+  insiderThreat('insider_threat', 'İçeriden Tehdit'),
+  contractBreach('contract_breach', 'Sözleşme İhlali'),
+  ndaBreach('nda_breach', 'Gizlilik Sözleşmesi İhlali'),
+  supplierBreach('supplier_breach', 'Tedarikçi İhlali'),
+  unauthorizedCopy('unauthorized_copy', 'Yetkisiz Kopyalama'),
+  unauthorizedExport('unauthorized_export', 'Yetkisiz Dışa Aktarım'),
+  unauthorizedDisclosure('unauthorized_disclosure', 'Yetkisiz Açıklama'),
+  publicExposure('public_exposure', 'Kamuya Açık Maruziyet'),
+  physicalSecurityBreach(
+    'physical_security_breach',
+    'Fiziksel Güvenlik İhlali',
+  ),
+  processViolation('process_violation', 'Süreç İhlali'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretIncidentType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretIncidentType fromValue(String? value) {
+    return IpTradeSecretIncidentType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretIncidentType.other,
+    );
+  }
+}
+
+enum IpTradeSecretIncidentStatus {
+  reported('reported', 'Bildirildi'),
+  triage('triage', 'Ön Değerlendirme'),
+  investigating('investigating', 'İnceleniyor'),
+  contained('contained', 'Kontrol Altına Alındı'),
+  remediating('remediating', 'Gideriliyor'),
+  monitoring('monitoring', 'İzleniyor'),
+  resolved('resolved', 'Çözüldü'),
+  closed('closed', 'Kapatıldı'),
+  falsePositive('false_positive', 'Yanlış Alarm'),
+  escalated('escalated', 'Üst Seviyeye Taşındı'),
+  legalAction('legal_action', 'Hukuki Süreçte');
+
+  const IpTradeSecretIncidentStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretIncidentStatus fromValue(String? value) {
+    return IpTradeSecretIncidentStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretIncidentStatus.reported,
+    );
+  }
+}
+
+enum IpTradeSecretIncidentSeverity {
+  informational('informational', 'Bilgilendirme', 0),
+  low('low', 'Düşük', 1),
+  medium('medium', 'Orta', 2),
+  high('high', 'Yüksek', 3),
+  critical('critical', 'Kritik', 4);
+
+  const IpTradeSecretIncidentSeverity(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretIncidentSeverity fromValue(String? value) {
+    return IpTradeSecretIncidentSeverity.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretIncidentSeverity.medium,
+    );
+  }
+}
+
+enum IpTradeSecretIncidentSource {
+  employeeReport('employee_report', 'Çalışan Bildirimi'),
+  managerReport('manager_report', 'Yönetici Bildirimi'),
+  auditFinding('audit_finding', 'Denetim Bulgusu'),
+  accessLog('access_log', 'Erişim Kaydı'),
+  securityTool('security_tool', 'Güvenlik Aracı'),
+  dataLossPrevention('data_loss_prevention', 'Veri Kaybı Önleme Sistemi'),
+  customerReport('customer_report', 'Müşteri Bildirimi'),
+  supplierReport('supplier_report', 'Tedarikçi Bildirimi'),
+  anonymousReport('anonymous_report', 'Anonim Bildirim'),
+  legalNotice('legal_notice', 'Hukuki Bildirim'),
+  regulatorNotice('regulator_notice', 'Düzenleyici Kurum Bildirimi'),
+  mediaMonitoring('media_monitoring', 'Medya İzleme'),
+  digitalMarketMonitoring('digital_market_monitoring', 'Dijital Pazar İzleme'),
+  fieldInvestigation('field_investigation', 'Saha Araştırması'),
+  threatIntelligence('threat_intelligence', 'Tehdit İstihbaratı'),
+  other('other', 'Diğer Kaynak');
+
+  const IpTradeSecretIncidentSource(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretIncidentSource fromValue(String? value) {
+    return IpTradeSecretIncidentSource.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretIncidentSource.other,
+    );
+  }
+}
