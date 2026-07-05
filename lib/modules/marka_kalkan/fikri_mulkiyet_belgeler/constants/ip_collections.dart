@@ -2,6 +2,7 @@ abstract final class IpCollections {
   static const String assets = 'ip_assets';
   static const String rights = 'ip_rights';
   static const String documents = 'ip_documents';
+  static const String tradeSecrets = 'ip_trade_secrets';
   static const String relationships = 'ip_relationships';
 
   // Sonraki geliştirme fazları için ayrılmış koleksiyonlar.

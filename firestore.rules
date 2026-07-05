@@ -2553,6 +2553,305 @@ match /publicProductCodes/{codeId} {
           && resource.data.relationshipIds.size() == 0;
     }
 
+    // ============================================================
+    // FİKRİ MÜLKİYET — FORMÜL VE TİCARİ SIR KALKANI
+    // Gerçek sır içeriği Firestore içinde açık metin tutulamaz.
+    // tenantId, marka hesabının Firebase Auth UID değeridir.
+    // ============================================================
+
+    match /ip_trade_secrets/{tradeSecretId} {
+      allow get: if request.auth != null
+          && (
+            (
+              resource == null
+              && tradeSecretId.matches(
+                '^' + request.auth.uid + '__ipsecret_[0-9]+$'
+              )
+            )
+            || (
+              resource != null
+              && resource.data.tenantId == request.auth.uid
+            )
+          );
+
+      allow list: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.keys().hasAll([
+            'tenantId',
+            'brandId',
+            'secretCode',
+            'title',
+            'description',
+            'secretType',
+            'status',
+            'confidentialityLevel',
+            'riskLevel',
+            'protectionMode',
+            'disclosureScope',
+            'legalBasisStatus',
+            'compartmentalizationLevel',
+            'economicValueLevel',
+            'primaryAssetId',
+            'relatedAssetIds',
+            'relatedDocumentIds',
+            'ndaDocumentIds',
+            'contractDocumentIds',
+            'evidenceRecordIds',
+            'protectionMeasureCodes',
+            'custodianUserIds',
+            'authorizedUserIds',
+            'authorizedPartnerIds',
+            'ownerDepartment',
+            'secretFingerprint',
+            'hashAlgorithm',
+            'encryptedSecretReference',
+            'externalSecureSystemReference',
+            'firstProtectedAt',
+            'lastAccessReviewAt',
+            'nextAccessReviewAt',
+            'lastRiskAssessmentAt',
+            'lastDisclosureAt',
+            'leakageSuspected',
+            'legalHoldActive',
+            'accessControlScore',
+            'legalProtectionScore',
+            'technicalProtectionScore',
+            'operationalProtectionScore',
+            'secretSecurityScore',
+            'notes',
+            'metadata',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'tenantId',
+            'brandId',
+            'secretCode',
+            'title',
+            'description',
+            'secretType',
+            'status',
+            'confidentialityLevel',
+            'riskLevel',
+            'protectionMode',
+            'disclosureScope',
+            'legalBasisStatus',
+            'compartmentalizationLevel',
+            'economicValueLevel',
+            'primaryAssetId',
+            'relatedAssetIds',
+            'relatedDocumentIds',
+            'ndaDocumentIds',
+            'contractDocumentIds',
+            'evidenceRecordIds',
+            'protectionMeasureCodes',
+            'custodianUserIds',
+            'authorizedUserIds',
+            'authorizedPartnerIds',
+            'ownerDepartment',
+            'secretFingerprint',
+            'hashAlgorithm',
+            'encryptedSecretReference',
+            'externalSecureSystemReference',
+            'firstProtectedAt',
+            'lastAccessReviewAt',
+            'nextAccessReviewAt',
+            'lastRiskAssessmentAt',
+            'lastDisclosureAt',
+            'leakageSuspected',
+            'legalHoldActive',
+            'accessControlScore',
+            'legalProtectionScore',
+            'technicalProtectionScore',
+            'operationalProtectionScore',
+            'secretSecurityScore',
+            'notes',
+            'metadata',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.secretCode is string
+          && request.resource.data.secretCode.size() > 0
+          && request.resource.data.secretCode.size() <= 100
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 300
+          && request.resource.data.secretType in [
+            'formula',
+            'recipe',
+            'manufacturing_process',
+            'know_how',
+            'algorithm',
+            'source_code',
+            'dataset',
+            'test_method',
+            'pricing_model',
+            'customer_list',
+            'supplier_network',
+            'business_method',
+            'product_roadmap',
+            'market_strategy',
+            'other'
+          ]
+          && request.resource.data.status in [
+            'draft',
+            'active',
+            'under_review',
+            'suspended',
+            'compromised',
+            'retired'
+          ]
+          && request.resource.data.confidentialityLevel in [
+            'restricted',
+            'highly_confidential',
+            'trade_secret'
+          ]
+          && request.resource.data.protectionMode in [
+            'metadata_only',
+            'encrypted_vault',
+            'external_secure_system',
+            'compartmentalized'
+          ]
+          && request.resource.data.leakageSuspected is bool
+          && request.resource.data.legalHoldActive is bool
+          && request.resource.data.accessControlScore is int
+          && request.resource.data.accessControlScore >= 0
+          && request.resource.data.accessControlScore <= 100
+          && request.resource.data.legalProtectionScore is int
+          && request.resource.data.legalProtectionScore >= 0
+          && request.resource.data.legalProtectionScore <= 100
+          && request.resource.data.technicalProtectionScore is int
+          && request.resource.data.technicalProtectionScore >= 0
+          && request.resource.data.technicalProtectionScore <= 100
+          && request.resource.data.operationalProtectionScore is int
+          && request.resource.data.operationalProtectionScore >= 0
+          && request.resource.data.operationalProtectionScore <= 100
+          && request.resource.data.secretSecurityScore is int
+          && request.resource.data.secretSecurityScore >= 0
+          && request.resource.data.secretSecurityScore <= 100
+          && !request.resource.data.keys().hasAny([
+            'formulaContent',
+            'recipeContent',
+            'secretContent',
+            'plaintextSecret',
+            'rawFormula',
+            'rawRecipe',
+            'sourceCodeContent',
+            'algorithmContent'
+          ])
+          && !request.resource.data.metadata.keys().hasAny([
+            'formulaContent',
+            'recipeContent',
+            'secretContent',
+            'plaintextSecret',
+            'rawFormula',
+            'rawRecipe',
+            'sourceCodeContent',
+            'algorithmContent'
+          ])
+          && (
+            request.resource.data.protectionMode != 'encrypted_vault'
+            || (
+              request.resource.data.encryptedSecretReference is string
+              && request.resource.data.encryptedSecretReference.size() > 0
+            )
+          )
+          && (
+            request.resource.data.protectionMode
+                != 'external_secure_system'
+            || (
+              request.resource.data.externalSecureSystemReference is string
+              && request.resource.data.externalSecureSystemReference.size() > 0
+            )
+          )
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid
+          );
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.secretCode == resource.data.secretCode
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.confidentialityLevel in [
+            'restricted',
+            'highly_confidential',
+            'trade_secret'
+          ]
+          && request.resource.data.leakageSuspected is bool
+          && request.resource.data.legalHoldActive is bool
+          && request.resource.data.accessControlScore is int
+          && request.resource.data.accessControlScore >= 0
+          && request.resource.data.accessControlScore <= 100
+          && request.resource.data.legalProtectionScore is int
+          && request.resource.data.legalProtectionScore >= 0
+          && request.resource.data.legalProtectionScore <= 100
+          && request.resource.data.technicalProtectionScore is int
+          && request.resource.data.technicalProtectionScore >= 0
+          && request.resource.data.technicalProtectionScore <= 100
+          && request.resource.data.operationalProtectionScore is int
+          && request.resource.data.operationalProtectionScore >= 0
+          && request.resource.data.operationalProtectionScore <= 100
+          && request.resource.data.secretSecurityScore is int
+          && request.resource.data.secretSecurityScore >= 0
+          && request.resource.data.secretSecurityScore <= 100
+          && !request.resource.data.keys().hasAny([
+            'formulaContent',
+            'recipeContent',
+            'secretContent',
+            'plaintextSecret',
+            'rawFormula',
+            'rawRecipe',
+            'sourceCodeContent',
+            'algorithmContent'
+          ])
+          && !request.resource.data.metadata.keys().hasAny([
+            'formulaContent',
+            'recipeContent',
+            'secretContent',
+            'plaintextSecret',
+            'rawFormula',
+            'rawRecipe',
+            'sourceCodeContent',
+            'algorithmContent'
+          ])
+          && (
+            request.resource.data.protectionMode != 'encrypted_vault'
+            || (
+              request.resource.data.encryptedSecretReference is string
+              && request.resource.data.encryptedSecretReference.size() > 0
+            )
+          )
+          && (
+            request.resource.data.protectionMode
+                != 'external_secure_system'
+            || (
+              request.resource.data.externalSecureSystemReference is string
+              && request.resource.data.externalSecureSystemReference.size() > 0
+            )
+          )
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.legalHoldActive == false;
+    }
     match /ip_relationships/{relationshipId} {
       allow read: if request.auth != null
           && resource.data.tenantId == request.auth.uid;

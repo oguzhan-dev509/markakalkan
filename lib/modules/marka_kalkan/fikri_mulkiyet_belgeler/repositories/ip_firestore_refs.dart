@@ -33,6 +33,10 @@ class IpFirestoreRefs {
     return _firestore.collection(IpCollections.documents);
   }
 
+  CollectionReference<Map<String, dynamic>> get tradeSecrets {
+    return _firestore.collection(IpCollections.tradeSecrets);
+  }
+
   CollectionReference<Map<String, dynamic>> get relationships {
     return _firestore.collection(IpCollections.relationships);
   }
@@ -94,6 +98,14 @@ class IpFirestoreRefs {
   DocumentReference<Map<String, dynamic>> documentDocument(String documentId) {
     return documents.doc(
       _validateRequiredId(documentId, fieldName: 'documentId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> tradeSecretDocument(
+    String tradeSecretId,
+  ) {
+    return tradeSecrets.doc(
+      _validateRequiredId(tradeSecretId, fieldName: 'tradeSecretId'),
     );
   }
 
