@@ -32,6 +32,15 @@ class CorporateHubPage extends StatelessWidget {
       status: _ModuleStatus.active,
     ),
     _CorporateModule(
+      id: 'trade_secret_shield',
+      title: 'Formül ve Ticari Sır Kalkanı',
+      description:
+          'Formül, bileşen, erişim, ifşa, olay, risk ve savunulabilirlik '
+          'kayıtlarını tek merkezde yönetin.',
+      icon: Icons.shield_outlined,
+      status: _ModuleStatus.active,
+    ),
+    _CorporateModule(
       id: 'traceability',
       title: 'Ürün Kimliği ve İzlenebilirlik',
       description:
@@ -308,6 +317,9 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'ip_documents':
         AppRouter.openIpDocumentVault(context);
+        return;
+      case 'trade_secret_shield':
+        AppRouter.openIpTradeSecretShield(context);
         return;
       case 'traceability':
         AppRouter.openBrandOperations(context);

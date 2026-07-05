@@ -30,8 +30,15 @@ import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentati
 import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/vaka_kanit_raporu_sayfasi.dart';
 
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_document_vault_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_shield_page.dart';
 
 abstract final class AppRouter {
+  static Future<void> openIpTradeSecretShield(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const IpTradeSecretShieldPage()),
+    );
+  }
+
   static Future<void> openIpDocumentVault(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const IpDocumentVaultPage()),
