@@ -19,9 +19,7 @@ final class IpDocumentUploadService {
     required String uploadedBy,
     int maximumFileSizeBytes =
         IpDocumentFilePreparationService.defaultMaximumFileSizeBytes,
-  }) async {
-    final actorId = _validateIdentifier(uploadedBy, fieldName: 'uploadedBy');
-
+  }) {
     final prepared = IpDocumentFilePreparationService.prepare(
       bytes: bytes,
       originalFileName: originalFileName,
@@ -31,14 +29,49 @@ final class IpDocumentUploadService {
       maximumFileSizeBytes: maximumFileSizeBytes,
     );
 
+    return uploadPrepared(
+      prepared: prepared,
+      tenantId: tenantId,
+      documentId: documentId,
+      uploadedBy: uploadedBy,
+    );
+  }
+
+  Future<IpDocumentStorageUploadResult> uploadPrepared({
+    required IpPreparedDocumentFile prepared,
+    required String tenantId,
+    required String documentId,
+    required String uploadedBy,
+  }) async {
+    final actorId = _validateIdentifier(uploadedBy, fieldName: 'uploadedBy');
+
+    final normalizedTenantId = _validateIdentifier(
+      tenantId,
+      fieldName: 'tenantId',
+    );
+
+    final normalizedDocumentId = _validateIdentifier(
+      documentId,
+      fieldName: 'documentId',
+    );
+
+    final expectedPrefix =
+        'tenants/$normalizedTenantId/ip_documents/$normalizedDocumentId/';
+
+    if (!prepared.storagePath.startsWith(expectedPrefix)) {
+      throw StateError(
+        'Hazırlanan Storage yolu tenant ve belge kimliğiyle eşleşmiyor.',
+      );
+    }
+
     final result = await _storage.upload(
       storagePath: prepared.storagePath,
       bytes: prepared.bytes,
       mimeType: prepared.mimeType,
       originalFileName: prepared.originalFileName,
       sha256Hash: prepared.sha256Hash,
-      tenantId: tenantId.trim(),
-      documentId: documentId.trim(),
+      tenantId: normalizedTenantId,
+      documentId: normalizedDocumentId,
       uploadedBy: actorId,
     );
 
@@ -66,6 +99,14 @@ final class IpDocumentUploadService {
       );
     }
 
+    if (result.mimeType.trim().toLowerCase() != prepared.mimeType) {
+      await _attemptCleanup(result.storagePath);
+
+      throw StateError(
+        'Storage adaptörü beklenen MIME türünden farklı bir değer döndürdü.',
+      );
+    }
+
     if (result.downloadUrl.trim().isEmpty) {
       await _attemptCleanup(result.storagePath);
 
@@ -85,7 +126,7 @@ final class IpDocumentUploadService {
     try {
       await _storage.delete(storagePath: storagePath);
     } catch (_) {
-      // Doğrulama hatasının korunması için temizlik hatası yutulur.
+      // Ana bütünlük hatasının korunması için temizlik hatası yutulur.
     }
   }
 
