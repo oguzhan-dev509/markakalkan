@@ -499,3 +499,111 @@ enum IpTradeSecretProtectionControlFrequency {
     );
   }
 }
+
+enum IpTradeSecretRiskAssessmentStatus {
+  draft('draft', 'Taslak'),
+  inReview('in_review', 'İncelemede'),
+  approved('approved', 'Onaylandı'),
+  active('active', 'Aktif'),
+  mitigating('mitigating', 'İyileştiriliyor'),
+  accepted('accepted', 'Risk Kabul Edildi'),
+  closed('closed', 'Kapatıldı'),
+  archived('archived', 'Arşivlendi');
+
+  const IpTradeSecretRiskAssessmentStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretRiskAssessmentStatus fromValue(String? value) {
+    return IpTradeSecretRiskAssessmentStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretRiskAssessmentStatus.draft,
+    );
+  }
+}
+
+enum IpTradeSecretRiskLevel {
+  informational('informational', 'Bilgilendirme', 0),
+  low('low', 'Düşük', 1),
+  medium('medium', 'Orta', 2),
+  high('high', 'Yüksek', 3),
+  critical('critical', 'Kritik', 4);
+
+  const IpTradeSecretRiskLevel(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretRiskLevel fromValue(String? value) {
+    return IpTradeSecretRiskLevel.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretRiskLevel.medium,
+    );
+  }
+}
+
+enum IpTradeSecretThreatCategory {
+  insiderThreat('insider_threat', 'İçeriden Tehdit'),
+  externalAttack('external_attack', 'Harici Saldırı'),
+  unauthorizedAccess('unauthorized_access', 'Yetkisiz Erişim'),
+  accidentalDisclosure('accidental_disclosure', 'Kazara Açıklama'),
+  cyberAttack('cyber_attack', 'Siber Saldırı'),
+  malwareRansomware(
+    'malware_ransomware',
+    'Zararlı Yazılım veya Fidye Yazılımı',
+  ),
+  physicalLossTheft('physical_loss_theft', 'Fiziksel Kayıp veya Hırsızlık'),
+  supplierThirdParty('supplier_third_party', 'Tedarikçi veya Üçüncü Taraf'),
+  contractualFailure('contractual_failure', 'Sözleşmesel Koruma Eksikliği'),
+  processFailure('process_failure', 'Süreç Hatası'),
+  humanError('human_error', 'İnsan Hatası'),
+  competitiveIntelligence('competitive_intelligence', 'Rakip İstihbaratı'),
+  technologyObsolescence('technology_obsolescence', 'Teknoloji Eskimesi'),
+  backupRecoveryFailure(
+    'backup_recovery_failure',
+    'Yedekleme veya Kurtarma Hatası',
+  ),
+  disasterBusinessInterruption(
+    'disaster_business_interruption',
+    'Afet veya İş Kesintisi',
+  ),
+  legalRegulatory('legal_regulatory', 'Hukuki veya Düzenleyici'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretThreatCategory(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretThreatCategory fromValue(String? value) {
+    return IpTradeSecretThreatCategory.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretThreatCategory.other,
+    );
+  }
+}
+
+enum IpTradeSecretGapStatus {
+  none('none', 'Açık Yok'),
+  identified('identified', 'Açık Tespit Edildi'),
+  planned('planned', 'İyileştirme Planlandı'),
+  remediationInProgress('remediation_in_progress', 'İyileştirme Sürüyor'),
+  mitigated('mitigated', 'Açık Giderildi'),
+  accepted('accepted', 'Açık Kabul Edildi'),
+  overdue('overdue', 'Süresi Geçti'),
+  closed('closed', 'Kapatıldı');
+
+  const IpTradeSecretGapStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretGapStatus fromValue(String? value) {
+    return IpTradeSecretGapStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretGapStatus.none,
+    );
+  }
+}
