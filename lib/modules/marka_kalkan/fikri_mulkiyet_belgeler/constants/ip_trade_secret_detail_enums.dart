@@ -1075,3 +1075,106 @@ enum IpTradeSecretAlertTriggerType {
     );
   }
 }
+
+enum IpTradeSecretDecisionStatus {
+  draft('draft', 'Taslak'),
+  underReview('under_review', 'İncelemede'),
+  pendingApproval('pending_approval', 'Onay Bekliyor'),
+  approved('approved', 'Onaylandı'),
+  conditionallyApproved('conditionally_approved', 'Koşullu Onaylandı'),
+  rejected('rejected', 'Reddedildi'),
+  effective('effective', 'Yürürlükte'),
+  suspended('suspended', 'Askıya Alındı'),
+  revoked('revoked', 'İptal Edildi'),
+  expired('expired', 'Süresi Doldu'),
+  superseded('superseded', 'Yerine Yeni Karar Geçti');
+
+  const IpTradeSecretDecisionStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretDecisionStatus fromValue(String? value) {
+    return IpTradeSecretDecisionStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretDecisionStatus.draft,
+    );
+  }
+}
+
+enum IpTradeSecretDecisionType {
+  riskAcceptance('risk_acceptance', 'Risk Kabulü'),
+  riskRejection('risk_rejection', 'Risk Reddi'),
+  thirdPartyDisclosureApproval(
+    'third_party_disclosure_approval',
+    'Üçüncü Taraf Paylaşım Onayı',
+  ),
+  ownershipTransfer('ownership_transfer', 'Sahiplik Devri'),
+  responsibilityTransfer('responsibility_transfer', 'Sorumluluk Devri'),
+  protectionLevelIncrease(
+    'protection_level_increase',
+    'Koruma Seviyesi Artırma',
+  ),
+  protectionLevelReduction(
+    'protection_level_reduction',
+    'Koruma Seviyesi Düşürme',
+  ),
+  legalHoldStart('legal_hold_start', 'Hukuki Muhafaza Başlatma'),
+  legalHoldRelease('legal_hold_release', 'Hukuki Muhafaza Kaldırma'),
+  budgetApproval('budget_approval', 'Bütçe Onayı'),
+  retirement('retirement', 'Ticari Sırrı Emekliye Ayırma'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretDecisionType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretDecisionType fromValue(String? value) {
+    return IpTradeSecretDecisionType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretDecisionType.other,
+    );
+  }
+}
+
+enum IpTradeSecretApprovalOutcome {
+  pending('pending', 'Bekliyor'),
+  approved('approved', 'Onay'),
+  rejected('rejected', 'Ret'),
+  abstained('abstained', 'Çekimser'),
+  recused('recused', 'Oylamaya Katılmadı');
+
+  const IpTradeSecretApprovalOutcome(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretApprovalOutcome fromValue(String? value) {
+    return IpTradeSecretApprovalOutcome.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretApprovalOutcome.pending,
+    );
+  }
+}
+
+enum IpTradeSecretDecisionVotingMethod {
+  singleApprover('single_approver', 'Tek Onaylayan'),
+  unanimous('unanimous', 'Oybirliği'),
+  simpleMajority('simple_majority', 'Basit Çoğunluk'),
+  qualifiedMajority('qualified_majority', 'Nitelikli Çoğunluk'),
+  boardResolution('board_resolution', 'Kurul Kararı'),
+  executiveOverride('executive_override', 'Yönetici Yetkisi');
+
+  const IpTradeSecretDecisionVotingMethod(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretDecisionVotingMethod fromValue(String? value) {
+    return IpTradeSecretDecisionVotingMethod.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretDecisionVotingMethod.singleApprover,
+    );
+  }
+}
