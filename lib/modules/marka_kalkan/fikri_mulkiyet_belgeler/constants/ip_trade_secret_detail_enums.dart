@@ -607,3 +607,91 @@ enum IpTradeSecretGapStatus {
     );
   }
 }
+
+enum IpTradeSecretResilienceProfileStatus {
+  draft('draft', 'Taslak'),
+  inReview('in_review', 'İncelemede'),
+  approved('approved', 'Onaylandı'),
+  active('active', 'Aktif'),
+  improvementRequired('improvement_required', 'İyileştirme Gerekli'),
+  suspended('suspended', 'Askıya Alındı'),
+  superseded('superseded', 'Yeni Sürümle Değiştirildi'),
+  archived('archived', 'Arşivlendi');
+
+  const IpTradeSecretResilienceProfileStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretResilienceProfileStatus fromValue(String? value) {
+    return IpTradeSecretResilienceProfileStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretResilienceProfileStatus.draft,
+    );
+  }
+}
+
+enum IpTradeSecretResilienceLevel {
+  fragile('fragile', 'Kırılgan', 0),
+  weak('weak', 'Zayıf', 1),
+  developing('developing', 'Gelişiyor', 2),
+  resilient('resilient', 'Dayanıklı', 3),
+  advanced('advanced', 'İleri', 4);
+
+  const IpTradeSecretResilienceLevel(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretResilienceLevel fromValue(String? value) {
+    return IpTradeSecretResilienceLevel.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretResilienceLevel.developing,
+    );
+  }
+}
+
+enum IpTradeSecretReviewType {
+  initial('initial', 'İlk İnceleme'),
+  periodic('periodic', 'Periyodik İnceleme'),
+  eventDriven('event_driven', 'Olay Tetiklemeli İnceleme'),
+  incidentDriven('incident_driven', 'İhlal Sonrası İnceleme'),
+  controlChange('control_change', 'Kontrol Değişikliği İncelemesi'),
+  ownershipChange('ownership_change', 'Sahiplik Değişikliği İncelemesi'),
+  regulatoryChange('regulatory_change', 'Mevzuat Değişikliği İncelemesi'),
+  closure('closure', 'Kapanış İncelemesi');
+
+  const IpTradeSecretReviewType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretReviewType fromValue(String? value) {
+    return IpTradeSecretReviewType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretReviewType.periodic,
+    );
+  }
+}
+
+enum IpTradeSecretMaturityLevel {
+  initial('initial', 'Başlangıç', 0),
+  repeatable('repeatable', 'Tekrarlanabilir', 1),
+  defined('defined', 'Tanımlı', 2),
+  managed('managed', 'Yönetilen', 3),
+  optimized('optimized', 'Optimize', 4);
+
+  const IpTradeSecretMaturityLevel(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretMaturityLevel fromValue(String? value) {
+    return IpTradeSecretMaturityLevel.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretMaturityLevel.initial,
+    );
+  }
+}
