@@ -1178,3 +1178,65 @@ enum IpTradeSecretDecisionVotingMethod {
     );
   }
 }
+
+enum IpTradeSecretPortfolioHealth {
+  healthy('healthy', 'Sağlıklı', 1),
+  watch('watch', 'İzlenmeli', 2),
+  elevated('elevated', 'Yükselmiş Risk', 3),
+  highRisk('high_risk', 'Yüksek Risk', 4),
+  critical('critical', 'Kritik', 5);
+
+  const IpTradeSecretPortfolioHealth(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretPortfolioHealth fromValue(String? value) {
+    return IpTradeSecretPortfolioHealth.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretPortfolioHealth.watch,
+    );
+  }
+}
+
+enum IpTradeSecretPortfolioTrend {
+  improving('improving', 'İyileşiyor'),
+  stable('stable', 'Sabit'),
+  deteriorating('deteriorating', 'Kötüleşiyor'),
+  volatile('volatile', 'Dalgalı'),
+  unknown('unknown', 'Bilinmiyor');
+
+  const IpTradeSecretPortfolioTrend(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretPortfolioTrend fromValue(String? value) {
+    return IpTradeSecretPortfolioTrend.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretPortfolioTrend.unknown,
+    );
+  }
+}
+
+enum IpTradeSecretPortfolioScope {
+  tenant('tenant', 'Şirket'),
+  brand('brand', 'Marka'),
+  businessUnit('business_unit', 'İş Birimi'),
+  department('department', 'Departman'),
+  country('country', 'Ülke'),
+  category('category', 'Kategori');
+
+  const IpTradeSecretPortfolioScope(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretPortfolioScope fromValue(String? value) {
+    return IpTradeSecretPortfolioScope.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretPortfolioScope.brand,
+    );
+  }
+}
