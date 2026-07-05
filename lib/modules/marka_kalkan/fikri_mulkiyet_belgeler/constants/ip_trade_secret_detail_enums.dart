@@ -790,3 +790,98 @@ enum IpTradeSecretLegalReadinessLevel {
     );
   }
 }
+
+enum IpTradeSecretLifecycleStatus {
+  active('active', 'Aktif'),
+  transferPlanned('transfer_planned', 'Devir Planlandı'),
+  transferring('transferring', 'Devrediliyor'),
+  suspended('suspended', 'Askıya Alındı'),
+  restricted('restricted', 'Erişim Kısıtlı'),
+  retired('retired', 'Emekliye Ayrıldı'),
+  closed('closed', 'Kapatıldı'),
+  archived('archived', 'Arşivlendi');
+
+  const IpTradeSecretLifecycleStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretLifecycleStatus fromValue(String? value) {
+    return IpTradeSecretLifecycleStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretLifecycleStatus.active,
+    );
+  }
+}
+
+enum IpTradeSecretTransitionType {
+  onboarding('onboarding', 'Göreve Başlama'),
+  roleChange('role_change', 'Görev Değişikliği'),
+  ownershipTransfer('ownership_transfer', 'Sahiplik Devri'),
+  responsibilityTransfer('responsibility_transfer', 'Sorumluluk Devri'),
+  accessReduction('access_reduction', 'Erişim Daraltma'),
+  accessRevocation('access_revocation', 'Erişim İptali'),
+  employeeExit('employee_exit', 'Çalışan Çıkışı'),
+  consultantExit('consultant_exit', 'Danışman Çıkışı'),
+  partnerExit('partner_exit', 'Ortak Çıkışı'),
+  supplierExit('supplier_exit', 'Tedarikçi Çıkışı'),
+  retirement('retirement', 'Emekliye Ayırma'),
+  closure('closure', 'Kapatma');
+
+  const IpTradeSecretTransitionType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretTransitionType fromValue(String? value) {
+    return IpTradeSecretTransitionType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretTransitionType.roleChange,
+    );
+  }
+}
+
+enum IpTradeSecretExitPartyType {
+  employee('employee', 'Çalışan'),
+  consultant('consultant', 'Danışman'),
+  partner('partner', 'Ortak'),
+  supplier('supplier', 'Tedarikçi'),
+  distributor('distributor', 'Distribütör'),
+  contractor('contractor', 'Yüklenici'),
+  boardMember('board_member', 'Yönetim Kurulu Üyesi'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretExitPartyType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretExitPartyType fromValue(String? value) {
+    return IpTradeSecretExitPartyType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretExitPartyType.other,
+    );
+  }
+}
+
+enum IpTradeSecretHandoverStatus {
+  notRequired('not_required', 'Gerekli Değil'),
+  pending('pending', 'Bekliyor'),
+  inProgress('in_progress', 'Sürüyor'),
+  completed('completed', 'Tamamlandı'),
+  partiallyCompleted('partially_completed', 'Kısmen Tamamlandı'),
+  failed('failed', 'Başarısız'),
+  waived('waived', 'Muaf Tutuldu');
+
+  const IpTradeSecretHandoverStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretHandoverStatus fromValue(String? value) {
+    return IpTradeSecretHandoverStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretHandoverStatus.pending,
+    );
+  }
+}
