@@ -975,3 +975,103 @@ enum IpTradeSecretVerificationOutcome {
     );
   }
 }
+
+enum IpTradeSecretAlertStatus {
+  draft('draft', 'Taslak'),
+  active('active', 'Aktif'),
+  triggered('triggered', 'Tetiklendi'),
+  acknowledged('acknowledged', 'Kabul Edildi'),
+  snoozed('snoozed', 'Ertelendi'),
+  muted('muted', 'Susturuldu'),
+  escalated('escalated', 'Yükseltildi'),
+  resolved('resolved', 'Çözüldü'),
+  reopened('reopened', 'Yeniden Açıldı'),
+  disabled('disabled', 'Devre Dışı');
+
+  const IpTradeSecretAlertStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretAlertStatus fromValue(String? value) {
+    return IpTradeSecretAlertStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretAlertStatus.draft,
+    );
+  }
+}
+
+enum IpTradeSecretAlertSeverity {
+  info('info', 'Bilgi', 1),
+  low('low', 'Düşük', 2),
+  medium('medium', 'Orta', 3),
+  high('high', 'Yüksek', 4),
+  critical('critical', 'Kritik', 5);
+
+  const IpTradeSecretAlertSeverity(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretAlertSeverity fromValue(String? value) {
+    return IpTradeSecretAlertSeverity.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretAlertSeverity.medium,
+    );
+  }
+}
+
+enum IpTradeSecretAlertSourceType {
+  accessGrant('access_grant', 'Erişim Yetkisi'),
+  disclosure('disclosure', 'Paylaşım'),
+  incident('incident', 'Olay'),
+  protectionControl('protection_control', 'Koruma Kontrolü'),
+  riskAssessment('risk_assessment', 'Risk Değerlendirmesi'),
+  resilienceProfile('resilience_profile', 'Dayanıklılık Profili'),
+  defensibilityRecord('defensibility_record', 'Hukuki Savunma Kaydı'),
+  lifecycleTransition('lifecycle_transition', 'Yaşam Döngüsü Geçişi'),
+  remediationAction('remediation_action', 'İyileştirme Eylemi'),
+  scheduledReview('scheduled_review', 'Planlı İnceleme'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretAlertSourceType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretAlertSourceType fromValue(String? value) {
+    return IpTradeSecretAlertSourceType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretAlertSourceType.other,
+    );
+  }
+}
+
+enum IpTradeSecretAlertTriggerType {
+  dueDateApproaching('due_date_approaching', 'Son Tarih Yaklaşıyor'),
+  overdue('overdue', 'Gecikmiş'),
+  scoreBelowThreshold('score_below_threshold', 'Skor Eşik Altında'),
+  countAboveThreshold('count_above_threshold', 'Sayı Eşik Üstünde'),
+  statusChanged('status_changed', 'Durum Değişti'),
+  evidenceExpired('evidence_expired', 'Kanıt Süresi Doldu'),
+  openIncident('open_incident', 'Açık Olay'),
+  exitObligationIncomplete(
+    'exit_obligation_incomplete',
+    'Çıkış Yükümlülüğü Eksik',
+  ),
+  ineffectiveAction('ineffective_action', 'Eylem Etkisiz'),
+  manual('manual', 'Manuel');
+
+  const IpTradeSecretAlertTriggerType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretAlertTriggerType fromValue(String? value) {
+    return IpTradeSecretAlertTriggerType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretAlertTriggerType.manual,
+    );
+  }
+}
