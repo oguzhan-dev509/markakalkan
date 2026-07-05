@@ -18,4 +18,23 @@ abstract final class IpCollections {
   static const String watchRules = 'ip_watch_rules';
 
   const IpCollections._();
+  static const String tradeSecretComponents = 'ip_trade_secret_components';
+  static const String tradeSecretAccessGrants = 'ip_trade_secret_access_grants';
+  static const String tradeSecretDisclosures = 'ip_trade_secret_disclosures';
+  static const String tradeSecretIncidents = 'ip_trade_secret_incidents';
+  static const String tradeSecretProtectionControls =
+      'ip_trade_secret_protection_controls';
+  static const String tradeSecretRiskAssessments =
+      'ip_trade_secret_risk_assessments';
+  static const String tradeSecretResilienceProfiles =
+      'ip_trade_secret_resilience_profiles';
+  static const String tradeSecretDefensibilityRecords =
+      'ip_trade_secret_defensibility_records';
+  static const String tradeSecretLifecycleTransitions =
+      'ip_trade_secret_lifecycle_transitions';
+  static const String tradeSecretRemediationActions =
+      'ip_trade_secret_remediation_actions';
+  static const String tradeSecretAlertRules = 'ip_trade_secret_alert_rules';
+  static const String tradeSecretManagementDecisions =
+      'ip_trade_secret_management_decisions';
 }
