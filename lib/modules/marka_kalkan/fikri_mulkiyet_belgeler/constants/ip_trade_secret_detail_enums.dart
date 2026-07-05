@@ -695,3 +695,98 @@ enum IpTradeSecretMaturityLevel {
     );
   }
 }
+
+enum IpTradeSecretDefensibilityStatus {
+  draft('draft', 'Taslak'),
+  evidenceCollection('evidence_collection', 'Kanıt Toplanıyor'),
+  inReview('in_review', 'İncelemede'),
+  approved('approved', 'Onaylandı'),
+  active('active', 'Aktif'),
+  remediationRequired('remediation_required', 'Eksik Giderme Gerekli'),
+  litigationHold('litigation_hold', 'Hukuki Muhafaza'),
+  closed('closed', 'Kapatıldı'),
+  archived('archived', 'Arşivlendi');
+
+  const IpTradeSecretDefensibilityStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretDefensibilityStatus fromValue(String? value) {
+    return IpTradeSecretDefensibilityStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretDefensibilityStatus.draft,
+    );
+  }
+}
+
+enum IpTradeSecretEvidenceCategory {
+  ownership('ownership', 'Hak Sahipliği'),
+  confidentialityPolicy('confidentiality_policy', 'Gizlilik Politikası'),
+  ndaContract('nda_contract', 'NDA veya Sözleşme'),
+  accessControl('access_control', 'Erişim Kontrolü'),
+  trainingAcknowledgement('training_acknowledgement', 'Eğitim ve Kabul'),
+  technicalControl('technical_control', 'Teknik Kontrol'),
+  physicalControl('physical_control', 'Fiziksel Kontrol'),
+  disclosureRecord('disclosure_record', 'Paylaşım Kaydı'),
+  incidentResponse('incident_response', 'Olay Müdahalesi'),
+  auditLog('audit_log', 'Denetim Kaydı'),
+  riskAssessment('risk_assessment', 'Risk Değerlendirmesi'),
+  resilienceReview('resilience_review', 'Dayanıklılık İncelemesi'),
+  retentionRecord('retention_record', 'Saklama Kaydı'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretEvidenceCategory(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretEvidenceCategory fromValue(String? value) {
+    return IpTradeSecretEvidenceCategory.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretEvidenceCategory.other,
+    );
+  }
+}
+
+enum IpTradeSecretEvidenceStrength {
+  none('none', 'Yok', 0),
+  weak('weak', 'Zayıf', 1),
+  moderate('moderate', 'Orta', 2),
+  strong('strong', 'Güçlü', 3),
+  conclusive('conclusive', 'Kesin', 4);
+
+  const IpTradeSecretEvidenceStrength(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretEvidenceStrength fromValue(String? value) {
+    return IpTradeSecretEvidenceStrength.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretEvidenceStrength.none,
+    );
+  }
+}
+
+enum IpTradeSecretLegalReadinessLevel {
+  unprepared('unprepared', 'Hazırlıksız', 0),
+  limited('limited', 'Sınırlı', 1),
+  defensible('defensible', 'Savunulabilir', 2),
+  strong('strong', 'Güçlü', 3),
+  litigationReady('litigation_ready', 'Uyuşmazlığa Hazır', 4);
+
+  const IpTradeSecretLegalReadinessLevel(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretLegalReadinessLevel fromValue(String? value) {
+    return IpTradeSecretLegalReadinessLevel.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretLegalReadinessLevel.unprepared,
+    );
+  }
+}
