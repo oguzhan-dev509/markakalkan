@@ -885,3 +885,93 @@ enum IpTradeSecretHandoverStatus {
     );
   }
 }
+
+enum IpTradeSecretRemediationStatus {
+  draft('draft', 'Taslak'),
+  planned('planned', 'Planlandı'),
+  assigned('assigned', 'Atandı'),
+  inProgress('in_progress', 'Sürüyor'),
+  blocked('blocked', 'Engellendi'),
+  pendingVerification('pending_verification', 'Doğrulama Bekliyor'),
+  verified('verified', 'Doğrulandı'),
+  closed('closed', 'Kapatıldı'),
+  reopened('reopened', 'Yeniden Açıldı'),
+  cancelled('cancelled', 'İptal Edildi');
+
+  const IpTradeSecretRemediationStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretRemediationStatus fromValue(String? value) {
+    return IpTradeSecretRemediationStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretRemediationStatus.draft,
+    );
+  }
+}
+
+enum IpTradeSecretRemediationPriority {
+  low('low', 'Düşük', 1),
+  medium('medium', 'Orta', 2),
+  high('high', 'Yüksek', 3),
+  critical('critical', 'Kritik', 4);
+
+  const IpTradeSecretRemediationPriority(this.value, this.label, this.level);
+
+  final String value;
+  final String label;
+  final int level;
+
+  static IpTradeSecretRemediationPriority fromValue(String? value) {
+    return IpTradeSecretRemediationPriority.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretRemediationPriority.medium,
+    );
+  }
+}
+
+enum IpTradeSecretRemediationSourceType {
+  riskAssessment('risk_assessment', 'Risk Değerlendirmesi'),
+  incident('incident', 'Olay'),
+  protectionControl('protection_control', 'Koruma Kontrolü'),
+  resilienceReview('resilience_review', 'Dayanıklılık İncelemesi'),
+  defensibilityReview('defensibility_review', 'Hukuki Savunma İncelemesi'),
+  lifecycleTransition('lifecycle_transition', 'Yaşam Döngüsü Geçişi'),
+  audit('audit', 'Denetim'),
+  managementDecision('management_decision', 'Yönetim Kararı'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretRemediationSourceType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretRemediationSourceType fromValue(String? value) {
+    return IpTradeSecretRemediationSourceType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretRemediationSourceType.other,
+    );
+  }
+}
+
+enum IpTradeSecretVerificationOutcome {
+  notReviewed('not_reviewed', 'İncelenmedi'),
+  effective('effective', 'Etkili'),
+  partiallyEffective('partially_effective', 'Kısmen Etkili'),
+  ineffective('ineffective', 'Etkisiz'),
+  inconclusive('inconclusive', 'Sonuçsuz'),
+  rejected('rejected', 'Reddedildi');
+
+  const IpTradeSecretVerificationOutcome(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretVerificationOutcome fromValue(String? value) {
+    return IpTradeSecretVerificationOutcome.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretVerificationOutcome.notReviewed,
+    );
+  }
+}
