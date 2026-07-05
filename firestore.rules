@@ -2594,6 +2594,356 @@ match /publicProductCodes/{codeId} {
           && resource.data.status != 'high_risk'
           && resource.data.status != 'under_review';
     }
+    // ============================================================
+    // FİKRİ MÜLKİYET — HAK SAHİPLİĞİ KAYITLARI
+    // tenantId, marka hesabının Firebase Auth UID değeridir.
+    // Hak sahipliği kimliği, tenant ve ilk oluşturma bilgileri
+    // güncelleme sırasında değiştirilemez.
+    // ============================================================
+
+    match /ip_ownership_records/{ownershipRecordId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.keys().hasAll([
+            'tenantId',
+            'brandId',
+            'assetId',
+            'recordCode',
+            'ownershipKind',
+            'partyType',
+            'partyName',
+            'partyId',
+            'partyExternalId',
+            'partyCountryCode',
+            'partyRegistrationNumber',
+            'partyTaxNumber',
+            'partyContactEmail',
+            'acquisitionType',
+            'status',
+            'ownershipPercentage',
+            'jurisdictionScope',
+            'countryCodes',
+            'regionCode',
+            'rightId',
+            'sourceOwnershipRecordId',
+            'previousOwnershipRecordId',
+            'nextOwnershipRecordId',
+            'agreementNumber',
+            'agreementDate',
+            'effectiveFrom',
+            'effectiveUntil',
+            'isExclusive',
+            'isPrimaryOwner',
+            'isBeneficialOwner',
+            'isOwnershipVerified',
+            'verificationDate',
+            'verifiedBy',
+            'documentIds',
+            'relationshipIds',
+            'transferChainRecordIds',
+            'notes',
+            'metadata',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'tenantId',
+            'brandId',
+            'assetId',
+            'recordCode',
+            'ownershipKind',
+            'partyType',
+            'partyName',
+            'partyId',
+            'partyExternalId',
+            'partyCountryCode',
+            'partyRegistrationNumber',
+            'partyTaxNumber',
+            'partyContactEmail',
+            'acquisitionType',
+            'status',
+            'ownershipPercentage',
+            'jurisdictionScope',
+            'countryCodes',
+            'regionCode',
+            'rightId',
+            'sourceOwnershipRecordId',
+            'previousOwnershipRecordId',
+            'nextOwnershipRecordId',
+            'agreementNumber',
+            'agreementDate',
+            'effectiveFrom',
+            'effectiveUntil',
+            'isExclusive',
+            'isPrimaryOwner',
+            'isBeneficialOwner',
+            'isOwnershipVerified',
+            'verificationDate',
+            'verifiedBy',
+            'documentIds',
+            'relationshipIds',
+            'transferChainRecordIds',
+            'notes',
+            'metadata',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+
+          && request.resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId is string
+          && request.resource.data.tenantId.size() > 0
+
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+
+          && request.resource.data.assetId is string
+          && request.resource.data.assetId.size() > 0
+
+          && request.resource.data.recordCode is string
+          && request.resource.data.recordCode.size() > 0
+          && request.resource.data.recordCode.size() <= 100
+
+          && request.resource.data.partyName is string
+          && request.resource.data.partyName.size() > 0
+          && request.resource.data.partyName.size() <= 300
+
+          && request.resource.data.ownershipKind in [
+            'legal_owner',
+            'economic_owner',
+            'joint_owner',
+            'creator',
+            'inventor',
+            'designer',
+            'employee_creation',
+            'founder_contribution',
+            'contractor_creation',
+            'agency_creation',
+            'commissioned_work',
+            'contract_manufacturing',
+            'assignee',
+            'assignor',
+            'licensor',
+            'licensee',
+            'beneficial_owner',
+            'custodian',
+            'other'
+          ]
+
+          && request.resource.data.partyType in [
+            'person',
+            'company',
+            'institution',
+            'public_body',
+            'university',
+            'research_organization',
+            'partnership',
+            'team',
+            'unknown'
+          ]
+
+          && request.resource.data.acquisitionType in [
+            'original_creation',
+            'employment',
+            'commissioned_work',
+            'assignment',
+            'license',
+            'inheritance',
+            'merger',
+            'acquisition',
+            'court_decision',
+            'statutory_transfer',
+            'joint_development',
+            'other'
+          ]
+
+          && request.resource.data.status in [
+            'draft',
+            'under_review',
+            'active',
+            'disputed',
+            'suspended',
+            'transferred',
+            'expired',
+            'revoked',
+            'ended',
+            'archived'
+          ]
+
+          && request.resource.data.jurisdictionScope in [
+            'national',
+            'regional',
+            'international',
+            'contractual',
+            'unregistered'
+          ]
+
+          && request.resource.data.ownershipPercentage is number
+          && request.resource.data.ownershipPercentage >= 0
+          && request.resource.data.ownershipPercentage <= 100
+
+          && request.resource.data.countryCodes is list
+          && request.resource.data.documentIds is list
+          && request.resource.data.relationshipIds is list
+          && request.resource.data.transferChainRecordIds is list
+          && request.resource.data.metadata is map
+
+          && request.resource.data.isExclusive is bool
+          && request.resource.data.isPrimaryOwner is bool
+          && request.resource.data.isBeneficialOwner is bool
+          && request.resource.data.isOwnershipVerified is bool
+
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+
+          && request.resource.data.updatedAt == null
+          && request.resource.data.updatedBy == null;
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+
+          && request.resource.data.keys().hasAll([
+            'tenantId',
+            'brandId',
+            'assetId',
+            'recordCode',
+            'ownershipKind',
+            'partyType',
+            'partyName',
+            'acquisitionType',
+            'status',
+            'ownershipPercentage',
+            'jurisdictionScope',
+            'countryCodes',
+            'isExclusive',
+            'isPrimaryOwner',
+            'isBeneficialOwner',
+            'isOwnershipVerified',
+            'documentIds',
+            'relationshipIds',
+            'transferChainRecordIds',
+            'metadata',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.assetId == resource.data.assetId
+          && request.resource.data.recordCode == resource.data.recordCode
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+
+          && request.resource.data.ownershipKind in [
+            'legal_owner',
+            'economic_owner',
+            'joint_owner',
+            'creator',
+            'inventor',
+            'designer',
+            'employee_creation',
+            'founder_contribution',
+            'contractor_creation',
+            'agency_creation',
+            'commissioned_work',
+            'contract_manufacturing',
+            'assignee',
+            'assignor',
+            'licensor',
+            'licensee',
+            'beneficial_owner',
+            'custodian',
+            'other'
+          ]
+
+          && request.resource.data.partyType in [
+            'person',
+            'company',
+            'institution',
+            'public_body',
+            'university',
+            'research_organization',
+            'partnership',
+            'team',
+            'unknown'
+          ]
+
+          && request.resource.data.acquisitionType in [
+            'original_creation',
+            'employment',
+            'commissioned_work',
+            'assignment',
+            'license',
+            'inheritance',
+            'merger',
+            'acquisition',
+            'court_decision',
+            'statutory_transfer',
+            'joint_development',
+            'other'
+          ]
+
+          && request.resource.data.status in [
+            'draft',
+            'under_review',
+            'active',
+            'disputed',
+            'suspended',
+            'transferred',
+            'expired',
+            'revoked',
+            'ended',
+            'archived'
+          ]
+
+          && request.resource.data.jurisdictionScope in [
+            'national',
+            'regional',
+            'international',
+            'contractual',
+            'unregistered'
+          ]
+
+          && request.resource.data.partyName is string
+          && request.resource.data.partyName.size() > 0
+          && request.resource.data.partyName.size() <= 300
+
+          && request.resource.data.ownershipPercentage is number
+          && request.resource.data.ownershipPercentage >= 0
+          && request.resource.data.ownershipPercentage <= 100
+
+          && request.resource.data.countryCodes is list
+          && request.resource.data.documentIds is list
+          && request.resource.data.relationshipIds is list
+          && request.resource.data.transferChainRecordIds is list
+          && request.resource.data.metadata is map
+
+          && request.resource.data.isExclusive is bool
+          && request.resource.data.isPrimaryOwner is bool
+          && request.resource.data.isBeneficialOwner is bool
+          && request.resource.data.isOwnershipVerified is bool
+
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.status == 'draft'
+          && resource.data.documentIds.size() == 0
+          && resource.data.relationshipIds.size() == 0
+          && resource.data.transferChainRecordIds.size() == 0
+          && resource.data.sourceOwnershipRecordId == null
+          && resource.data.previousOwnershipRecordId == null
+          && resource.data.nextOwnershipRecordId == null
+          && resource.data.rightId == null;
+    }
     match /{document=**} {
       allow read, write: if false;
     }
