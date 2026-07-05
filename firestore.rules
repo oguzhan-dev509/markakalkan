@@ -2466,7 +2466,24 @@ match /publicProductCodes/{codeId} {
     }
 
     match /ip_documents/{documentId} {
-      allow read: if request.auth != null
+      // Henüz oluşmamış belge yalnız tenant UID önekli kimlikle okunabilir.
+      // Bu izin repository idempotency/varlık ön kontrolü içindir.
+      allow get: if request.auth != null
+          && (
+            (
+              resource == null
+              && documentId.matches(
+                '^' + request.auth.uid + '__ipdoc_[0-9]+$'
+              )
+            )
+            || (
+              resource != null
+              && resource.data.tenantId == request.auth.uid
+            )
+          );
+
+      // Koleksiyon sorguları tenantId filtresiyle sınırlandırılır.
+      allow list: if request.auth != null
           && resource.data.tenantId == request.auth.uid;
 
       allow create: if request.auth != null

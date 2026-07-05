@@ -210,7 +210,7 @@ class _IpDocumentVaultPageState extends State<IpDocumentVaultPage> {
 
     try {
       final documentId =
-          'ipdoc_${DateTime.now().toUtc().microsecondsSinceEpoch}';
+          '${user.uid}__ipdoc_${DateTime.now().toUtc().microsecondsSinceEpoch}';
 
       final draft = IpDocumentModel(
         id: documentId,
