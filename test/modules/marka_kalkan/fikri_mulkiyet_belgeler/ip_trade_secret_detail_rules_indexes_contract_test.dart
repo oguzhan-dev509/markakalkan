@@ -114,6 +114,15 @@ void main() {
     }
   });
 
+  test('rules source boyutu güvenli eşik altındadır', () {
+    final rulesBytes = File('firestore.rules').readAsBytesSync().length;
+
+    expect(
+      rulesBytes,
+      lessThan(220000),
+      reason: 'firestore.rules güvenli deploy payını korumalıdır.',
+    );
+  });
   test('firestore index json geçerlidir ve fieldOverrides korunur', () {
     final decoded =
         jsonDecode(File('firestore.indexes.json').readAsStringSync())
