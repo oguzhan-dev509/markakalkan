@@ -391,3 +391,111 @@ enum IpTradeSecretIncidentSource {
     );
   }
 }
+
+enum IpTradeSecretProtectionControlType {
+  preventive('preventive', 'Önleyici'),
+  detective('detective', 'Tespit Edici'),
+  corrective('corrective', 'Düzeltici'),
+  deterrent('deterrent', 'Caydırıcı'),
+  compensating('compensating', 'Telafi Edici'),
+  recovery('recovery', 'Kurtarma'),
+  monitoring('monitoring', 'İzleme'),
+  governance('governance', 'Yönetişim'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretProtectionControlType(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretProtectionControlType fromValue(String? value) {
+    return IpTradeSecretProtectionControlType.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretProtectionControlType.other,
+    );
+  }
+}
+
+enum IpTradeSecretProtectionControlStatus {
+  planned('planned', 'Planlandı'),
+  implementing('implementing', 'Uygulanıyor'),
+  active('active', 'Aktif'),
+  partiallyEffective('partially_effective', 'Kısmen Etkili'),
+  ineffective('ineffective', 'Etkisiz'),
+  suspended('suspended', 'Askıda'),
+  retired('retired', 'Kullanımdan Kaldırıldı'),
+  remediationRequired('remediation_required', 'İyileştirme Gerekli');
+
+  const IpTradeSecretProtectionControlStatus(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretProtectionControlStatus fromValue(String? value) {
+    return IpTradeSecretProtectionControlStatus.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretProtectionControlStatus.planned,
+    );
+  }
+}
+
+enum IpTradeSecretProtectionControlCategory {
+  accessControl('access_control', 'Erişim Kontrolü'),
+  identityManagement('identity_management', 'Kimlik Yönetimi'),
+  encryption('encryption', 'Şifreleme'),
+  dataLossPrevention('data_loss_prevention', 'Veri Kaybı Önleme'),
+  loggingMonitoring('logging_monitoring', 'Kayıt ve İzleme'),
+  physicalSecurity('physical_security', 'Fiziksel Güvenlik'),
+  personnelSecurity('personnel_security', 'Personel Güvenliği'),
+  contractualProtection('contractual_protection', 'Sözleşmesel Koruma'),
+  supplierSecurity('supplier_security', 'Tedarikçi Güvenliği'),
+  secureDevelopment('secure_development', 'Güvenli Geliştirme'),
+  backupRecovery('backup_recovery', 'Yedekleme ve Kurtarma'),
+  incidentResponse('incident_response', 'Olay Müdahalesi'),
+  classificationHandling(
+    'classification_handling',
+    'Sınıflandırma ve Kullanım',
+  ),
+  retentionDestruction('retention_destruction', 'Saklama ve İmha'),
+  awarenessTraining('awareness_training', 'Farkındalık Eğitimi'),
+  auditCompliance('audit_compliance', 'Denetim ve Uyum'),
+  other('other', 'Diğer');
+
+  const IpTradeSecretProtectionControlCategory(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretProtectionControlCategory fromValue(String? value) {
+    return IpTradeSecretProtectionControlCategory.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretProtectionControlCategory.other,
+    );
+  }
+}
+
+enum IpTradeSecretProtectionControlFrequency {
+  continuous('continuous', 'Sürekli'),
+  daily('daily', 'Günlük'),
+  weekly('weekly', 'Haftalık'),
+  monthly('monthly', 'Aylık'),
+  quarterly('quarterly', 'Üç Aylık'),
+  semiAnnual('semi_annual', 'Altı Aylık'),
+  annual('annual', 'Yıllık'),
+  eventDriven('event_driven', 'Olaya Bağlı'),
+  onDemand('on_demand', 'İhtiyaç Halinde'),
+  oneTime('one_time', 'Tek Seferlik'),
+  notApplicable('not_applicable', 'Uygulanamaz');
+
+  const IpTradeSecretProtectionControlFrequency(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static IpTradeSecretProtectionControlFrequency fromValue(String? value) {
+    return IpTradeSecretProtectionControlFrequency.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => IpTradeSecretProtectionControlFrequency.notApplicable,
+    );
+  }
+}
