@@ -406,6 +406,150 @@ class IpDocumentRepository implements IpDocumentRepositoryPort {
   }
 
   @override
+  Future<String> createVersionAtomically({
+    required IpDocumentModel previousDocument,
+    required IpDocumentModel newVersion,
+    required String updatedBy,
+  }) async {
+    _validateTenant(previousDocument.tenantId);
+    _validateTenant(newVersion.tenantId);
+    _validateDocument(previousDocument);
+    _validateDocument(newVersion);
+
+    final previousId = _validateRequiredId(
+      previousDocument.id,
+      fieldName: 'previousDocumentId',
+    );
+
+    final newVersionId = _validateRequiredId(
+      newVersion.id,
+      fieldName: 'newVersionId',
+    );
+
+    final actorId = _validateRequiredId(updatedBy, fieldName: 'updatedBy');
+
+    if (previousId == newVersionId) {
+      throw StateError(
+        'Yeni belge sürümü önceki sürümle aynı kimliği kullanamaz.',
+      );
+    }
+
+    if (previousDocument.brandId.trim() != newVersion.brandId.trim()) {
+      throw StateError('Belge sürümleri aynı marka kimliğine bağlı olmalıdır.');
+    }
+
+    if (newVersion.versionNumber != previousDocument.versionNumber + 1) {
+      throw StateError(
+        'Yeni sürüm numarası önceki sürüm numarasından tam olarak '
+        'bir büyük olmalıdır.',
+      );
+    }
+
+    if (newVersion.previousVersionId?.trim() != previousId) {
+      throw StateError(
+        'Yeni sürümün previousVersionId değeri önceki belge kimliğiyle '
+        'eşleşmelidir.',
+      );
+    }
+
+    final previousRootId = previousDocument.parentDocumentId?.trim();
+    final expectedRootId = previousRootId != null && previousRootId.isNotEmpty
+        ? previousRootId
+        : previousId;
+
+    if (newVersion.parentDocumentId?.trim() != expectedRootId) {
+      throw StateError(
+        'Yeni sürümün parentDocumentId değeri sürüm zincirinin kök '
+        'belge kimliğiyle eşleşmelidir.',
+      );
+    }
+
+    if (newVersion.supersedingDocumentId != null) {
+      throw StateError(
+        'Yeni oluşturulan sürüm supersedingDocumentId içeremez.',
+      );
+    }
+
+    final newHash = newVersion.sha256Hash?.trim();
+
+    if (newHash != null && newHash.isNotEmpty) {
+      final duplicateHash = await findBySha256Hash(sha256Hash: newHash);
+
+      if (duplicateHash != null && duplicateHash.id != newVersionId) {
+        throw StateError(
+          'Yeni sürümün SHA-256 parmak izi başka bir belge kaydında '
+          'kullanılıyor.',
+        );
+      }
+    }
+
+    final previousReference = _refs.documentDocument(previousId);
+    final newVersionReference = _refs.documentDocument(newVersionId);
+
+    await _refs.firestore.runTransaction((transaction) async {
+      final previousSnapshot = await transaction.get(previousReference);
+      final newVersionSnapshot = await transaction.get(newVersionReference);
+
+      if (!previousSnapshot.exists || previousSnapshot.data() == null) {
+        throw StateError('Önceki belge sürümü bulunamadı: $previousId');
+      }
+
+      if (newVersionSnapshot.exists) {
+        throw StateError(
+          'Yeni sürüm kimliği zaten kullanılıyor: $newVersionId',
+        );
+      }
+
+      final storedPrevious = IpDocumentModel.fromDocument(previousSnapshot);
+
+      _validateTenant(storedPrevious.tenantId);
+
+      if (storedPrevious.supersedingDocumentId?.trim().isNotEmpty == true) {
+        throw StateError(
+          'Önceki belge sürümünün zaten bir ardıl sürümü bulunuyor.',
+        );
+      }
+
+      if (storedPrevious.legalHoldActive) {
+        throw StateError(
+          'Hukuki muhafaza altındaki belgeden yeni sürüm oluşturulamaz.',
+        );
+      }
+
+      if (storedPrevious.isLocked) {
+        throw StateError('Kilitli belgeden yeni sürüm oluşturulamaz.');
+      }
+
+      if (storedPrevious.versionNumber != previousDocument.versionNumber) {
+        throw StateError('Önceki sürüm numarası işlem sırasında değişti.');
+      }
+
+      if (storedPrevious.brandId != newVersion.brandId.trim()) {
+        throw StateError(
+          'Kayıtlı önceki sürüm ile yeni sürümün marka kimliği eşleşmiyor.',
+        );
+      }
+
+      final createMap = newVersion.toMap();
+
+      createMap['createdAt'] = FieldValue.serverTimestamp();
+      createMap['createdBy'] = actorId;
+      createMap['updatedAt'] = FieldValue.serverTimestamp();
+      createMap['updatedBy'] = actorId;
+
+      transaction.set(newVersionReference, createMap);
+
+      transaction.update(previousReference, <String, dynamic>{
+        'supersedingDocumentId': newVersionId,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': actorId,
+      });
+    });
+
+    return newVersionId;
+  }
+
+  @override
   Future<void> delete(String documentId) async {
     final document = _refs.documentDocument(documentId);
     final snapshot = await document.get();

@@ -187,6 +187,95 @@ class IpDocumentVaultService {
     );
   }
 
+  /// Mevcut belgenin bir sonraki sürümünü atomik olarak oluşturur.
+  ///
+  /// Yeni sürüm kimliği, sürüm numarası ve zincir bağlantıları çağıran
+  /// katmanda hazırlanır. Servis, bu değerlerin mevcut sürümle tutarlı
+  /// olduğunu doğrular ve repository transaction işlemine devreder.
+  Future<String> createNextVersion({
+    required String previousDocumentId,
+    required IpDocumentModel newVersion,
+    required String createdBy,
+  }) async {
+    final actorId = _validateActor(createdBy, fieldName: 'createdBy');
+
+    final previousDocument = await _requireDocument(previousDocumentId);
+
+    _validateTenant(newVersion.tenantId);
+    _validateDocumentIdentity(newVersion);
+    _validateFileAndIntegrityConsistency(newVersion);
+    _validateVersionIdentity(newVersion);
+
+    final newVersionId = _validateDocumentId(newVersion.id);
+
+    if (newVersionId == previousDocument.id) {
+      throw StateError('Yeni sürüm önceki belgeyle aynı kimliği kullanamaz.');
+    }
+
+    if (previousDocument.legalHoldActive) {
+      throw StateError(
+        'Hukuki muhafaza altındaki belgeden yeni sürüm oluşturulamaz.',
+      );
+    }
+
+    if (previousDocument.isLocked) {
+      throw StateError('Kilitli belgeden yeni sürüm oluşturulamaz.');
+    }
+
+    if (previousDocument.supersedingDocumentId?.trim().isNotEmpty == true) {
+      throw StateError('Önceki belgenin zaten bir ardıl sürümü bulunuyor.');
+    }
+
+    if (newVersion.brandId.trim() != previousDocument.brandId.trim()) {
+      throw StateError(
+        'Yeni sürüm önceki belgeyle aynı marka kimliğine bağlı olmalıdır.',
+      );
+    }
+
+    if (newVersion.documentCode.trim() !=
+        previousDocument.documentCode.trim()) {
+      throw StateError('Belge sürüm zincirinde documentCode değiştirilemez.');
+    }
+
+    if (newVersion.versionNumber != previousDocument.versionNumber + 1) {
+      throw StateError(
+        'Yeni sürüm numarası önceki sürümden tam olarak bir büyük olmalıdır.',
+      );
+    }
+
+    if (newVersion.previousVersionId?.trim() != previousDocument.id) {
+      throw StateError(
+        'Yeni sürümün previousVersionId değeri önceki belge kimliğiyle '
+        'eşleşmelidir.',
+      );
+    }
+
+    final previousRootId = previousDocument.parentDocumentId?.trim();
+
+    final expectedRootId = previousRootId != null && previousRootId.isNotEmpty
+        ? previousRootId
+        : previousDocument.id;
+
+    if (newVersion.parentDocumentId?.trim() != expectedRootId) {
+      throw StateError(
+        'Yeni sürümün parentDocumentId değeri sürüm zincirinin kök '
+        'kimliğiyle eşleşmelidir.',
+      );
+    }
+
+    if (newVersion.supersedingDocumentId != null) {
+      throw StateError(
+        'Yeni oluşturulan sürüm supersedingDocumentId içeremez.',
+      );
+    }
+
+    return _repository.createVersionAtomically(
+      previousDocument: previousDocument,
+      newVersion: newVersion,
+      updatedBy: actorId,
+    );
+  }
+
   /// Silme güvenliğini hem servis hem repository katmanında uygular.
   Future<void> deleteDocument(String documentId) async {
     final document = await _repository.getById(_validateDocumentId(documentId));

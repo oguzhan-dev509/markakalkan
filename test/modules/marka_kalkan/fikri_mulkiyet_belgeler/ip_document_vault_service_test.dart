@@ -392,6 +392,218 @@ void main() {
     });
   });
 
+  group('IpDocumentVaultService sürümleme', () {
+    test('ilk sürümden ikinci sürümü atomik olarak oluşturur', () async {
+      final previous = _document(id: 'document-1', createdBy: actorId);
+
+      final repository = _FakeDocumentRepository(
+        documents: <String, IpDocumentModel>{previous.id: previous},
+      );
+
+      final service = IpDocumentVaultService(
+        repository: repository,
+        tenantId: tenantId,
+      );
+
+      final newVersion = _document(
+        id: 'document-2',
+        createdBy: actorId,
+        versionNumber: 2,
+        parentDocumentId: 'document-1',
+        previousVersionId: 'document-1',
+      );
+
+      final result = await service.createNextVersion(
+        previousDocumentId: previous.id,
+        newVersion: newVersion,
+        createdBy: actorId,
+      );
+
+      expect(result, 'document-2');
+      expect(repository.atomicPreviousDocument, same(previous));
+      expect(repository.atomicallyCreatedVersion, same(newVersion));
+      expect(repository.atomicUpdatedBy, actorId);
+    });
+
+    test('üçüncü sürüm kök belge kimliğini korur', () async {
+      final previous = _document(
+        id: 'document-2',
+        createdBy: actorId,
+        versionNumber: 2,
+        parentDocumentId: 'document-1',
+        previousVersionId: 'document-1',
+      );
+
+      final repository = _FakeDocumentRepository(
+        documents: <String, IpDocumentModel>{previous.id: previous},
+      );
+
+      final service = IpDocumentVaultService(
+        repository: repository,
+        tenantId: tenantId,
+      );
+
+      final newVersion = _document(
+        id: 'document-3',
+        createdBy: actorId,
+        versionNumber: 3,
+        parentDocumentId: 'document-1',
+        previousVersionId: 'document-2',
+      );
+
+      final result = await service.createNextVersion(
+        previousDocumentId: previous.id,
+        newVersion: newVersion,
+        createdBy: actorId,
+      );
+
+      expect(result, 'document-3');
+      expect(
+        repository.atomicallyCreatedVersion?.parentDocumentId,
+        'document-1',
+      );
+    });
+
+    test('kilitli belgeden yeni sürüm oluşturulamaz', () async {
+      final previous = _document(
+        id: 'document-1',
+        createdBy: actorId,
+        isLocked: true,
+      );
+
+      final repository = _FakeDocumentRepository(
+        documents: <String, IpDocumentModel>{previous.id: previous},
+      );
+
+      final service = IpDocumentVaultService(
+        repository: repository,
+        tenantId: tenantId,
+      );
+
+      await expectLater(
+        () => service.createNextVersion(
+          previousDocumentId: previous.id,
+          newVersion: _document(
+            id: 'document-2',
+            createdBy: actorId,
+            versionNumber: 2,
+            parentDocumentId: 'document-1',
+            previousVersionId: 'document-1',
+          ),
+          createdBy: actorId,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(repository.atomicallyCreatedVersion, isNull);
+    });
+
+    test('legal hold altındaki belgeden yeni sürüm oluşturulamaz', () async {
+      final previous = _document(
+        id: 'document-1',
+        createdBy: actorId,
+        legalHoldActive: true,
+        isLocked: true,
+      );
+
+      final repository = _FakeDocumentRepository(
+        documents: <String, IpDocumentModel>{previous.id: previous},
+      );
+
+      final service = IpDocumentVaultService(
+        repository: repository,
+        tenantId: tenantId,
+      );
+
+      await expectLater(
+        () => service.createNextVersion(
+          previousDocumentId: previous.id,
+          newVersion: _document(
+            id: 'document-2',
+            createdBy: actorId,
+            versionNumber: 2,
+            parentDocumentId: 'document-1',
+            previousVersionId: 'document-1',
+          ),
+          createdBy: actorId,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(repository.atomicallyCreatedVersion, isNull);
+    });
+
+    test('ardıl sürümü bulunan belgeden yeniden sürüm oluşturulamaz', () async {
+      final previous = _document(
+        id: 'document-1',
+        createdBy: actorId,
+        supersedingDocumentId: 'document-2',
+      );
+
+      final repository = _FakeDocumentRepository(
+        documents: <String, IpDocumentModel>{previous.id: previous},
+      );
+
+      final service = IpDocumentVaultService(
+        repository: repository,
+        tenantId: tenantId,
+      );
+
+      await expectLater(
+        () => service.createNextVersion(
+          previousDocumentId: previous.id,
+          newVersion: _document(
+            id: 'document-3',
+            createdBy: actorId,
+            versionNumber: 2,
+            parentDocumentId: 'document-1',
+            previousVersionId: 'document-1',
+          ),
+          createdBy: actorId,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(repository.atomicallyCreatedVersion, isNull);
+    });
+
+    test('hatalı kök veya previousVersionId zinciri reddedilir', () async {
+      final previous = _document(
+        id: 'document-2',
+        createdBy: actorId,
+        versionNumber: 2,
+        parentDocumentId: 'document-1',
+        previousVersionId: 'document-1',
+      );
+
+      final repository = _FakeDocumentRepository(
+        documents: <String, IpDocumentModel>{previous.id: previous},
+      );
+
+      final service = IpDocumentVaultService(
+        repository: repository,
+        tenantId: tenantId,
+      );
+
+      await expectLater(
+        () => service.createNextVersion(
+          previousDocumentId: previous.id,
+          newVersion: _document(
+            id: 'document-3',
+            createdBy: actorId,
+            versionNumber: 3,
+            parentDocumentId: 'wrong-root',
+            previousVersionId: 'wrong-previous',
+          ),
+          createdBy: actorId,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(repository.atomicallyCreatedVersion, isNull);
+    });
+  });
+
   group('IpDocumentVaultService güvenli silme', () {
     test('bağlantısız ve kilitsiz belge silinir', () async {
       final document = _document(id: 'document-1', createdBy: actorId);
@@ -560,6 +772,9 @@ class _FakeDocumentRepository implements IpDocumentRepositoryPort {
 
   IpDocumentModel? createdDocument;
   IpDocumentModel? updatedDocument;
+  IpDocumentModel? atomicPreviousDocument;
+  IpDocumentModel? atomicallyCreatedVersion;
+  String? atomicUpdatedBy;
 
   final List<_StatusUpdate> statusUpdates = <_StatusUpdate>[];
   final List<_IntegrityUpdate> integrityUpdates = <_IntegrityUpdate>[];
@@ -723,6 +938,32 @@ class _FakeDocumentRepository implements IpDocumentRepositoryPort {
     required String updatedBy,
   }) async {
     releasedLegalHoldIds.add(documentId);
+  }
+
+  @override
+  Future<String> createVersionAtomically({
+    required IpDocumentModel previousDocument,
+    required IpDocumentModel newVersion,
+    required String updatedBy,
+  }) async {
+    if (!documents.containsKey(previousDocument.id)) {
+      throw StateError(
+        'Önceki belge sürümü bulunamadı: ${previousDocument.id}',
+      );
+    }
+
+    if (documents.containsKey(newVersion.id)) {
+      throw StateError(
+        'Yeni sürüm kimliği zaten kullanılıyor: ${newVersion.id}',
+      );
+    }
+
+    atomicPreviousDocument = previousDocument;
+    atomicallyCreatedVersion = newVersion;
+    atomicUpdatedBy = updatedBy;
+    documents[newVersion.id] = newVersion;
+
+    return newVersion.id;
   }
 
   @override

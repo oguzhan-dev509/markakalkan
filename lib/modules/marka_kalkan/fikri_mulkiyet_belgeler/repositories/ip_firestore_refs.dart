@@ -19,6 +19,8 @@ class IpFirestoreRefs {
   final FirebaseFirestore _firestore;
   final String tenantId;
 
+  FirebaseFirestore get firestore => _firestore;
+
   CollectionReference<Map<String, dynamic>> get assets {
     return _firestore.collection(IpCollections.assets);
   }

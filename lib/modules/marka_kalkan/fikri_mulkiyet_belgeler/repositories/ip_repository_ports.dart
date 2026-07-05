@@ -205,6 +205,14 @@ abstract interface class IpDocumentRepositoryPort {
     required String updatedBy,
   });
 
+  /// Yeni sürümü oluşturur ve önceki sürümün ardıl belge bağlantısını
+  /// aynı Firestore transaction işlemi içinde günceller.
+  Future<String> createVersionAtomically({
+    required IpDocumentModel previousDocument,
+    required IpDocumentModel newVersion,
+    required String updatedBy,
+  });
+
   Future<void> delete(String documentId);
 }
 
