@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
+import 'ip_trade_secret_inventory_page.dart';
+
 class IpTradeSecretShieldPage extends StatelessWidget {
   const IpTradeSecretShieldPage({super.key});
 
@@ -75,7 +77,16 @@ class IpTradeSecretShieldPage extends StatelessWidget {
                 const SizedBox(height: 22),
                 const _RiskAndActionGrid(),
                 const SizedBox(height: 22),
-                _CapabilityGrid(items: _capabilities),
+                _CapabilityGrid(
+                  items: _capabilities,
+                  onOpenInventory: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const IpTradeSecretInventoryPage(),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -503,9 +514,10 @@ class _ListPanel extends StatelessWidget {
 }
 
 class _CapabilityGrid extends StatelessWidget {
-  const _CapabilityGrid({required this.items});
+  const _CapabilityGrid({required this.items, required this.onOpenInventory});
 
   final List<_Capability> items;
+  final VoidCallback onOpenInventory;
 
   @override
   Widget build(BuildContext context) {
@@ -516,6 +528,7 @@ class _CapabilityGrid extends StatelessWidget {
             : constraints.maxWidth < 980
             ? 2
             : 3;
+
         const spacing = 16.0;
         final width =
             (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
@@ -527,38 +540,56 @@ class _CapabilityGrid extends StatelessWidget {
               .map(
                 (item) => SizedBox(
                   width: width,
-                  child: _Panel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _IconBox(item.icon),
-                        const SizedBox(height: 14),
-                        Text(
-                          item.title,
-                          style: const TextStyle(
-                            color: MarkaKalkanTheme.navy,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: item.title == 'Formül ve Bileşen Envanteri'
+                        ? onOpenInventory
+                        : null,
+                    child: _Panel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _IconBox(item.icon),
+                          const SizedBox(height: 14),
+                          Text(
+                            item.title,
+                            style: const TextStyle(
+                              color: MarkaKalkanTheme.navy,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          item.description,
-                          style: const TextStyle(
-                            color: Color(0xFF687580),
-                            height: 1.45,
+                          const SizedBox(height: 8),
+                          Text(
+                            item.description,
+                            style: const TextStyle(
+                              color: Color(0xFF687580),
+                              height: 1.45,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'Ayrıntıları Aç',
-                          style: TextStyle(
-                            color: MarkaKalkanTheme.blue,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Text(
+                                item.title == 'Formül ve Bileşen Envanteri'
+                                    ? 'Envanteri Aç'
+                                    : 'Ayrıntıları Aç',
+                                style: const TextStyle(
+                                  color: MarkaKalkanTheme.blue,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Spacer(),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                color: MarkaKalkanTheme.blue,
+                                size: 19,
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
