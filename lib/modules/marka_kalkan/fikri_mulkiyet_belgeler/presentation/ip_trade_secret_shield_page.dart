@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
+import 'ip_trade_secret_access_disclosure_page.dart';
 import 'ip_trade_secret_inventory_page.dart';
 
 class IpTradeSecretShieldPage extends StatelessWidget {
@@ -83,6 +84,14 @@ class IpTradeSecretShieldPage extends StatelessWidget {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const IpTradeSecretInventoryPage(),
+                      ),
+                    );
+                  },
+                  onOpenAccessDisclosure: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const IpTradeSecretAccessDisclosurePage(),
                       ),
                     );
                   },
@@ -514,10 +523,15 @@ class _ListPanel extends StatelessWidget {
 }
 
 class _CapabilityGrid extends StatelessWidget {
-  const _CapabilityGrid({required this.items, required this.onOpenInventory});
+  const _CapabilityGrid({
+    required this.items,
+    required this.onOpenInventory,
+    required this.onOpenAccessDisclosure,
+  });
 
   final List<_Capability> items;
   final VoidCallback onOpenInventory;
+  final VoidCallback onOpenAccessDisclosure;
 
   @override
   Widget build(BuildContext context) {
@@ -544,6 +558,8 @@ class _CapabilityGrid extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     onTap: item.title == 'Formül ve Bileşen Envanteri'
                         ? onOpenInventory
+                        : item.title == 'Erişim ve İfşa Sicili'
+                        ? onOpenAccessDisclosure
                         : null,
                     child: _Panel(
                       child: Column(
