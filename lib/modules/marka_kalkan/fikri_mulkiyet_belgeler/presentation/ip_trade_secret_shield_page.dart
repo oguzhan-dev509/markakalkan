@@ -4,6 +4,7 @@ import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'ip_trade_secret_access_disclosure_page.dart';
 import 'ip_trade_secret_incident_page.dart';
 import 'ip_trade_secret_inventory_page.dart';
+import 'ip_trade_secret_protection_control_page.dart';
 
 class IpTradeSecretShieldPage extends StatelessWidget {
   const IpTradeSecretShieldPage({super.key});
@@ -100,6 +101,14 @@ class IpTradeSecretShieldPage extends StatelessWidget {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const IpTradeSecretIncidentPage(),
+                      ),
+                    );
+                  },
+                  onOpenProtectionControl: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const IpTradeSecretProtectionControlPage(),
                       ),
                     );
                   },
@@ -536,12 +545,14 @@ class _CapabilityGrid extends StatelessWidget {
     required this.onOpenInventory,
     required this.onOpenAccessDisclosure,
     required this.onOpenIncident,
+    required this.onOpenProtectionControl,
   });
 
   final List<_Capability> items;
   final VoidCallback onOpenInventory;
   final VoidCallback onOpenAccessDisclosure;
   final VoidCallback onOpenIncident;
+  final VoidCallback onOpenProtectionControl;
 
   @override
   Widget build(BuildContext context) {
@@ -572,6 +583,8 @@ class _CapabilityGrid extends StatelessWidget {
                         ? onOpenAccessDisclosure
                         : item.title == 'Olay ve İhlal Yönetimi'
                         ? onOpenIncident
+                        : item.title == 'Koruma Kontrolleri'
+                        ? onOpenProtectionControl
                         : null,
                     child: _Panel(
                       child: Column(
