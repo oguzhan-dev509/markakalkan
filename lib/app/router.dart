@@ -34,10 +34,21 @@ import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/present
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_access_disclosure_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_incident_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_inventory_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_management_decision_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_protection_control_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_remediation_action_page.dart';
 
 abstract final class AppRouter {
+  static Future<void> openIpTradeSecretManagementDecision(
+    BuildContext context,
+  ) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const IpTradeSecretManagementDecisionPage(),
+      ),
+    );
+  }
+
   static Future<void> openIpTradeSecretRemediationAction(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(

@@ -4,6 +4,7 @@ import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'ip_trade_secret_access_disclosure_page.dart';
 import 'ip_trade_secret_incident_page.dart';
 import 'ip_trade_secret_inventory_page.dart';
+import 'ip_trade_secret_management_decision_page.dart';
 import 'ip_trade_secret_protection_control_page.dart';
 import 'ip_trade_secret_remediation_action_page.dart';
 
@@ -118,6 +119,14 @@ class IpTradeSecretShieldPage extends StatelessWidget {
                       MaterialPageRoute<void>(
                         builder: (_) =>
                             const IpTradeSecretRemediationActionPage(),
+                      ),
+                    );
+                  },
+                  onOpenManagementDecision: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const IpTradeSecretManagementDecisionPage(),
                       ),
                     );
                   },
@@ -556,6 +565,7 @@ class _CapabilityGrid extends StatelessWidget {
     required this.onOpenIncident,
     required this.onOpenProtectionControl,
     required this.onOpenRemediationAction,
+    required this.onOpenManagementDecision,
   });
 
   final List<_Capability> items;
@@ -564,6 +574,7 @@ class _CapabilityGrid extends StatelessWidget {
   final VoidCallback onOpenIncident;
   final VoidCallback onOpenProtectionControl;
   final VoidCallback onOpenRemediationAction;
+  final VoidCallback onOpenManagementDecision;
 
   @override
   Widget build(BuildContext context) {
@@ -598,6 +609,8 @@ class _CapabilityGrid extends StatelessWidget {
                         ? onOpenProtectionControl
                         : item.title == 'Düzeltici Aksiyonlar'
                         ? onOpenRemediationAction
+                        : item.title == 'Yönetim Kararları'
+                        ? onOpenManagementDecision
                         : null,
                     child: _Panel(
                       child: Column(
