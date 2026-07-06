@@ -5,6 +5,7 @@ import 'ip_trade_secret_access_disclosure_page.dart';
 import 'ip_trade_secret_incident_page.dart';
 import 'ip_trade_secret_inventory_page.dart';
 import 'ip_trade_secret_protection_control_page.dart';
+import 'ip_trade_secret_remediation_action_page.dart';
 
 class IpTradeSecretShieldPage extends StatelessWidget {
   const IpTradeSecretShieldPage({super.key});
@@ -109,6 +110,14 @@ class IpTradeSecretShieldPage extends StatelessWidget {
                       MaterialPageRoute<void>(
                         builder: (_) =>
                             const IpTradeSecretProtectionControlPage(),
+                      ),
+                    );
+                  },
+                  onOpenRemediationAction: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const IpTradeSecretRemediationActionPage(),
                       ),
                     );
                   },
@@ -546,6 +555,7 @@ class _CapabilityGrid extends StatelessWidget {
     required this.onOpenAccessDisclosure,
     required this.onOpenIncident,
     required this.onOpenProtectionControl,
+    required this.onOpenRemediationAction,
   });
 
   final List<_Capability> items;
@@ -553,6 +563,7 @@ class _CapabilityGrid extends StatelessWidget {
   final VoidCallback onOpenAccessDisclosure;
   final VoidCallback onOpenIncident;
   final VoidCallback onOpenProtectionControl;
+  final VoidCallback onOpenRemediationAction;
 
   @override
   Widget build(BuildContext context) {
@@ -585,6 +596,8 @@ class _CapabilityGrid extends StatelessWidget {
                         ? onOpenIncident
                         : item.title == 'Koruma Kontrolleri'
                         ? onOpenProtectionControl
+                        : item.title == 'Düzeltici Aksiyonlar'
+                        ? onOpenRemediationAction
                         : null,
                     child: _Panel(
                       child: Column(
