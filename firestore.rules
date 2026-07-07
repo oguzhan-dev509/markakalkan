@@ -4979,6 +4979,536 @@ allow delete: if request.auth != null
           && resource.data.status != 'under_review';
     }
     // ============================================================
+    // FASON ÜRETİM VE TEDARİK GÜVENLİĞİ — PARTNER SİCİLİ
+    // tenantId, marka hesabının Firebase Auth UID değeridir.
+    // Partner kodu, tenant ve ilk oluşturma bilgileri değiştirilemez.
+    // ============================================================
+
+    // ============================================================
+    // SUPPLY SECURITY ORTAK KURAL FONKSİYONLARI
+    // ============================================================
+
+    function ssPartnerFields() {
+      return [
+        'tenantId',
+        'brandId',
+        'partnerCode',
+        'partnerCodeNormalized',
+        'legalName',
+        'tradeName',
+        'taxNumber',
+        'registrationNumber',
+        'roles',
+        'status',
+        'verificationStatus',
+        'riskLevel',
+        'trustScore',
+        'countryCode',
+        'city',
+        'region',
+        'address',
+        'website',
+        'contactPersonName',
+        'email',
+        'phone',
+        'isCriticalPartner',
+        'contractManufacturingAuthorized',
+        'subcontractingAllowed',
+        'hasNda',
+        'auditRequired',
+        'lastAuditAt',
+        'nextAuditAt',
+        'certificateDocumentIds',
+        'relatedFacilityIds',
+        'relatedProductIds',
+        'productCategoryCodes',
+        'notes',
+        'archiveReason',
+        'archivedAt',
+        'metadata',
+        'createdAt',
+        'createdBy',
+        'updatedAt',
+        'updatedBy'
+      ];
+    }
+
+    function ssFacilityFields() {
+      return [
+        'tenantId',
+        'brandId',
+        'partnerId',
+        'facilityCode',
+        'facilityCodeNormalized',
+        'name',
+        'facilityType',
+        'status',
+        'verificationStatus',
+        'riskLevel',
+        'authorizationStatus',
+        'parentFacilityId',
+        'countryCode',
+        'city',
+        'region',
+        'address',
+        'latitude',
+        'longitude',
+        'monthlyCapacity',
+        'capacityUnit',
+        'shiftCodes',
+        'relatedProductIds',
+        'productCategoryCodes',
+        'certificateDocumentIds',
+        'auditDocumentIds',
+        'isPrimaryFacility',
+        'isCriticalFacility',
+        'productionAuthorized',
+        'storageAuthorized',
+        'packagingAuthorized',
+        'labelPrintingAuthorized',
+        'destructionAuthorized',
+        'subcontractingObserved',
+        'suspiciousNightShiftObserved',
+        'capacityMismatchObserved',
+        'unregisteredShipmentObserved',
+        'auditRequired',
+        'lastAuditAt',
+        'nextAuditAt',
+        'lastVerifiedAt',
+        'riskReason',
+        'notes',
+        'archiveReason',
+        'archivedAt',
+        'metadata',
+        'createdAt',
+        'createdBy',
+        'updatedAt',
+        'updatedBy'
+      ];
+    }
+
+    function ssMetadataIsSafe() {
+      return request.resource.data.metadata is map
+          && !request.resource.data.keys().hasAny([
+            'password',
+            'credential',
+            'accessToken',
+            'apiKey',
+            'privateKey',
+            'formulaContent',
+            'recipeContent',
+            'secretContent',
+            'plaintextSecret',
+            'rawFormula',
+            'rawRecipe'
+          ])
+          && !request.resource.data.metadata.keys().hasAny([
+            'password',
+            'passwd',
+            'secret',
+            'token',
+            'credential',
+            'apiKey',
+            'api_key',
+            'accessKey',
+            'access_key',
+            'privateKey',
+            'private_key',
+            'formula',
+            'formulaContent',
+            'recipe',
+            'recipeContent',
+            'reçete',
+            'formül'
+          ]);
+    }
+
+    function ssArchiveIsValid() {
+      return request.resource.data.status != 'archived'
+          || (
+            request.resource.data.archiveReason is string
+            && request.resource.data.archiveReason.size() > 0
+            && request.resource.data.archiveReason.size() <= 2000
+            && request.resource.data.archivedAt is timestamp
+          );
+    }
+
+    function ssAuditDatesAreValid() {
+      return (
+            request.resource.data.lastAuditAt == null
+            || request.resource.data.lastAuditAt is timestamp
+          )
+          && (
+            request.resource.data.nextAuditAt == null
+            || request.resource.data.nextAuditAt is timestamp
+          )
+          && (
+            request.resource.data.lastAuditAt == null
+            || request.resource.data.nextAuditAt == null
+            || request.resource.data.nextAuditAt
+                >= request.resource.data.lastAuditAt
+          );
+    }
+    function ssCommonIsValid() {
+      return request.resource.data.tenantId is string
+          && request.resource.data.tenantId.size() > 0
+          && request.resource.data.brandId is string
+          && request.resource.data.brandId.size() > 0
+          && request.resource.data.verificationStatus in [
+            'unverified',
+            'documents_pending',
+            'under_review',
+            'verified',
+            'rejected',
+            'expired'
+          ]
+          && request.resource.data.riskLevel in [
+            'low',
+            'medium',
+            'high',
+            'critical'
+          ]
+          && request.resource.data.auditRequired is bool
+          && request.resource.data.certificateDocumentIds is list
+          && request.resource.data.relatedProductIds is list
+          && request.resource.data.productCategoryCodes is list
+          && ssMetadataIsSafe()
+          && ssAuditDatesAreValid()
+          && ssArchiveIsValid()
+          && (
+            request.resource.data.riskLevel != 'critical'
+            || request.resource.data.auditRequired == true
+          );
+    }
+    function ssPartnerIsValid() {
+      return request.resource.data.keys().hasOnly(ssPartnerFields())
+          && request.resource.data.keys().size() == 40
+          && ssCommonIsValid()
+          && isValidRequiredText(
+            request.resource.data.partnerCode,
+            100
+          )
+          && isValidRequiredText(
+            request.resource.data.partnerCodeNormalized,
+            100
+          )
+          && isValidRequiredText(
+            request.resource.data.legalName,
+            300
+          )
+          && isValidOptionalText(
+            request.resource.data.tradeName,
+            300
+          )
+          && isValidOptionalText(
+            request.resource.data.taxNumber,
+            80
+          )
+          && isValidOptionalText(
+            request.resource.data.registrationNumber,
+            120
+          )
+          && request.resource.data.roles is list
+          && request.resource.data.roles.size() <= 10
+          && request.resource.data.roles.hasOnly([
+            'manufacturer',
+            'contract_manufacturer',
+            'raw_material_supplier',
+            'packaging_supplier',
+            'label_printer',
+            'logistics_provider',
+            'warehouse_operator',
+            'subcontractor',
+            'destruction_provider',
+            'quality_laboratory'
+          ])
+          && request.resource.data.status in [
+            'draft',
+            'pending_verification',
+            'active',
+            'suspended',
+            'blocked',
+            'terminated',
+            'archived'
+          ]
+          && request.resource.data.trustScore is int
+          && request.resource.data.trustScore >= 0
+          && request.resource.data.trustScore <= 100
+          && isValidOptionalText(
+            request.resource.data.countryCode,
+            8
+          )
+          && isValidOptionalText(
+            request.resource.data.city,
+            160
+          )
+          && isValidOptionalText(
+            request.resource.data.region,
+            160
+          )
+          && isValidOptionalText(
+            request.resource.data.address,
+            2000
+          )
+          && isValidOptionalText(
+            request.resource.data.website,
+            500
+          )
+          && isValidOptionalText(
+            request.resource.data.contactPersonName,
+            200
+          )
+          && isValidOptionalText(
+            request.resource.data.email,
+            200
+          )
+          && isValidOptionalText(
+            request.resource.data.phone,
+            80
+          )
+          && request.resource.data.isCriticalPartner is bool
+          && request.resource.data.contractManufacturingAuthorized is bool
+          && request.resource.data.subcontractingAllowed is bool
+          && request.resource.data.hasNda is bool
+          && request.resource.data.relatedFacilityIds is list
+          && request.resource.data.certificateDocumentIds.size() <= 500
+          && request.resource.data.relatedFacilityIds.size() <= 500
+          && request.resource.data.relatedProductIds.size() <= 500
+          && request.resource.data.productCategoryCodes.size() <= 500
+          && isValidOptionalText(
+            request.resource.data.notes,
+            5000
+          )
+          && isValidOptionalText(
+            request.resource.data.archiveReason,
+            2000
+          )
+          && (
+            request.resource.data.archivedAt == null
+            || request.resource.data.archivedAt is timestamp
+          )
+          && (
+            request.resource.data.status != 'active'
+            || request.resource.data.roles.size() > 0
+          )
+          && (
+            request.resource.data.contractManufacturingAuthorized == false
+            || request.resource.data.roles.hasAny([
+              'manufacturer',
+              'contract_manufacturer'
+            ])
+          )
+          && (
+            request.resource.data.subcontractingAllowed == false
+            || request.resource.data.roles.hasAny([
+              'manufacturer',
+              'contract_manufacturer',
+              'subcontractor'
+            ])
+          );
+    }
+    function ssFacilityIsValid() {
+      return request.resource.data.keys().hasOnly(ssFacilityFields())
+          && request.resource.data.keys().size() == 49
+          && ssCommonIsValid()
+          && request.resource.data.partnerId is string
+          && request.resource.data.partnerId.size() > 0
+          && isValidRequiredText(
+            request.resource.data.facilityCode,
+            100
+          )
+          && isValidRequiredText(
+            request.resource.data.facilityCodeNormalized,
+            100
+          )
+          && isValidRequiredText(
+            request.resource.data.name,
+            300
+          )
+          && request.resource.data.facilityType in [
+            'factory',
+            'contract_manufacturing_plant',
+            'production_line',
+            'packaging_plant',
+            'label_printing_site',
+            'raw_material_warehouse',
+            'finished_goods_warehouse',
+            'distribution_center',
+            'destruction_facility',
+            'quality_laboratory',
+            'suspected_unauthorized_site'
+          ]
+          && request.resource.data.status in [
+            'draft',
+            'pending_verification',
+            'active',
+            'suspended',
+            'blocked',
+            'closed',
+            'archived'
+          ]
+          && request.resource.data.authorizationStatus in [
+            'not_applicable',
+            'unauthorized',
+            'pending',
+            'authorized',
+            'restricted',
+            'revoked'
+          ]
+          && request.resource.data.shiftCodes is list
+          && request.resource.data.shiftCodes.hasOnly([
+            'day',
+            'evening',
+            'night',
+            'weekend',
+            'custom'
+          ])
+          && request.resource.data.auditDocumentIds is list
+          && request.resource.data.isPrimaryFacility is bool
+          && request.resource.data.isCriticalFacility is bool
+          && request.resource.data.productionAuthorized is bool
+          && request.resource.data.storageAuthorized is bool
+          && request.resource.data.packagingAuthorized is bool
+          && request.resource.data.labelPrintingAuthorized is bool
+          && request.resource.data.destructionAuthorized is bool
+          && request.resource.data.subcontractingObserved is bool
+          && request.resource.data.suspiciousNightShiftObserved is bool
+          && request.resource.data.capacityMismatchObserved is bool
+          && request.resource.data.unregisteredShipmentObserved is bool
+          && (
+            request.resource.data.latitude == null
+            || (
+              request.resource.data.latitude is number
+              && request.resource.data.latitude >= -90
+              && request.resource.data.latitude <= 90
+            )
+          )
+          && (
+            request.resource.data.longitude == null
+            || (
+              request.resource.data.longitude is number
+              && request.resource.data.longitude >= -180
+              && request.resource.data.longitude <= 180
+            )
+          )
+          && (
+            (
+              request.resource.data.latitude == null
+              && request.resource.data.longitude == null
+            )
+            || (
+              request.resource.data.latitude is number
+              && request.resource.data.longitude is number
+            )
+          )
+          && (
+            request.resource.data.monthlyCapacity == null
+            || (
+              request.resource.data.monthlyCapacity is int
+              && request.resource.data.monthlyCapacity >= 0
+              && request.resource.data.capacityUnit is string
+              && request.resource.data.capacityUnit.size() > 0
+              && request.resource.data.capacityUnit.size() <= 80
+            )
+          )
+          && (
+            request.resource.data.lastVerifiedAt == null
+            || request.resource.data.lastVerifiedAt is timestamp
+          )
+          && (
+            request.resource.data.authorizationStatus != 'authorized'
+            || request.resource.data.productionAuthorized == true
+            || request.resource.data.storageAuthorized == true
+            || request.resource.data.packagingAuthorized == true
+            || request.resource.data.labelPrintingAuthorized == true
+            || request.resource.data.destructionAuthorized == true
+          )
+          && (
+            request.resource.data.facilityType
+                != 'suspected_unauthorized_site'
+            || request.resource.data.authorizationStatus != 'authorized'
+          );
+    }
+
+    match /supply_security_partners/{partnerId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && ssPartnerIsValid()
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == null;
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.partnerCode == resource.data.partnerCode
+          && request.resource.data.partnerCodeNormalized
+              == resource.data.partnerCodeNormalized
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && ssPartnerIsValid()
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.status == 'archived'
+          && resource.data.archiveReason is string
+          && resource.data.archiveReason.size() > 0
+          && resource.data.archivedAt is timestamp
+          && resource.data.relatedFacilityIds.size() == 0
+          && resource.data.relatedProductIds.size() == 0
+          && resource.data.certificateDocumentIds.size() == 0;
+    }
+    // ============================================================
+    // FASON ÜRETİM VE TEDARİK GÜVENLİĞİ — TESİS SİCİLİ
+    // tenantId, marka hesabının Firebase Auth UID değeridir.
+    // Marka, partner, tesis kodu ve oluşturma alanları değiştirilemez.
+    // ============================================================
+
+    match /supply_security_facilities/{facilityId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create: if request.auth != null
+          && request.resource.data.tenantId == request.auth.uid
+          && ssFacilityIsValid()
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == null;
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.partnerId == resource.data.partnerId
+          && request.resource.data.facilityCode
+              == resource.data.facilityCode
+          && request.resource.data.facilityCodeNormalized
+              == resource.data.facilityCodeNormalized
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && ssFacilityIsValid()
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && resource.data.status == 'archived'
+          && resource.data.archiveReason is string
+          && resource.data.archiveReason.size() > 0
+          && resource.data.archivedAt is timestamp
+          && resource.data.relatedProductIds.size() == 0
+          && resource.data.certificateDocumentIds.size() == 0
+          && resource.data.auditDocumentIds.size() == 0;
+    }
+    // ============================================================
     // FİKRİ MÜLKİYET — HAK SAHİPLİĞİ KAYITLARI
     // tenantId, marka hesabının Firebase Auth UID değeridir.
     // Hak sahipliği kimliği, tenant ve ilk oluşturma bilgileri

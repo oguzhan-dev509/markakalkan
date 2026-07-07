@@ -38,7 +38,15 @@ import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/present
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_protection_control_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_remediation_action_page.dart';
 
+import 'package:markakalkan/modules/marka_kalkan/fason_uretim_tedarik_guvenligi/presentation/supply_security_hub_page.dart';
+
 abstract final class AppRouter {
+  static Future<void> openSupplySecurityHub(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SupplySecurityHubPage()),
+    );
+  }
+
   static Future<void> openIpTradeSecretManagementDecision(
     BuildContext context,
   ) {

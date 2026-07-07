@@ -70,7 +70,7 @@ class CorporateHubPage extends StatelessWidget {
       description:
           'Yetkili üretim, fire, sevk, fazla üretim ve tedarik sapmalarını takip edin.',
       icon: Icons.factory_outlined,
-      status: _ModuleStatus.pilot,
+      status: _ModuleStatus.active,
     ),
     _CorporateModule(
       id: 'risk_scans',
@@ -329,6 +329,9 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'digital_market':
         AppRouter.openDijitalPazarIzleme(context);
+        return;
+      case 'supply_security':
+        AppRouter.openSupplySecurityHub(context);
         return;
     }
 
