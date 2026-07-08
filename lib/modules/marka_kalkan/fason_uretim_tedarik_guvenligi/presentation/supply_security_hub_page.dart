@@ -3,6 +3,7 @@ import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 import 'supply_facility_registry_page.dart';
 import 'supply_partner_registry_page.dart';
+import 'supply_protection_control_registry_page.dart';
 
 class SupplySecurityHubPage extends StatelessWidget {
   const SupplySecurityHubPage({super.key});
@@ -61,6 +62,30 @@ class SupplySecurityHubPage extends StatelessWidget {
                                 MaterialPageRoute<void>(
                                   builder: (_) =>
                                       const SupplyPartnerRegistryPage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _RegistryCard(
+                            icon: Icons.fact_check_outlined,
+                            title: 'Koruma Kontrolleri Sicili',
+                            description:
+                                'Partner ve tesis kontrollerini plan, sonuç, '
+                                'risk, bulgu, kanıt ve düzeltici faaliyet '
+                                'durumlarıyla yönetin.',
+                            badges: const [
+                              'Kontrol planı',
+                              'Bulgu ve sonuç',
+                              'Düzeltici faaliyet',
+                            ],
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const SupplyProtectionControlRegistryPage(),
                                 ),
                               );
                             },

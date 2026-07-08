@@ -29,6 +29,10 @@ class SupplySecurityFirestoreRefs {
     return _firestore.collection(SupplySecurityCollections.facilities);
   }
 
+  CollectionReference<Map<String, dynamic>> get protectionControls {
+    return _firestore.collection(SupplySecurityCollections.protectionControls);
+  }
+
   Query<Map<String, dynamic>> tenantQuery(
     CollectionReference<Map<String, dynamic>> collection,
   ) {
@@ -42,6 +46,14 @@ class SupplySecurityFirestoreRefs {
   DocumentReference<Map<String, dynamic>> facilityDocument(String facilityId) {
     return facilities.doc(
       _validateRequiredId(facilityId, fieldName: 'facilityId'),
+    );
+  }
+
+  DocumentReference<Map<String, dynamic>> protectionControlDocument(
+    String controlId,
+  ) {
+    return protectionControls.doc(
+      _validateRequiredId(controlId, fieldName: 'controlId'),
     );
   }
 

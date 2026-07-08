@@ -7,6 +7,11 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
+const {
+  buildCreateSupplyProtectionControl,
+  buildUpdateSupplyProtectionControl,
+} = require("./supply_security/protection_controls");
+
 setGlobalOptions({
   region: "europe-west3",
   maxInstances: 3,
@@ -178,3 +183,9 @@ exports.verifyProductCode = onCall(
       }
     },
 );
+
+exports.createSupplyProtectionControl =
+    buildCreateSupplyProtectionControl({db, admin});
+
+exports.updateSupplyProtectionControl =
+    buildUpdateSupplyProtectionControl({db, admin});

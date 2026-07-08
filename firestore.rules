@@ -14,26 +14,63 @@ service cloud.firestore {
           || (value is string && value.size() <= maxLength);
     }
 
+    function mkIsAiAgentId(value) {
+      return value is string && value.matches('^(?:task_planner|digital_field_scanner|page_change_monitor|visual_matcher|text_language_analyst|seller_entity_resolver|network_analyst|price_anomaly_analyst|evidence_custodian|risk_intervention_analyst|reporting_agent|human_expert_gate)$');
+    }
+
+    function mkIsPriority(value) {
+      return value is string && value.matches('^(?:low|normal|high|critical)$');
+    }
+
+    function mkIsOwnershipKind(value) {
+      return value is string && value.matches('^(?:legal_owner|economic_owner|joint_owner|creator|inventor|designer|employee_creation|founder_contribution|contractor_creation|agency_creation|commissioned_work|contract_manufacturing|assignee|assignor|licensor|licensee|beneficial_owner|custodian|other)$');
+    }
+
+    function mkIsMonitoringPageType(value) {
+      return value is string && value.matches('^(?:product_listing|seller_store|seller_profile|search_result|category_page|social_profile|social_post|website_home|website_product|independent_website|suspicious_domain|domain_record|other)$');
+    }
+
+    function mkIsAcquisitionType(value) {
+      return value is string && value.matches('^(?:original_creation|employment|commissioned_work|assignment|license|inheritance|merger|acquisition|court_decision|statutory_transfer|joint_development|other)$');
+    }
+
+    function mkIsTriggerType(value) {
+      return value is string && value.matches('^(?:scheduled|manual|retry|webhook|system_recovery)$');
+    }
+
+    function mkIsDiscoveryMethod(value) {
+      return value is string && value.matches('^(?:manual|source_scan|keyword_scan|seller_scan|domain_scan|image_match|event_match|signal_match|import)$');
+    }
+
+    function mkIsSourceType(value) {
+      return value is string && value.matches('^(?:marketplace|ecommerce_site|social_media|search_engine|classified_site|domain|mobile_app|manual_source)$');
+    }
+
+    function mkIsPartyType(value) {
+      return value is string && value.matches('^(?:person|company|institution|public_body|university|research_organization|partnership|team|unknown)$');
+    }
+
+    function mkIsOwnershipStatus(value) {
+      return value is string && value.matches('^(?:draft|under_review|active|disputed|suspended|transferred|expired|revoked|ended|archived)$');
+    }
+
+    function mkIsCrawlJobType(value) {
+      return value is string && value.matches('^(?:source_discovery|keyword_search|page_scan|seller_scan|store_scan|price_scan|manual_scan)$');
+    }
+
+    function mkIsSignalRiskLevel(value) {
+      return value is string && value.matches('^(?:low|medium|high|critical)$');
+    }
+
+    function mkIsActivePausedArchived(value) {
+      return value is string && value.matches('^(?:active|paused|archived)$');
+    }
+
    match /brandApplications/{applicationId} {
   allow create: if
       request.auth != null
       && request.auth.token.email != null
-      && request.resource.data.keys().hasAll([
-        'applicantUid',
-        'applicantEmail',
-        'companyName',
-        'brandName',
-        'businessType',
-        'sector',
-        'authorizedPerson',
-        'email',
-        'phone',
-        'taxNumber',
-        'website',
-        'problemDescription',
-        'status',
-        'createdAt'
-      ])
+      && request.resource.data.keys().size() == 14
       && request.resource.data.keys().hasOnly([
         'applicantUid',
         'applicantEmail',
@@ -118,17 +155,7 @@ match /brands/{brandUid}/products/{productId} {
 
   allow create: if request.auth != null
       && request.auth.uid == brandUid
-      && request.resource.data.keys().hasAll([
-        'name',
-        'brandName',
-        'sku',
-        'category',
-        'description',
-        'isActive',
-        'ownerUid',
-        'createdAt',
-        'updatedAt'
-      ])
+      && request.resource.data.keys().size() == 9
       && request.resource.data.keys().hasOnly([
         'name',
         'brandName',
@@ -175,21 +202,7 @@ match /brands/{brandUid}/productionBatches/{batchId} {
 
   allow create: if request.auth != null
       && request.auth.uid == brandUid
-      && request.resource.data.keys().hasAll([
-        'productId',
-        'productName',
-        'batchNumber',
-        'productionType',
-        'authorizedQuantity',
-        'defectQuantity',
-        'shippedQuantity',
-        'productionDate',
-        'notes',
-        'status',
-        'ownerUid',
-        'createdAt',
-        'updatedAt'
-      ])
+      && request.resource.data.keys().size() == 13
       && request.resource.data.keys().hasOnly([
         'productId',
         'productName',
@@ -215,11 +228,7 @@ match /brands/{brandUid}/productionBatches/{batchId} {
       && request.resource.data.batchNumber.size() >= 2
       && request.resource.data.batchNumber.size() <= 100
       && request.resource.data.productionType is string
-      && request.resource.data.productionType in [
-        'Kendi üretim',
-        'Fason üretim',
-        'İthalat'
-      ]
+      && (request.resource.data.productionType is string && request.resource.data.productionType.matches('^(?:Kendi üretim|Fason üretim|İthalat)$'))
       && request.resource.data.authorizedQuantity is int
       && request.resource.data.authorizedQuantity > 0
       && request.resource.data.defectQuantity is int
@@ -232,12 +241,7 @@ match /brands/{brandUid}/productionBatches/{batchId} {
       && request.resource.data.productionDate is timestamp
       && request.resource.data.notes is string
       && request.resource.data.notes.size() <= 2000
-      && request.resource.data.status in [
-        'planned',
-        'in_production',
-        'completed',
-        'cancelled'
-      ]
+      && (request.resource.data.status is string && request.resource.data.status.matches('^(?:planned|in_production|completed|cancelled)$'))
       && request.resource.data.ownerUid == request.auth.uid
       && request.resource.data.createdAt == request.time
       && request.resource.data.updatedAt == request.time;
@@ -274,33 +278,7 @@ match /brands/{brandUid}/digitalDetectiveTasks/{taskId} {
 
   allow create: if request.auth != null
       && request.auth.uid == brandUid
-      && request.resource.data.keys().hasAll([
-        'taskName',
-        'brandName',
-        'productName',
-        'categoryId',
-        'subcategory',
-        'violationIds',
-        'sources',
-        'searchTerms',
-        'excludedTerms',
-        'countries',
-        'cities',
-        'minimumPrice',
-        'maximumPrice',
-        'currency',
-        'frequency',
-        'riskLevel',
-        'startDate',
-        'endDate',
-        'status',
-        'ownerUid',
-        'ownerEmail',
-        'resultCount',
-        'processedCount',
-        'createdAt',
-        'updatedAt'
-      ])
+      && request.resource.data.keys().size() == 25
       && request.resource.data.keys().hasOnly([
         'taskName',
         'brandName',
@@ -400,16 +378,7 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
 
   allow create: if request.auth != null
       && request.auth.uid == brandUid
-      && request.resource.data.keys().hasAll([
-        'title',
-        'objective',
-        'status',
-        'priority',
-        'createdAt',
-        'updatedAt',
-        'currentAgentId',
-        'requiresHumanApproval'
-      ])
+      && request.resource.data.keys().size() == 8
       && request.resource.data.keys().hasOnly([
         'title',
         'objective',
@@ -427,12 +396,7 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
       && request.resource.data.objective.size() >= 3
       && request.resource.data.objective.size() <= 2000
       && request.resource.data.status == 'queued'
-      && request.resource.data.priority in [
-        'low',
-        'normal',
-        'high',
-        'critical'
-      ]
+      && mkIsPriority(request.resource.data.priority)
       && request.resource.data.currentAgentId == 'task_planner'
       && request.resource.data.requiresHumanApproval == true
       && request.resource.data.createdAt == request.time
@@ -440,16 +404,7 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
 
   allow update: if request.auth != null
       && request.auth.uid == brandUid
-      && request.resource.data.keys().hasAll([
-        'title',
-        'objective',
-        'status',
-        'priority',
-        'createdAt',
-        'updatedAt',
-        'currentAgentId',
-        'requiresHumanApproval'
-      ])
+      && request.resource.data.keys().size() == 8
       && request.resource.data.keys().hasOnly([
         'title',
         'objective',
@@ -471,29 +426,8 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
       && request.resource.data.createdAt == resource.data.createdAt
       && request.resource.data.requiresHumanApproval
           == resource.data.requiresHumanApproval
-      && request.resource.data.status in [
-        'draft',
-        'queued',
-        'running',
-        'waiting_human_approval',
-        'completed',
-        'failed',
-        'cancelled'
-      ]
-      && request.resource.data.currentAgentId in [
-        'task_planner',
-        'digital_field_scanner',
-        'page_change_monitor',
-        'visual_matcher',
-        'text_language_analyst',
-        'seller_entity_resolver',
-        'network_analyst',
-        'price_anomaly_analyst',
-        'evidence_custodian',
-        'risk_intervention_analyst',
-        'reporting_agent',
-        'human_expert_gate'
-      ]
+      && (request.resource.data.status is string && request.resource.data.status.matches('^(?:draft|queued|running|waiting_human_approval|completed|failed|cancelled)$'))
+      && mkIsAiAgentId(request.resource.data.currentAgentId)
       && request.resource.data.updatedAt == request.time;
 
   allow delete: if request.auth != null
@@ -505,18 +439,7 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
 
     allow create: if request.auth != null
         && request.auth.uid == brandUid
-        && request.resource.data.keys().hasAll([
-          'agentId',
-          'agentName',
-          'agentOrder',
-          'status',
-          'input',
-          'output',
-          'startedAt',
-          'completedAt',
-          'errorMessage',
-          'handoffToAgentId'
-        ])
+        && request.resource.data.keys().size() == 10
         && request.resource.data.keys().hasOnly([
           'agentId',
           'agentName',
@@ -530,30 +453,14 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
           'handoffToAgentId'
         ])
         && request.resource.data.agentId == taskId
-        && request.resource.data.agentId in [
-          'task_planner',
-          'digital_field_scanner',
-          'page_change_monitor',
-          'visual_matcher',
-          'text_language_analyst',
-          'seller_entity_resolver',
-          'network_analyst',
-          'price_anomaly_analyst',
-          'evidence_custodian',
-          'risk_intervention_analyst',
-          'reporting_agent',
-          'human_expert_gate'
-        ]
+        && mkIsAiAgentId(request.resource.data.agentId)
         && request.resource.data.agentName is string
         && request.resource.data.agentName.size() >= 2
         && request.resource.data.agentName.size() <= 160
         && request.resource.data.agentOrder is int
         && request.resource.data.agentOrder >= 1
         && request.resource.data.agentOrder <= 12
-        && request.resource.data.status in [
-          'pending',
-          'queued'
-        ]
+        && (request.resource.data.status is string && request.resource.data.status.matches('^(?:pending|queued)$'))
         && (
           (
             request.resource.data.agentId == 'task_planner'
@@ -574,36 +481,12 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
         && request.resource.data.handoffToAgentId is string
         && (
           request.resource.data.handoffToAgentId == ''
-          || request.resource.data.handoffToAgentId in [
-            'task_planner',
-            'digital_field_scanner',
-            'page_change_monitor',
-            'visual_matcher',
-            'text_language_analyst',
-            'seller_entity_resolver',
-            'network_analyst',
-            'price_anomaly_analyst',
-            'evidence_custodian',
-            'risk_intervention_analyst',
-            'reporting_agent',
-            'human_expert_gate'
-          ]
+          || mkIsAiAgentId(request.resource.data.handoffToAgentId)
         );
 
     allow update: if request.auth != null
         && request.auth.uid == brandUid
-        && request.resource.data.keys().hasAll([
-          'agentId',
-          'agentName',
-          'agentOrder',
-          'status',
-          'input',
-          'output',
-          'startedAt',
-          'completedAt',
-          'errorMessage',
-          'handoffToAgentId'
-        ])
+        && request.resource.data.keys().size() == 10
         && request.resource.data.keys().hasOnly([
           'agentId',
           'agentName',
@@ -628,16 +511,7 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
         && request.resource.data.agentName == resource.data.agentName
         && request.resource.data.agentOrder == resource.data.agentOrder
         && request.resource.data.input == resource.data.input
-        && request.resource.data.status in [
-          'pending',
-          'queued',
-          'running',
-          'completed',
-          'failed',
-          'skipped',
-          'waiting_handoff',
-          'waiting_human_approval'
-        ]
+        && (request.resource.data.status is string && request.resource.data.status.matches('^(?:pending|queued|running|completed|failed|skipped|waiting_handoff|waiting_human_approval)$'))
         && request.resource.data.output is map
         && (
           request.resource.data.startedAt == null
@@ -652,20 +526,7 @@ match /brands/{brandUid}/aiFieldOperations/{operationId} {
         && request.resource.data.handoffToAgentId is string
         && (
           request.resource.data.handoffToAgentId == ''
-          || request.resource.data.handoffToAgentId in [
-            'task_planner',
-            'digital_field_scanner',
-            'page_change_monitor',
-            'visual_matcher',
-            'text_language_analyst',
-            'seller_entity_resolver',
-            'network_analyst',
-            'price_anomaly_analyst',
-            'evidence_custodian',
-            'risk_intervention_analyst',
-            'reporting_agent',
-            'human_expert_gate'
-          ]
+          || mkIsAiAgentId(request.resource.data.handoffToAgentId)
         );
 
     allow delete: if request.auth != null
@@ -679,21 +540,7 @@ match /productCodes/{codeId} {
     && resource.data.ownerUid == request.auth.uid;
 
   allow create: if request.auth != null
-      && request.resource.data.keys().hasAll([
-        'publicCode',
-        'ownerUid',
-        'brandName',
-        'productId',
-        'productName',
-        'batchId',
-        'batchNumber',
-        'status',
-        'scanCount',
-        'firstVerifiedAt',
-        'lastVerifiedAt',
-        'createdAt',
-        'updatedAt'
-      ])
+      && request.resource.data.keys().size() == 13
       && request.resource.data.keys().hasOnly([
         'publicCode',
         'ownerUid',
@@ -754,11 +601,7 @@ match /productCodes/{codeId} {
         'status',
         'updatedAt'
       ])
-      && request.resource.data.status in [
-        'active',
-        'blocked',
-        'revoked'
-      ]
+      && (request.resource.data.status is string && request.resource.data.status.matches('^(?:active|blocked|revoked)$'))
       && request.resource.data.updatedAt == request.time;
 
   allow delete: if request.auth != null
@@ -769,14 +612,7 @@ match /publicProductCodes/{codeId} {
   allow list: if false;
 
   allow create: if request.auth != null
-      && request.resource.data.keys().hasAll([
-        'publicCode',
-        'brandName',
-        'productName',
-        'batchNumber',
-        'status',
-        'createdAt'
-      ])
+      && request.resource.data.keys().size() == 6
       && request.resource.data.keys().hasOnly([
         'publicCode',
         'brandName',
@@ -848,21 +684,7 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.sourceId is string
           && request.resource.data.sourceId.size() > 0
 
-          && request.resource.data.pageType in [
-            'product_listing',
-            'seller_store',
-            'seller_profile',
-            'search_result',
-            'category_page',
-            'social_profile',
-            'social_post',
-            'website_home',
-            'website_product',
-            'independent_website',
-            'suspicious_domain',
-            'domain_record',
-            'other'
-          ]
+          && mkIsMonitoringPageType(request.resource.data.pageType)
 
           && request.resource.data.url is string
           && request.resource.data.url.size() >= 4
@@ -885,63 +707,21 @@ match /publicProductCodes/{codeId} {
             || request.resource.data.domain is string
           )
 
-          && request.resource.data.status in [
-            'active',
-            'inactive',
-            'removed',
-            'blocked',
-            'redirected',
-            'republished',
-            'unreachable',
-            'error',
-            'unknown'
-          ]
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:active|inactive|removed|blocked|redirected|republished|unreachable|error|unknown)$'))
 
-          && request.resource.data.trackingStatus in [
-            'pending',
-            'active',
-            'paused',
-            'archived'
-          ]
+          && (request.resource.data.trackingStatus is string && request.resource.data.trackingStatus.matches('^(?:pending|active|paused|archived)$'))
 
-          && request.resource.data.discoveryMethod in [
-            'manual',
-            'source_scan',
-            'keyword_scan',
-            'seller_scan',
-            'domain_scan',
-            'image_match',
-            'event_match',
-            'signal_match',
-            'import'
-          ]
+          && mkIsDiscoveryMethod(request.resource.data.discoveryMethod)
 
-          && request.resource.data.scanFrequency in [
-            'hourly',
-            'every_6_hours',
-            'daily',
-            'weekly',
-            'manual'
-          ]
+          && (request.resource.data.scanFrequency is string && request.resource.data.scanFrequency.matches('^(?:hourly|every_6_hours|daily|weekly|manual)$'))
 
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsPriority(request.resource.data.priority)
 
           && request.resource.data.riskScore is int
           && request.resource.data.riskScore >= 0
           && request.resource.data.riskScore <= 100
 
-          && request.resource.data.riskLevel in [
-            'info',
-            'low',
-            'medium',
-            'high',
-            'critical'
-          ]
+          && (request.resource.data.riskLevel is string && request.resource.data.riskLevel.matches('^(?:info|low|medium|high|critical)$'))
 
           && request.resource.data.eventCount is int
           && request.resource.data.eventCount >= 0
@@ -1036,21 +816,7 @@ match /publicProductCodes/{codeId} {
             'updatedBy'
           ])
 
-          && request.resource.data.pageType in [
-            'product_listing',
-            'seller_store',
-            'seller_profile',
-            'search_result',
-            'category_page',
-            'social_profile',
-            'social_post',
-            'website_home',
-            'website_product',
-            'independent_website',
-            'suspicious_domain',
-            'domain_record',
-            'other'
-          ]
+          && mkIsMonitoringPageType(request.resource.data.pageType)
 
           && request.resource.data.url is string
           && request.resource.data.url.size() >= 4
@@ -1060,63 +826,21 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.normalizedUrl.size() >= 4
           && request.resource.data.normalizedUrl.size() <= 3000
 
-          && request.resource.data.status in [
-            'active',
-            'inactive',
-            'removed',
-            'blocked',
-            'redirected',
-            'republished',
-            'unreachable',
-            'error',
-            'unknown'
-          ]
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:active|inactive|removed|blocked|redirected|republished|unreachable|error|unknown)$'))
 
-          && request.resource.data.trackingStatus in [
-            'pending',
-            'active',
-            'paused',
-            'archived'
-          ]
+          && (request.resource.data.trackingStatus is string && request.resource.data.trackingStatus.matches('^(?:pending|active|paused|archived)$'))
 
-          && request.resource.data.discoveryMethod in [
-            'manual',
-            'source_scan',
-            'keyword_scan',
-            'seller_scan',
-            'domain_scan',
-            'image_match',
-            'event_match',
-            'signal_match',
-            'import'
-          ]
+          && mkIsDiscoveryMethod(request.resource.data.discoveryMethod)
 
-          && request.resource.data.scanFrequency in [
-            'hourly',
-            'every_6_hours',
-            'daily',
-            'weekly',
-            'manual'
-          ]
+          && (request.resource.data.scanFrequency is string && request.resource.data.scanFrequency.matches('^(?:hourly|every_6_hours|daily|weekly|manual)$'))
 
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsPriority(request.resource.data.priority)
 
           && request.resource.data.riskScore is int
           && request.resource.data.riskScore >= 0
           && request.resource.data.riskScore <= 100
 
-          && request.resource.data.riskLevel in [
-            'info',
-            'low',
-            'medium',
-            'high',
-            'critical'
-          ]
+          && (request.resource.data.riskLevel is string && request.resource.data.riskLevel.matches('^(?:info|low|medium|high|critical)$'))
 
           && request.resource.data.eventCount is int
           && request.resource.data.eventCount >= 0
@@ -1191,14 +915,7 @@ match /publicProductCodes/{codeId} {
             'status',
             'reviewedAt'
           ])
-          && request.resource.data.status in [
-            'new',
-            'reviewed',
-            'suppressed',
-            'forwarded',
-            'resolved',
-            'archived'
-          ]
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:new|reviewed|suppressed|forwarded|resolved|archived)$'))
           && request.resource.data.reviewedAt is timestamp;
 
       allow delete: if false;
@@ -1216,19 +933,9 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.eventTypes is list
           && request.resource.data.sourceIds is list
           && request.resource.data.conditions is list
-          && request.resource.data.signalLevel in [
-            'low',
-            'medium',
-            'high',
-            'critical'
-          ]
+          && mkIsSignalRiskLevel(request.resource.data.signalLevel)
           && request.resource.data.status is string
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsPriority(request.resource.data.priority)
           && request.resource.data.stopOnMatch is bool
           && request.resource.data.createdAt is timestamp
           && request.resource.data.createdBy is string
@@ -1261,19 +968,9 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.eventTypes is list
           && request.resource.data.sourceIds is list
           && request.resource.data.conditions is list
-          && request.resource.data.signalLevel in [
-            'low',
-            'medium',
-            'high',
-            'critical'
-          ]
+          && mkIsSignalRiskLevel(request.resource.data.signalLevel)
           && request.resource.data.status is string
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsPriority(request.resource.data.priority)
           && request.resource.data.stopOnMatch is bool
           && request.resource.data.updatedAt is timestamp;
 
@@ -1286,25 +983,7 @@ match /publicProductCodes/{codeId} {
           && resource.data.tenantId == request.auth.uid;
 
       allow create: if request.auth != null
-          && request.resource.data.keys().hasAll([
-            'tenantId',
-            'brandId',
-            'name',
-            'sourceType',
-            'baseUrl',
-            'accessMethod',
-            'healthStatus',
-            'termsReviewStatus',
-            'status',
-            'priority',
-            'scanFrequency',
-            'notes',
-            'lastCheckedAt',
-            'createdAt',
-            'createdBy',
-            'updatedAt',
-            'updatedBy'
-          ])
+          && request.resource.data.keys().size() == 17
           && request.resource.data.keys().hasOnly([
             'tenantId',
             'brandId',
@@ -1335,47 +1014,12 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.baseUrl is string
           && request.resource.data.baseUrl.size() >= 4
           && request.resource.data.baseUrl.size() <= 2000
-          && request.resource.data.sourceType in [
-            'marketplace',
-            'ecommerce_site',
-            'social_media',
-            'search_engine',
-            'classified_site',
-            'domain',
-            'mobile_app',
-            'manual_source'
-          ]
-          && request.resource.data.accessMethod in [
-            'public_web',
-            'official_api',
-            'partner_api',
-            'manual_upload',
-            'webhook'
-          ]
-          && request.resource.data.healthStatus in [
-            'healthy',
-            'degraded',
-            'failed',
-            'blocked',
-            'unknown'
-          ]
-          && request.resource.data.termsReviewStatus in [
-            'pending',
-            'approved',
-            'restricted',
-            'rejected'
-          ]
-          && request.resource.data.status in [
-            'active',
-            'paused',
-            'archived'
-          ]
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsSourceType(request.resource.data.sourceType)
+          && (request.resource.data.accessMethod is string && request.resource.data.accessMethod.matches('^(?:public_web|official_api|partner_api|manual_upload|webhook)$'))
+          && (request.resource.data.healthStatus is string && request.resource.data.healthStatus.matches('^(?:healthy|degraded|failed|blocked|unknown)$'))
+          && (request.resource.data.termsReviewStatus is string && request.resource.data.termsReviewStatus.matches('^(?:pending|approved|restricted|rejected)$'))
+          && mkIsActivePausedArchived(request.resource.data.status)
+          && mkIsPriority(request.resource.data.priority)
           && request.resource.data.scanFrequency is string
           && request.resource.data.scanFrequency.size() > 0
           && (
@@ -1427,47 +1071,12 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.baseUrl is string
           && request.resource.data.baseUrl.size() >= 4
           && request.resource.data.baseUrl.size() <= 2000
-          && request.resource.data.sourceType in [
-            'marketplace',
-            'ecommerce_site',
-            'social_media',
-            'search_engine',
-            'classified_site',
-            'domain',
-            'mobile_app',
-            'manual_source'
-          ]
-          && request.resource.data.accessMethod in [
-            'public_web',
-            'official_api',
-            'partner_api',
-            'manual_upload',
-            'webhook'
-          ]
-          && request.resource.data.healthStatus in [
-            'healthy',
-            'degraded',
-            'failed',
-            'blocked',
-            'unknown'
-          ]
-          && request.resource.data.termsReviewStatus in [
-            'pending',
-            'approved',
-            'restricted',
-            'rejected'
-          ]
-          && request.resource.data.status in [
-            'active',
-            'paused',
-            'archived'
-          ]
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsSourceType(request.resource.data.sourceType)
+          && (request.resource.data.accessMethod is string && request.resource.data.accessMethod.matches('^(?:public_web|official_api|partner_api|manual_upload|webhook)$'))
+          && (request.resource.data.healthStatus is string && request.resource.data.healthStatus.matches('^(?:healthy|degraded|failed|blocked|unknown)$'))
+          && (request.resource.data.termsReviewStatus is string && request.resource.data.termsReviewStatus.matches('^(?:pending|approved|restricted|rejected)$'))
+          && mkIsActivePausedArchived(request.resource.data.status)
+          && mkIsPriority(request.resource.data.priority)
           && request.resource.data.scanFrequency is string
           && request.resource.data.scanFrequency.size() > 0
           && (
@@ -1556,17 +1165,8 @@ match /publicProductCodes/{codeId} {
           )
           && request.resource.data.currency is string
           && request.resource.data.currency.size() == 3
-          && request.resource.data.status in [
-            'active',
-            'paused',
-            'archived'
-          ]
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsActivePausedArchived(request.resource.data.status)
+          && mkIsPriority(request.resource.data.priority)
           && request.resource.data.createdAt is timestamp
           && request.resource.data.createdBy == request.auth.uid
           && (
@@ -1639,17 +1239,8 @@ match /publicProductCodes/{codeId} {
           )
           && request.resource.data.currency is string
           && request.resource.data.currency.size() == 3
-          && request.resource.data.status in [
-            'active',
-            'paused',
-            'archived'
-          ]
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsActivePausedArchived(request.resource.data.status)
+          && mkIsPriority(request.resource.data.priority)
           && request.resource.data.updatedAt is timestamp
           && request.resource.data.updatedBy == request.auth.uid;
 
@@ -1770,24 +1361,9 @@ match /publicProductCodes/{codeId} {
             )
           )
 
-          && request.resource.data.jobType in [
-            'source_discovery',
-            'keyword_search',
-            'page_scan',
-            'seller_scan',
-            'store_scan',
-            'price_scan',
-            'manual_scan'
-          ]
+          && mkIsCrawlJobType(request.resource.data.jobType)
 
-          && request.resource.data.targetType in [
-            'source',
-            'page',
-            'seller',
-            'store',
-            'query',
-            'listing'
-          ]
+          && (request.resource.data.targetType is string && request.resource.data.targetType.matches('^(?:source|page|seller|store|query|listing)$'))
 
           && request.resource.data.targetId is string
           && request.resource.data.targetId.size() > 0
@@ -1808,44 +1384,15 @@ match /publicProductCodes/{codeId} {
             )
           )
 
-          && request.resource.data.scheduleType in [
-            'manual',
-            'hourly',
-            'every_6_hours',
-            'daily',
-            'weekly',
-            'custom'
-          ]
+          && (request.resource.data.scheduleType is string && request.resource.data.scheduleType.matches('^(?:manual|hourly|every_6_hours|daily|weekly|custom)$'))
 
-          && request.resource.data.triggerType in [
-            'scheduled',
-            'manual',
-            'retry',
-            'webhook',
-            'system_recovery'
-          ]
+          && mkIsTriggerType(request.resource.data.triggerType)
 
-          && request.resource.data.executionMode in [
-            'queue',
-            'n8n',
-            'worker',
-            'manual'
-          ]
+          && (request.resource.data.executionMode is string && request.resource.data.executionMode.matches('^(?:queue|n8n|worker|manual)$'))
 
-          && request.resource.data.priority in [
-            'low',
-            'normal',
-            'high',
-            'critical'
-          ]
+          && mkIsPriority(request.resource.data.priority)
 
-          && request.resource.data.status in [
-            'draft',
-            'active',
-            'paused',
-            'disabled',
-            'archived'
-          ]
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:draft|active|paused|disabled|archived)$'))
 
           && request.resource.data.lastRunStatus == 'never_run'
           && request.resource.data.lastRunAt == null
@@ -1932,66 +1479,22 @@ match /publicProductCodes/{codeId} {
                 )
               )
 
-              && request.resource.data.jobType in [
-                'source_discovery',
-                'keyword_search',
-                'page_scan',
-                'seller_scan',
-                'store_scan',
-                'price_scan',
-                'manual_scan'
-              ]
+              && mkIsCrawlJobType(request.resource.data.jobType)
 
-              && request.resource.data.targetType in [
-                'source',
-                'page',
-                'seller',
-                'store',
-                'query',
-                'listing'
-              ]
+              && (request.resource.data.targetType is string && request.resource.data.targetType.matches('^(?:source|page|seller|store|query|listing)$'))
 
               && request.resource.data.targetId is string
               && request.resource.data.targetId.size() > 0
 
-              && request.resource.data.scheduleType in [
-                'manual',
-                'hourly',
-                'every_6_hours',
-                'daily',
-                'weekly',
-                'custom'
-              ]
+              && (request.resource.data.scheduleType is string && request.resource.data.scheduleType.matches('^(?:manual|hourly|every_6_hours|daily|weekly|custom)$'))
 
-              && request.resource.data.triggerType in [
-                'scheduled',
-                'manual',
-                'retry',
-                'webhook',
-                'system_recovery'
-              ]
+              && mkIsTriggerType(request.resource.data.triggerType)
 
-              && request.resource.data.executionMode in [
-                'queue',
-                'n8n',
-                'worker',
-                'manual'
-              ]
+              && (request.resource.data.executionMode is string && request.resource.data.executionMode.matches('^(?:queue|n8n|worker|manual)$'))
 
-              && request.resource.data.priority in [
-                'low',
-                'normal',
-                'high',
-                'critical'
-              ]
+              && mkIsPriority(request.resource.data.priority)
 
-              && request.resource.data.status in [
-                'draft',
-                'active',
-                'paused',
-                'disabled',
-                'archived'
-              ]
+              && (request.resource.data.status is string && request.resource.data.status.matches('^(?:draft|active|paused|disabled|archived)$'))
 
               && (
                 request.resource.data.status == resource.data.status
@@ -2036,13 +1539,7 @@ match /publicProductCodes/{codeId} {
                 || resource.data.leaseExpiresAt <= request.time
               )
 
-              && request.resource.data.triggerType in [
-                'scheduled',
-                'manual',
-                'retry',
-                'webhook',
-                'system_recovery'
-              ]
+              && mkIsTriggerType(request.resource.data.triggerType)
 
               && request.resource.data.leaseOwner is string
               && request.resource.data.leaseOwner.matches('^queue:.+')
@@ -2086,36 +1583,7 @@ match /publicProductCodes/{codeId} {
       // Marka istemcisi yalnız queued çalışma talebi oluşturabilir.
       // Running ve sonuç durumları güvenilir worker/Admin SDK tarafından yazılır.
       allow create: if request.auth != null
-          && request.resource.data.keys().hasAll([
-            'tenantId',
-            'brandId',
-            'profileId',
-            'jobId',
-            'sourceId',
-            'targetId',
-            'pageId',
-            'triggerType',
-            'triggeredBy',
-            'requestKey',
-            'queuedAt',
-            'startedAt',
-            'completedAt',
-            'runStatus',
-            'workerId',
-            'executionAttempt',
-            'httpStatus',
-            'itemsFound',
-            'snapshotsCreated',
-            'eventsCreated',
-            'signalsCreated',
-            'bytesDownloaded',
-            'durationMs',
-            'errorCode',
-            'errorMessage',
-            'collectorVersion',
-            'parserVersion',
-            'createdAt'
-          ])
+          && request.resource.data.keys().size() == 28
           && request.resource.data.keys().hasOnly([
             'tenantId',
             'brandId',
@@ -2160,13 +1628,7 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.targetId is string
           && request.resource.data.targetId.size() > 0
 
-          && request.resource.data.triggerType in [
-            'scheduled',
-            'manual',
-            'retry',
-            'webhook',
-            'system_recovery'
-          ]
+          && mkIsTriggerType(request.resource.data.triggerType)
 
           && request.resource.data.triggeredBy == request.auth.uid
           && request.resource.data.requestKey is string
@@ -2282,13 +1744,7 @@ match /publicProductCodes/{codeId} {
             'updatedAt',
             'updatedBy'
           ])
-          && request.resource.data.status in [
-            'under_review',
-            'confirmed',
-            'dismissed',
-            'escalated',
-            'archived'
-          ]
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:under_review|confirmed|dismissed|escalated|archived)$'))
           && request.resource.data.reviewedAt is timestamp
           && request.resource.data.reviewedBy == request.auth.uid
           && request.resource.data.updatedAt is timestamp
@@ -2578,55 +2034,7 @@ match /publicProductCodes/{codeId} {
           && resource.data.tenantId == request.auth.uid;
 
       allow create: if request.auth != null
-          && request.resource.data.keys().hasAll([
-            'tenantId',
-            'brandId',
-            'secretCode',
-            'title',
-            'description',
-            'secretType',
-            'status',
-            'confidentialityLevel',
-            'riskLevel',
-            'protectionMode',
-            'disclosureScope',
-            'legalBasisStatus',
-            'compartmentalizationLevel',
-            'economicValueLevel',
-            'primaryAssetId',
-            'relatedAssetIds',
-            'relatedDocumentIds',
-            'ndaDocumentIds',
-            'contractDocumentIds',
-            'evidenceRecordIds',
-            'protectionMeasureCodes',
-            'custodianUserIds',
-            'authorizedUserIds',
-            'authorizedPartnerIds',
-            'ownerDepartment',
-            'secretFingerprint',
-            'hashAlgorithm',
-            'encryptedSecretReference',
-            'externalSecureSystemReference',
-            'firstProtectedAt',
-            'lastAccessReviewAt',
-            'nextAccessReviewAt',
-            'lastRiskAssessmentAt',
-            'lastDisclosureAt',
-            'leakageSuspected',
-            'legalHoldActive',
-            'accessControlScore',
-            'legalProtectionScore',
-            'technicalProtectionScore',
-            'operationalProtectionScore',
-            'secretSecurityScore',
-            'notes',
-            'metadata',
-            'createdAt',
-            'createdBy',
-            'updatedAt',
-            'updatedBy'
-          ])
+          && request.resource.data.keys().size() == 47
           && request.resource.data.keys().hasOnly([
             'tenantId',
             'brandId',
@@ -2685,42 +2093,10 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.title is string
           && request.resource.data.title.size() > 0
           && request.resource.data.title.size() <= 300
-          && request.resource.data.secretType in [
-            'formula',
-            'recipe',
-            'manufacturing_process',
-            'know_how',
-            'algorithm',
-            'source_code',
-            'dataset',
-            'test_method',
-            'pricing_model',
-            'customer_list',
-            'supplier_network',
-            'business_method',
-            'product_roadmap',
-            'market_strategy',
-            'other'
-          ]
-          && request.resource.data.status in [
-            'draft',
-            'active',
-            'under_review',
-            'suspended',
-            'compromised',
-            'retired'
-          ]
-          && request.resource.data.confidentialityLevel in [
-            'restricted',
-            'highly_confidential',
-            'trade_secret'
-          ]
-          && request.resource.data.protectionMode in [
-            'metadata_only',
-            'encrypted_vault',
-            'external_secure_system',
-            'compartmentalized'
-          ]
+          && (request.resource.data.secretType is string && request.resource.data.secretType.matches('^(?:formula|recipe|manufacturing_process|know_how|algorithm|source_code|dataset|test_method|pricing_model|customer_list|supplier_network|business_method|product_roadmap|market_strategy|other)$'))
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:draft|active|under_review|suspended|compromised|retired)$'))
+          && (request.resource.data.confidentialityLevel is string && request.resource.data.confidentialityLevel.matches('^(?:restricted|highly_confidential|trade_secret)$'))
+          && (request.resource.data.protectionMode is string && request.resource.data.protectionMode.matches('^(?:metadata_only|encrypted_vault|external_secure_system|compartmentalized)$'))
           && request.resource.data.leakageSuspected is bool
           && request.resource.data.legalHoldActive is bool
           && request.resource.data.accessControlScore is int
@@ -2788,11 +2164,7 @@ match /publicProductCodes/{codeId} {
           && request.resource.data.secretCode == resource.data.secretCode
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.confidentialityLevel in [
-            'restricted',
-            'highly_confidential',
-            'trade_secret'
-          ]
+          && (request.resource.data.confidentialityLevel is string && request.resource.data.confidentialityLevel.matches('^(?:restricted|highly_confidential|trade_secret)$'))
           && request.resource.data.leakageSuspected is bool
           && request.resource.data.legalHoldActive is bool
           && request.resource.data.accessControlScore is int
@@ -5154,20 +4526,8 @@ allow delete: if request.auth != null
           && request.resource.data.tenantId.size() > 0
           && request.resource.data.brandId is string
           && request.resource.data.brandId.size() > 0
-          && request.resource.data.verificationStatus in [
-            'unverified',
-            'documents_pending',
-            'under_review',
-            'verified',
-            'rejected',
-            'expired'
-          ]
-          && request.resource.data.riskLevel in [
-            'low',
-            'medium',
-            'high',
-            'critical'
-          ]
+          && (request.resource.data.verificationStatus is string && request.resource.data.verificationStatus.matches('^(?:unverified|documents_pending|under_review|verified|rejected|expired)$'))
+          && mkIsSignalRiskLevel(request.resource.data.riskLevel)
           && request.resource.data.auditRequired is bool
           && request.resource.data.certificateDocumentIds is list
           && request.resource.data.relatedProductIds is list
@@ -5222,15 +4582,7 @@ allow delete: if request.auth != null
             'destruction_provider',
             'quality_laboratory'
           ])
-          && request.resource.data.status in [
-            'draft',
-            'pending_verification',
-            'active',
-            'suspended',
-            'blocked',
-            'terminated',
-            'archived'
-          ]
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:draft|pending_verification|active|suspended|blocked|terminated|archived)$'))
           && request.resource.data.trustScore is int
           && request.resource.data.trustScore >= 0
           && request.resource.data.trustScore <= 100
@@ -5325,36 +4677,9 @@ allow delete: if request.auth != null
             request.resource.data.name,
             300
           )
-          && request.resource.data.facilityType in [
-            'factory',
-            'contract_manufacturing_plant',
-            'production_line',
-            'packaging_plant',
-            'label_printing_site',
-            'raw_material_warehouse',
-            'finished_goods_warehouse',
-            'distribution_center',
-            'destruction_facility',
-            'quality_laboratory',
-            'suspected_unauthorized_site'
-          ]
-          && request.resource.data.status in [
-            'draft',
-            'pending_verification',
-            'active',
-            'suspended',
-            'blocked',
-            'closed',
-            'archived'
-          ]
-          && request.resource.data.authorizationStatus in [
-            'not_applicable',
-            'unauthorized',
-            'pending',
-            'authorized',
-            'restricted',
-            'revoked'
-          ]
+          && (request.resource.data.facilityType is string && request.resource.data.facilityType.matches('^(?:factory|contract_manufacturing_plant|production_line|packaging_plant|label_printing_site|raw_material_warehouse|finished_goods_warehouse|distribution_center|destruction_facility|quality_laboratory|suspected_unauthorized_site)$'))
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:draft|pending_verification|active|suspended|blocked|closed|archived)$'))
+          && (request.resource.data.authorizationStatus is string && request.resource.data.authorizationStatus.matches('^(?:not_applicable|unauthorized|pending|authorized|restricted|revoked)$'))
           && request.resource.data.shiftCodes is list
           && request.resource.data.shiftCodes.hasOnly([
             'day',
@@ -5430,6 +4755,165 @@ allow delete: if request.auth != null
           );
     }
 
+    // ============================================================
+    // FASON ÜRETİM VE TEDARİK GÜVENLİĞİ — KORUMA KONTROLLERİ
+    // tenantId, marka hesabının Firebase Auth UID değeridir.
+    // Kontrol kodu, marka ve oluşturma alanları değiştirilemez.
+    // Fiziksel silme kapalıdır; kayıtlar gerekçeyle arşivlenir.
+    // ============================================================
+
+    function ssOptionalTimestamp(value) {
+      return value == null || value is timestamp;
+    }
+
+    function ssProtectionControlIsValid() {
+      return request.resource.data.keys().size() == 35
+          && request.resource.data.keys().hasOnly([
+            'tenantId',
+            'brandId',
+            'controlCode',
+            'controlCodeNormalized',
+            'title',
+            'controlType',
+            'scope',
+            'status',
+            'result',
+            'riskLevel',
+            'partnerId',
+            'facilityId',
+            'description',
+            'assignedToId',
+            'assignedToName',
+            'plannedAt',
+            'startedAt',
+            'completedAt',
+            'nextControlAt',
+            'findings',
+            'evidenceDocumentIds',
+            'relatedProductIds',
+            'correctiveAction',
+            'correctiveActionOwnerId',
+            'correctiveActionOwnerName',
+            'correctiveActionDueAt',
+            'correctiveActionCompletedAt',
+            'notes',
+            'archiveReason',
+            'archivedAt',
+            'metadata',
+            'createdAt',
+            'createdBy',
+            'updatedAt',
+            'updatedBy'
+          ])
+          && isValidRequiredText(request.resource.data.tenantId, 160)
+          && isValidRequiredText(request.resource.data.brandId, 160)
+          && isValidRequiredText(request.resource.data.controlCode, 100)
+          && isValidRequiredText(
+            request.resource.data.controlCodeNormalized,
+            100
+          )
+          && request.resource.data.controlCodeNormalized
+              == request.resource.data.controlCode.upper()
+          && isValidRequiredText(request.resource.data.title, 200)
+          && (request.resource.data.controlType is string && request.resource.data.controlType.matches('^(?:identity_verification|authorization_review|facility_inspection|production_security|capacity_consistency|raw_material_traceability|packaging_and_label_security|shipment_security|destruction_verification|subcontractor_review|document_and_certificate_review|incident_follow_up|custom)$'))
+          && (request.resource.data.scope is string && request.resource.data.scope.matches('^(?:partner|facility|partner_and_facility)$'))
+          && (request.resource.data.status is string && request.resource.data.status.matches('^(?:draft|planned|in_progress|completed|overdue|cancelled|archived)$'))
+          && (request.resource.data.result is string && request.resource.data.result.matches('^(?:not_evaluated|passed|passed_with_observation|failed|critical_failure|not_applicable)$'))
+          && mkIsSignalRiskLevel(request.resource.data.riskLevel)
+          && (
+            (
+              request.resource.data.scope == 'partner'
+              && request.resource.data.partnerId is string
+              && request.resource.data.partnerId.size() > 0
+              && request.resource.data.facilityId == null
+            )
+            || (
+              request.resource.data.scope == 'facility'
+              && request.resource.data.partnerId == null
+              && request.resource.data.facilityId is string
+              && request.resource.data.facilityId.size() > 0
+            )
+            || (
+              request.resource.data.scope == 'partner_and_facility'
+              && request.resource.data.partnerId is string
+              && request.resource.data.partnerId.size() > 0
+              && request.resource.data.facilityId is string
+              && request.resource.data.facilityId.size() > 0
+            )
+          )
+          && isValidOptionalText(request.resource.data.description, 5000)
+          && isValidOptionalText(request.resource.data.findings, 10000)
+          && (
+            request.resource.data.correctiveAction == null
+            || request.resource.data.correctiveAction is string
+          )
+          && request.resource.data.evidenceDocumentIds is list
+          && request.resource.data.relatedProductIds is list
+          && request.resource.data.metadata is map
+          && ssOptionalTimestamp(request.resource.data.plannedAt)
+          && ssOptionalTimestamp(request.resource.data.startedAt)
+          && ssOptionalTimestamp(request.resource.data.completedAt)
+          && ssOptionalTimestamp(request.resource.data.nextControlAt)
+          && ssOptionalTimestamp(
+            request.resource.data.correctiveActionDueAt
+          )
+          && ssOptionalTimestamp(
+            request.resource.data.correctiveActionCompletedAt
+          )
+          && ssOptionalTimestamp(request.resource.data.archivedAt)
+          && (
+            request.resource.data.status != 'completed'
+            || (
+              request.resource.data.completedAt is timestamp
+              && request.resource.data.result != 'not_evaluated'
+            )
+          )
+          && (
+            !(
+              (request.resource.data.result is string && request.resource.data.result.matches('^(?:failed|critical_failure)$'))
+            )
+            || (
+              request.resource.data.findings is string
+              && request.resource.data.findings.size() > 0
+              && request.resource.data.correctiveAction is string
+              && request.resource.data.correctiveAction.size() > 0
+            )
+          )
+          && (
+            request.resource.data.status != 'archived'
+            || (
+              request.resource.data.archiveReason is string
+              && request.resource.data.archiveReason.size() > 0
+              && request.resource.data.archivedAt is timestamp
+            )
+          );
+    }
+
+    match /supply_security_protection_controls/{controlId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+     allow create: if false;
+
+      allow update: if request.auth != null
+          && resource.data.tenantId == request.auth.uid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.controlCode
+              == resource.data.controlCode
+          && request.resource.data.controlCodeNormalized
+              == resource.data.controlCodeNormalized
+          && request.resource.data.createdAt
+              == resource.data.createdAt
+          && request.resource.data.createdBy
+              == resource.data.createdBy
+          && resource.data.status != 'archived'
+          && ssProtectionControlIsValid()
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if false;
+    }
     match /supply_security_partners/{partnerId} {
       allow read: if request.auth != null
           && resource.data.tenantId == request.auth.uid;
@@ -5520,50 +5004,7 @@ allow delete: if request.auth != null
           && resource.data.tenantId == request.auth.uid;
 
       allow create: if request.auth != null
-          && request.resource.data.keys().hasAll([
-            'tenantId',
-            'brandId',
-            'assetId',
-            'recordCode',
-            'ownershipKind',
-            'partyType',
-            'partyName',
-            'partyId',
-            'partyExternalId',
-            'partyCountryCode',
-            'partyRegistrationNumber',
-            'partyTaxNumber',
-            'partyContactEmail',
-            'acquisitionType',
-            'status',
-            'ownershipPercentage',
-            'jurisdictionScope',
-            'countryCodes',
-            'regionCode',
-            'rightId',
-            'sourceOwnershipRecordId',
-            'previousOwnershipRecordId',
-            'nextOwnershipRecordId',
-            'agreementNumber',
-            'agreementDate',
-            'effectiveFrom',
-            'effectiveUntil',
-            'isExclusive',
-            'isPrimaryOwner',
-            'isBeneficialOwner',
-            'isOwnershipVerified',
-            'verificationDate',
-            'verifiedBy',
-            'documentIds',
-            'relationshipIds',
-            'transferChainRecordIds',
-            'notes',
-            'metadata',
-            'createdAt',
-            'createdBy',
-            'updatedAt',
-            'updatedBy'
-          ])
+          && request.resource.data.keys().size() == 42
           && request.resource.data.keys().hasOnly([
             'tenantId',
             'brandId',
@@ -5627,75 +5068,15 @@ allow delete: if request.auth != null
           && request.resource.data.partyName.size() > 0
           && request.resource.data.partyName.size() <= 300
 
-          && request.resource.data.ownershipKind in [
-            'legal_owner',
-            'economic_owner',
-            'joint_owner',
-            'creator',
-            'inventor',
-            'designer',
-            'employee_creation',
-            'founder_contribution',
-            'contractor_creation',
-            'agency_creation',
-            'commissioned_work',
-            'contract_manufacturing',
-            'assignee',
-            'assignor',
-            'licensor',
-            'licensee',
-            'beneficial_owner',
-            'custodian',
-            'other'
-          ]
+          && mkIsOwnershipKind(request.resource.data.ownershipKind)
 
-          && request.resource.data.partyType in [
-            'person',
-            'company',
-            'institution',
-            'public_body',
-            'university',
-            'research_organization',
-            'partnership',
-            'team',
-            'unknown'
-          ]
+          && mkIsPartyType(request.resource.data.partyType)
 
-          && request.resource.data.acquisitionType in [
-            'original_creation',
-            'employment',
-            'commissioned_work',
-            'assignment',
-            'license',
-            'inheritance',
-            'merger',
-            'acquisition',
-            'court_decision',
-            'statutory_transfer',
-            'joint_development',
-            'other'
-          ]
+          && mkIsAcquisitionType(request.resource.data.acquisitionType)
 
-          && request.resource.data.status in [
-            'draft',
-            'under_review',
-            'active',
-            'disputed',
-            'suspended',
-            'transferred',
-            'expired',
-            'revoked',
-            'ended',
-            'archived'
-          ]
+          && mkIsOwnershipStatus(request.resource.data.status)
 
-          && request.resource.data.jurisdictionScope in [
-            'national',
-            'regional',
-            'international',
-            'contractual',
-            'unregistered'
-          ]
+          && (request.resource.data.jurisdictionScope is string && request.resource.data.jurisdictionScope.matches('^(?:national|regional|international|contractual|unregistered)$'))
 
           && request.resource.data.ownershipPercentage is number
           && request.resource.data.ownershipPercentage >= 0
@@ -5755,75 +5136,15 @@ allow delete: if request.auth != null
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.createdBy == resource.data.createdBy
 
-          && request.resource.data.ownershipKind in [
-            'legal_owner',
-            'economic_owner',
-            'joint_owner',
-            'creator',
-            'inventor',
-            'designer',
-            'employee_creation',
-            'founder_contribution',
-            'contractor_creation',
-            'agency_creation',
-            'commissioned_work',
-            'contract_manufacturing',
-            'assignee',
-            'assignor',
-            'licensor',
-            'licensee',
-            'beneficial_owner',
-            'custodian',
-            'other'
-          ]
+          && mkIsOwnershipKind(request.resource.data.ownershipKind)
 
-          && request.resource.data.partyType in [
-            'person',
-            'company',
-            'institution',
-            'public_body',
-            'university',
-            'research_organization',
-            'partnership',
-            'team',
-            'unknown'
-          ]
+          && mkIsPartyType(request.resource.data.partyType)
 
-          && request.resource.data.acquisitionType in [
-            'original_creation',
-            'employment',
-            'commissioned_work',
-            'assignment',
-            'license',
-            'inheritance',
-            'merger',
-            'acquisition',
-            'court_decision',
-            'statutory_transfer',
-            'joint_development',
-            'other'
-          ]
+          && mkIsAcquisitionType(request.resource.data.acquisitionType)
 
-          && request.resource.data.status in [
-            'draft',
-            'under_review',
-            'active',
-            'disputed',
-            'suspended',
-            'transferred',
-            'expired',
-            'revoked',
-            'ended',
-            'archived'
-          ]
+          && mkIsOwnershipStatus(request.resource.data.status)
 
-          && request.resource.data.jurisdictionScope in [
-            'national',
-            'regional',
-            'international',
-            'contractual',
-            'unregistered'
-          ]
+          && (request.resource.data.jurisdictionScope is string && request.resource.data.jurisdictionScope.matches('^(?:national|regional|international|contractual|unregistered)$'))
 
           && request.resource.data.partyName is string
           && request.resource.data.partyName.size() > 0
