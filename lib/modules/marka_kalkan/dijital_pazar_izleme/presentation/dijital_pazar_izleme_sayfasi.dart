@@ -8,6 +8,16 @@ class DijitalPazarIzlemeSayfasi extends StatelessWidget {
 
   static const List<_MonitoringModule> _modules = [
     _MonitoringModule(
+      title: 'Sahte İkiz Sicili',
+      description:
+          'Şüpheli veya teyitli sahte ikizleri; klon yöntemi, risk, '
+          'benzerlik, dalga, satıcı, mağaza, ilan ve kanıt bağlarıyla '
+          'kalıcı savunma dosyaları olarak yönetin.',
+      icon: Icons.content_copy_outlined,
+      statusText: 'Kalıcı savunma sicili',
+      isActive: true,
+    ),
+    _MonitoringModule(
       title: 'Marka İzleme Profili',
       description:
           'İzlenecek marka, ürün, kategori, anahtar kelime ve risk önceliklerini tanımlayın.',
@@ -266,6 +276,11 @@ class _MonitoringModuleCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () {
+        if (module.title == 'Sahte İkiz Sicili') {
+          AppRouter.openCounterfeitTwinRegistry(context);
+          return;
+        }
+
         if (module.title == 'Marka İzleme Profili') {
           AppRouter.openMarkaIzlemeProfili(context);
           return;

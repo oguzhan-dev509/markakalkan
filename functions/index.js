@@ -12,6 +12,11 @@ const {
   buildUpdateSupplyProtectionControl,
 } = require("./supply_security/protection_controls");
 
+const {
+  buildCreateCounterfeitTwinRecord,
+  buildUpdateCounterfeitTwinRecord,
+} = require("./counterfeit_twin/counterfeit_twin_records");
+
 setGlobalOptions({
   region: "europe-west3",
   maxInstances: 3,
@@ -189,3 +194,9 @@ exports.createSupplyProtectionControl =
 
 exports.updateSupplyProtectionControl =
     buildUpdateSupplyProtectionControl({db, admin});
+
+exports.createCounterfeitTwinRecord =
+    buildCreateCounterfeitTwinRecord({db, admin});
+
+exports.updateCounterfeitTwinRecord =
+    buildUpdateCounterfeitTwinRecord({db, admin});

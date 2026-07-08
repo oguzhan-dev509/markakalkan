@@ -39,8 +39,17 @@ import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/present
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_remediation_action_page.dart';
 
 import 'package:markakalkan/modules/marka_kalkan/fason_uretim_tedarik_guvenligi/presentation/supply_security_hub_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_registry_page.dart';
 
 abstract final class AppRouter {
+  static Future<void> openCounterfeitTwinRegistry(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const CounterfeitTwinRegistryPage(),
+      ),
+    );
+  }
+
   static Future<void> openSupplySecurityHub(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const SupplySecurityHubPage()),
