@@ -5509,6 +5509,18 @@ allow delete: if request.auth != null
           && resource.data.auditDocumentIds.size() == 0;
     }
     // ============================================================
+    // FASON ÜRETİM VE TEDARİK GÜVENLİĞİ — KORUMA KONTROLLERİ
+    // Okuma tenant-safe; tüm yazmalar güvenilir callable katmanında.
+    // ============================================================
+
+    match /supply_security_protection_controls/{controlId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create, update, delete: if false;
+    }
+
+    // ============================================================
     // FİKRİ MÜLKİYET — HAK SAHİPLİĞİ KAYITLARI
     // tenantId, marka hesabının Firebase Auth UID değeridir.
     // Hak sahipliği kimliği, tenant ve ilk oluşturma bilgileri
@@ -5860,6 +5872,24 @@ allow delete: if request.auth != null
     }
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // ============================================================
+    // YARATIM ÖNCELİK SİCİLİ
+    // Okuma tenant-safe; tüm yazmalar güvenilir callable katmanında.
+    // ============================================================
+    match /ip_creation_priority_records/{recordId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create, update, delete: if false;
+    }
+
+    match /ip_creation_priority_versions/{versionId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create, update, delete: if false;
     }
 
     // ============================================================

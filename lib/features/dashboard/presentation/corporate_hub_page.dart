@@ -24,6 +24,15 @@ class CorporateHubPage extends StatelessWidget {
       status: _ModuleStatus.active,
     ),
     _CorporateModule(
+      id: 'creation_priority',
+      title: 'Yaratım Öncelik Sicili',
+      description:
+          'Fikir, buluş, eser, tasarım, yazılım ve araştırmalarınızın '
+          'ilk oluşum tarihini ve sürüm zincirini güvenli biçimde belgeleyin.',
+      icon: Icons.lightbulb_outline,
+      status: _ModuleStatus.active,
+    ),
+    _CorporateModule(
       id: 'ip_documents',
       title: 'Fikri Mülkiyet ve Belgeler',
       description:
@@ -317,6 +326,9 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'ip_documents':
         AppRouter.openIpDocumentVault(context);
+        return;
+      case 'creation_priority':
+        AppRouter.openIpCreationPriorityRegistry(context);
         return;
       case 'trade_secret_shield':
         AppRouter.openIpTradeSecretShield(context);

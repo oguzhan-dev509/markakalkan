@@ -17,6 +17,13 @@ const {
   buildUpdateCounterfeitTwinRecord,
 } = require("./counterfeit_twin/counterfeit_twin_records");
 
+const {
+  buildCreateIpCreationPriorityDraft,
+  buildUpdateIpCreationPriorityDraft,
+  buildSealIpCreationPriorityRecord,
+  buildCreateIpCreationPriorityVersion,
+} = require("./ip_creation_priority/ip_creation_priority_records");
+
 setGlobalOptions({
   region: "europe-west3",
   maxInstances: 3,
@@ -200,3 +207,16 @@ exports.createCounterfeitTwinRecord =
 
 exports.updateCounterfeitTwinRecord =
     buildUpdateCounterfeitTwinRecord({db, admin});
+
+
+exports.createIpCreationPriorityDraft =
+    buildCreateIpCreationPriorityDraft({db, admin});
+
+exports.updateIpCreationPriorityDraft =
+    buildUpdateIpCreationPriorityDraft({db, admin});
+
+exports.sealIpCreationPriorityRecord =
+    buildSealIpCreationPriorityRecord({db, admin});
+
+exports.createIpCreationPriorityVersion =
+    buildCreateIpCreationPriorityVersion({db, admin});

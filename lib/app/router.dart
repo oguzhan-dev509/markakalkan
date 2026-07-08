@@ -30,6 +30,7 @@ import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentati
 import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/presentation/vaka_kanit_raporu_sayfasi.dart';
 
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_document_vault_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_creation_priority_registry_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_shield_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_access_disclosure_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/presentation/ip_trade_secret_incident_page.dart';
@@ -42,6 +43,14 @@ import 'package:markakalkan/modules/marka_kalkan/fason_uretim_tedarik_guvenligi/
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_registry_page.dart';
 
 abstract final class AppRouter {
+  static Future<void> openIpCreationPriorityRegistry(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const IpCreationPriorityRegistryPage(),
+      ),
+    );
+  }
+
   static Future<void> openCounterfeitTwinRegistry(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(

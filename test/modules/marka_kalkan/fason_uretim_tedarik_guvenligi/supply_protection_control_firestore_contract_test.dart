@@ -7,12 +7,25 @@ void main() {
   const rulesPath = 'firestore.rules';
   const indexesPath = 'firestore.indexes.json';
   const collectionName = 'supply_security_protection_controls';
+  const collectionMatch =
+      'match /supply_security_protection_controls/{controlId}';
 
   late String rules;
   late List<dynamic> indexes;
+  late String collectionRules;
 
   setUpAll(() {
     rules = File(rulesPath).readAsStringSync();
+
+    final collectionStart = rules.indexOf(collectionMatch);
+    expect(collectionStart, greaterThanOrEqualTo(0));
+
+    final followingSection = rules.substring(collectionStart);
+    final collectionEnd = followingSection.indexOf('\n    match /');
+
+    collectionRules = collectionEnd < 0
+        ? followingSection
+        : followingSection.substring(0, collectionEnd);
 
     final json =
         jsonDecode(File(indexesPath).readAsStringSync())
@@ -22,94 +35,45 @@ void main() {
   });
 
   test('rules expose protection control collection', () {
-    expect(
-      rules,
-      contains(
-        'match /supply_security_protection_controls/'
-        '{controlId}',
-      ),
-    );
-
-    expect(rules, contains('function ssProtectionControlIsValid()'));
+    expect(rules, contains(collectionMatch));
   });
 
-  test('rules allow protection control creation only through server', () {
-    final collectionStart = rules.indexOf(
-      'match /supply_security_protection_controls/'
-      '{controlId}',
-    );
-
-    expect(collectionStart, greaterThanOrEqualTo(0));
-
-    final followingSection = rules.substring(collectionStart);
-    final collectionEnd = followingSection.indexOf('\n    match /');
-
-    final collectionRules = collectionEnd < 0
-        ? followingSection
-        : followingSection.substring(0, collectionEnd);
-
-    expect(collectionRules, contains('allow create: if false;'));
-  });
-
-  test('rules enforce tenant ownership', () {
-    expect(
-      rules,
-      contains(
-        'request.resource.data.tenantId '
-        '== request.auth.uid',
-      ),
-    );
-
-    expect(rules, contains('resource.data.tenantId == request.auth.uid'));
-  });
-
-  test('rules protect immutable identity fields', () {
-    expect(
-      rules,
-      contains(
-        'request.resource.data.brandId '
-        '== resource.data.brandId',
-      ),
-    );
-
-    expect(rules, contains('request.resource.data.controlCode'));
-
-    expect(rules, contains('request.resource.data.controlCodeNormalized'));
-
-    expect(rules, contains('request.resource.data.createdAt'));
-
-    expect(rules, contains('request.resource.data.createdBy'));
-  });
-
-  test('rules reject physical deletion', () {
-    final collectionStart = rules.indexOf(
-      'match /supply_security_protection_controls/'
-      '{controlId}',
-    );
-
-    expect(collectionStart, greaterThanOrEqualTo(0));
-
-    final followingSection = rules.substring(collectionStart);
-
-    expect(followingSection, contains('allow delete: if false;'));
-  });
-
-  test('rules require failure findings and corrective action', () {
-    expect(rules, contains('failed|critical_failure'));
-    expect(rules, contains('request.resource.data.findings.size() > 0'));
+  test('rules keep reads tenant safe', () {
+    expect(collectionRules, contains('request.auth != null'));
 
     expect(
-      rules,
-      contains('request.resource.data.correctiveAction.size() > 0'),
+      collectionRules,
+      contains('resource.data.tenantId == request.auth.uid'),
     );
   });
 
-  test('rules require archive reason and timestamp', () {
-    expect(rules, contains("request.resource.data.status != 'archived'"));
+  test('rules reject all direct client writes', () {
+    final combinedWriteRule = collectionRules.contains(
+      'allow create, update, delete: if false;',
+    );
 
-    expect(rules, contains('request.resource.data.archiveReason.size() > 0'));
+    final splitWriteRules =
+        collectionRules.contains('allow create: if false;') &&
+        collectionRules.contains('allow update: if false;') &&
+        collectionRules.contains('allow delete: if false;');
 
-    expect(rules, contains('request.resource.data.archivedAt is timestamp'));
+    expect(
+      combinedWriteRule || splitWriteRules,
+      isTrue,
+      reason:
+          'Koruma kontrolleri yalnız güvenilir callable/Admin SDK katmanından '
+          'yazılmalıdır.',
+    );
+  });
+
+  test('rules do not reintroduce business validation helpers', () {
+    expect(collectionRules, isNot(contains('ssProtectionControlIsValid()')));
+
+    expect(collectionRules, isNot(contains('controlCodeNormalized')));
+
+    expect(collectionRules, isNot(contains('failed|critical_failure')));
+
+    expect(collectionRules, isNot(contains('correctiveAction.size()')));
   });
 
   test('exactly eight protection control indexes exist', () {
