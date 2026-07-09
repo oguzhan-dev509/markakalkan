@@ -13,6 +13,11 @@ const {
 } = require("./supply_security/protection_controls");
 
 const {
+  buildCreateSupplyProductionAsset,
+  buildUpdateSupplyProductionAsset,
+} = require("./supply_security/production_assets");
+
+const {
   buildCreateCounterfeitTwinRecord,
   buildUpdateCounterfeitTwinRecord,
 } = require("./counterfeit_twin/counterfeit_twin_records");
@@ -207,6 +212,12 @@ exports.createSupplyProtectionControl =
 
 exports.updateSupplyProtectionControl =
     buildUpdateSupplyProtectionControl({db, admin});
+
+exports.createSupplyProductionAsset =
+    buildCreateSupplyProductionAsset({db, admin});
+
+exports.updateSupplyProductionAsset =
+    buildUpdateSupplyProductionAsset({db, admin});
 
 exports.createCounterfeitTwinRecord =
     buildCreateCounterfeitTwinRecord({db, admin});

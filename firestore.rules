@@ -5782,4 +5782,14 @@ allow delete: if request.auth != null
     }
 
   }
+
+    // FASON ÜRETİM VE TEDARİK GÜVENLİĞİ — ÜRETİM VARLIKLARI SİCİLİ
+    // Şema ve yaşam döngüsü otoritesi callable/Cloud Functions tarafındadır.
+    match /supply_security_production_assets/{productionAssetId} {
+      allow read: if request.auth != null
+          && resource.data.tenantId == request.auth.uid;
+
+      allow create, update, delete: if false;
+    }
+
 }
