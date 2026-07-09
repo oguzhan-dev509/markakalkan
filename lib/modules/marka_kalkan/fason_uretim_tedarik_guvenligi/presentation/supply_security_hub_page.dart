@@ -3,6 +3,7 @@ import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 import 'supply_facility_registry_page.dart';
 import 'supply_partner_registry_page.dart';
+import 'supply_production_asset_registry_page.dart';
 import 'supply_protection_control_registry_page.dart';
 
 class SupplySecurityHubPage extends StatelessWidget {
@@ -86,6 +87,30 @@ class SupplySecurityHubPage extends StatelessWidget {
                                 MaterialPageRoute<void>(
                                   builder: (_) =>
                                       const SupplyProtectionControlRegistryPage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _RegistryCard(
+                            icon: Icons.precision_manufacturing_outlined,
+                            title: 'Üretim Varlıkları Sicili',
+                            description:
+                                'Fiziksel kalıp, aparat ve şablonlarla dijital '
+                                'üretim programı ve hassas tasarım dosyalarını '
+                                'tek izlenebilir sicilde yönetin.',
+                            badges: const [
+                              'Fiziksel varlıklar',
+                              'Dijital üretim dosyaları',
+                              'Hibrit kayıtlar',
+                            ],
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const SupplyProductionAssetRegistryPage(),
                                 ),
                               );
                             },
