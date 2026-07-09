@@ -497,21 +497,65 @@ class _LegalNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F7F7),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB9D8D8)),
-      ),
-      child: const Text(
-        'Bu kayıt bir tescil değildir. Yaratımınızın ne zaman ve hangi '
-        'içerikle sizde bulunduğunu belgeleyen ilk taslağı oluşturur. '
-        'Mühürleme işlemi kayıt oluşturulduktan sonra ayrıca yapılır.',
-        style: TextStyle(
-          color: MarkaKalkanTheme.navy,
-          height: 1.45,
-          fontWeight: FontWeight.w700,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF071B36), Color(0xFF073A4A), Color(0xFF0A5C67)],
         ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1D7480)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22051A2F),
+            blurRadius: 14,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline_rounded, color: Color(0xFFFFC857), size: 26),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(
+                  color: Colors.white,
+                  height: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+                children: [
+                  TextSpan(
+                    text: 'Bu kayıt bir tescil değildir. ',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  TextSpan(
+                    text:
+                        'Yaratımınızın ne zaman ve hangi içerikle sizde '
+                        'bulunduğunu belgeleyen ilk taslağı oluşturur. ',
+                  ),
+                  TextSpan(
+                    text:
+                        'Taslak kaydedildikten sonra kayıt içeriği '
+                        'değiştirilemez. ',
+                    style: TextStyle(
+                      color: Color(0xFFFFC857),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  TextSpan(
+                    text:
+                        'Mühürleme işlemi kayıt oluşturulduktan sonra '
+                        'ayrıca yapılır.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

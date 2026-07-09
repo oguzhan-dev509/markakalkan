@@ -20,6 +20,16 @@ class IpCreationPriorityCommandService {
 
   final FirebaseFunctions _functions;
 
+  Future<String> ensureOwnerIdentity() async {
+    final callable = _functions.httpsCallable(
+      'ensureIpCreationRegistryOwnerIdentity',
+    );
+
+    final response = await callable.call<Map<String, dynamic>>();
+
+    return _parseOwnerNumber(response.data);
+  }
+
   Future<IpCreationPriorityDraftResult> createDraft({
     required IpCreationPriorityRecordModel record,
     required IpCreationPriorityVersionModel version,
@@ -126,6 +136,17 @@ class IpCreationPriorityCommandService {
           .toList(growable: false),
       'versionMetadata': Map<String, dynamic>.from(version.metadata),
     };
+  }
+
+  static String _parseOwnerNumber(Map<String, dynamic> data) {
+    final ownerNumber = data['registryOwnerNumber'];
+
+    if (ownerNumber is! String ||
+        !RegExp(r'^MK-SH-[A-Z0-9]{4}-[A-Z0-9]{4}$').hasMatch(ownerNumber)) {
+      throw StateError('Sunucu geçerli Sicil Sahibi No döndürmedi.');
+    }
+
+    return ownerNumber;
   }
 
   static String _parseContentHash(Map<String, dynamic> data) {

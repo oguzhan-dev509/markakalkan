@@ -131,6 +131,8 @@ class _IpCreationPriorityRegistryPageState
                   children: [
                     const _LegalNotice(),
                     const SizedBox(height: 18),
+                    _OwnerIdentityCard(user: user, repository: repository),
+                    const SizedBox(height: 18),
                     _SummaryStrip(
                       total: records.length,
                       sealed: sealed,
@@ -236,36 +238,420 @@ class _LegalNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 820;
+
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 22 : 34,
+            vertical: compact ? 26 : 32,
+          ),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF071B36), Color(0xFF073A4A), Color(0xFF0A5C67)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF1D7480)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x26051A2F),
+                blurRadius: 24,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              if (!compact)
+                const Positioned(right: -6, top: -10, child: _HeroMotif()),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: compact ? constraints.maxWidth : 790,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shield_outlined,
+                          color: Color(0xFFFFC857),
+                          size: 24,
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'Yaratım Öncelik Sicili',
+                          style: TextStyle(
+                            color: Color(0xFFFFC857),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Bu fikir benim, bu eser benim, bu buluş benim',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: compact ? 28 : 38,
+                        height: 1.08,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Tarihe not düşün; emeğiniz iz bıraksın, fikriniz '
+                      'başkası sahiplenmeden önce sizde belgelensin.',
+                      style: TextStyle(
+                        color: const Color(0xFFFFC857),
+                        fontSize: compact ? 16 : 18,
+                        height: 1.4,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Fikir, tasarım, yazılım, buluş, edebî eser, görsel '
+                      'çalışma ve benzeri yaratımlarınızı zaman damgası, '
+                      'sürüm geçmişi ve delil zinciriyle kayıt altına alın.',
+                      style: TextStyle(
+                        color: const Color(0xFFD6E6EA),
+                        fontSize: compact ? 14 : 16,
+                        height: 1.55,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HeroMotif extends StatelessWidget {
+  const _HeroMotif();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Opacity(
+        opacity: 0.22,
+        child: SizedBox(
+          width: 310,
+          height: 220,
+          child: Stack(
+            children: [
+              const Positioned(
+                right: 52,
+                top: 16,
+                child: Icon(
+                  Icons.description_outlined,
+                  color: Colors.cyanAccent,
+                  size: 126,
+                ),
+              ),
+              const Positioned(
+                right: 0,
+                bottom: 22,
+                child: Icon(
+                  Icons.verified_user_outlined,
+                  color: Color(0xFFFFC857),
+                  size: 90,
+                ),
+              ),
+              const Positioned(
+                left: 8,
+                bottom: 8,
+                child: Icon(
+                  Icons.hub_outlined,
+                  color: Colors.cyanAccent,
+                  size: 112,
+                ),
+              ),
+              Positioned(
+                left: 82,
+                top: 92,
+                child: Container(
+                  width: 150,
+                  height: 1,
+                  color: const Color(0xFF8EE6EF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OwnerIdentityCard extends StatefulWidget {
+  const _OwnerIdentityCard({required this.user, required this.repository});
+
+  final User user;
+  final IpCreationPriorityRepository repository;
+
+  @override
+  State<_OwnerIdentityCard> createState() => _OwnerIdentityCardState();
+}
+
+class _OwnerIdentityCardState extends State<_OwnerIdentityCard> {
+  late Future<String> _ownerNumberFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownerNumberFuture = widget.repository.ensureOwnerIdentity();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OwnerIdentityCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.user.uid != widget.user.uid) {
+      _ownerNumberFuture = widget.repository.ensureOwnerIdentity();
+    }
+  }
+
+  void _retryOwnerNumber() {
+    setState(() {
+      _ownerNumberFuture = widget.repository.ensureOwnerIdentity();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final email = (widget.user.email ?? '').trim();
+    final name = _displayName(widget.user);
+    final verified = widget.user.emailVerified;
+
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFDCE7EA)),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '“Bu fikir benim. Bu eser benim. Bu buluş benim.”',
-            style: TextStyle(
-              color: MarkaKalkanTheme.navy,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Fikrinizi tescil etmez; fikrinizin ne zaman, hangi içerikle '
-            'sizde bulunduğunu güçlü biçimde belgeler.',
-            style: TextStyle(
-              color: Color(0xFF425B66),
-              height: 1.5,
-              fontWeight: FontWeight.w600,
-            ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x10051A2F),
+            blurRadius: 14,
+            offset: Offset(0, 6),
           ),
         ],
       ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          final identity = Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE5F7F6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.person_outline_rounded,
+                  color: MarkaKalkanTheme.teal,
+                  size: 29,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Sicil Alanınız',
+                      style: TextStyle(
+                        color: Color(0xFF607982),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: MarkaKalkanTheme.navy,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (email.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _maskEmail(email),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF526B75),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final status = Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _IdentityBadge(
+                icon: verified
+                    ? Icons.verified_outlined
+                    : Icons.mark_email_unread_outlined,
+                label: verified ? 'E-posta doğrulandı' : 'Doğrulama bekliyor',
+                foreground: verified
+                    ? const Color(0xFF087F5B)
+                    : const Color(0xFF9A5A00),
+                background: verified
+                    ? const Color(0xFFE7F8EF)
+                    : const Color(0xFFFFF3DF),
+              ),
+              FutureBuilder<String>(
+                future: _ownerNumberFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const _IdentityBadge(
+                      icon: Icons.hourglass_top_rounded,
+                      label: 'Sicil Sahibi No hazırlanıyor',
+                      foreground: Color(0xFF35556A),
+                      background: Color(0xFFF0F5F8),
+                    );
+                  }
+
+                  if (snapshot.hasError || snapshot.data == null) {
+                    return _IdentityBadge(
+                      icon: Icons.refresh_rounded,
+                      label: 'Sicil Sahibi No için yeniden dene',
+                      foreground: const Color(0xFF9A5A00),
+                      background: const Color(0xFFFFF3DF),
+                      onTap: _retryOwnerNumber,
+                    );
+                  }
+
+                  return _IdentityBadge(
+                    icon: Icons.badge_outlined,
+                    label: 'Sicil Sahibi No: ${snapshot.data}',
+                    foreground: const Color(0xFF35556A),
+                    background: const Color(0xFFF0F5F8),
+                  );
+                },
+              ),
+            ],
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [identity, const SizedBox(height: 14), status],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: identity),
+              const SizedBox(width: 18),
+              status,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  static String _displayName(User user) {
+    final configured = (user.displayName ?? '').trim();
+    if (configured.isNotEmpty) return configured;
+
+    final email = (user.email ?? '').trim();
+    if (!email.contains('@')) return 'Sicil sahibi';
+
+    final local = email.split('@').first;
+    final words = local
+        .replaceAll(RegExp(r'[._-]+'), ' ')
+        .split(' ')
+        .where((part) => part.trim().isNotEmpty)
+        .map((part) {
+          final value = part.trim();
+          return '${value[0].toUpperCase()}${value.substring(1)}';
+        })
+        .toList(growable: false);
+
+    return words.isEmpty ? 'Sicil sahibi' : words.join(' ');
+  }
+
+  static String _maskEmail(String email) {
+    final parts = email.split('@');
+    if (parts.length != 2) return email;
+
+    final local = parts.first;
+    final domain = parts.last;
+    final visible = local.length >= 4 ? local.substring(0, 3) : local[0];
+    return '$visible***@$domain';
+  }
+}
+
+class _IdentityBadge extends StatelessWidget {
+  const _IdentityBadge({
+    required this.icon,
+    required this.label,
+    required this.foreground,
+    required this.background,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color foreground;
+  final Color background;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: foreground, size: 18),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(color: foreground, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+
+    if (onTap == null) {
+      return badge;
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: badge,
     );
   }
 }
@@ -287,53 +673,143 @@ class _SummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _MetricCard(label: 'Toplam kayıt', value: '$total'),
-        _MetricCard(label: 'Mühürlü', value: '$sealed'),
-        _MetricCard(label: 'Taslak', value: '$drafts'),
-        _MetricCard(label: 'Geliştiriliyor', value: '$developing'),
-        _MetricCard(label: 'Patent uyarısı', value: '$patentWarnings'),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 12.0;
+        final columns = constraints.maxWidth >= 1100
+            ? 5
+            : constraints.maxWidth >= 760
+            ? 3
+            : constraints.maxWidth >= 500
+            ? 2
+            : 1;
+        final cardWidth =
+            (constraints.maxWidth - (gap * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            _MetricCard(
+              width: cardWidth,
+              label: 'Toplam kayıt',
+              value: '$total',
+              icon: Icons.description_outlined,
+              iconColor: const Color(0xFF0B8F95),
+              iconBackground: const Color(0xFFE5F7F6),
+            ),
+            _MetricCard(
+              width: cardWidth,
+              label: 'Mühürlü',
+              value: '$sealed',
+              icon: Icons.verified_outlined,
+              iconColor: const Color(0xFF2A63B8),
+              iconBackground: const Color(0xFFE8F0FF),
+            ),
+            _MetricCard(
+              width: cardWidth,
+              label: 'Taslak',
+              value: '$drafts',
+              icon: Icons.hourglass_empty_rounded,
+              iconColor: const Color(0xFF7352B8),
+              iconBackground: const Color(0xFFF0EAFE),
+            ),
+            _MetricCard(
+              width: cardWidth,
+              label: 'Geliştiriliyor',
+              value: '$developing',
+              icon: Icons.trending_up_rounded,
+              iconColor: const Color(0xFF13885F),
+              iconBackground: const Color(0xFFE7F8EF),
+            ),
+            _MetricCard(
+              width: cardWidth,
+              label: 'Patent uyarısı',
+              value: '$patentWarnings',
+              icon: Icons.shield_outlined,
+              iconColor: const Color(0xFFA56A0A),
+              iconBackground: const Color(0xFFFFF3DF),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.label, required this.value});
+  const _MetricCard({
+    required this.width,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBackground,
+  });
 
+  final double width;
   final String label;
   final String value;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBackground;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 210,
-      padding: const EdgeInsets.all(18),
+      width: width,
+      constraints: const BoxConstraints(minHeight: 118),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFDCE7EA)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: MarkaKalkanTheme.navy,
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-            ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12051A2F),
+            blurRadius: 14,
+            offset: Offset(0, 6),
           ),
-          const SizedBox(height: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF607982),
-              fontWeight: FontWeight.w700,
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: iconBackground,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 28),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 28,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF607982),
+                    height: 1.25,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -441,6 +917,7 @@ class _EnumDropdown<T> extends StatelessWidget {
       width: 245,
       child: DropdownButtonFormField<T>(
         initialValue: value,
+        isExpanded: true,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

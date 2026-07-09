@@ -24,6 +24,12 @@ const {
   buildCreateIpCreationPriorityVersion,
 } = require("./ip_creation_priority/ip_creation_priority_records");
 
+const {
+  buildEnsureIpCreationRegistryOwnerIdentity,
+} = require(
+    "./ip_creation_priority/ip_creation_registry_owner_identity",
+);
+
 setGlobalOptions({
   region: "europe-west3",
   maxInstances: 3,
@@ -208,6 +214,9 @@ exports.createCounterfeitTwinRecord =
 exports.updateCounterfeitTwinRecord =
     buildUpdateCounterfeitTwinRecord({db, admin});
 
+
+exports.ensureIpCreationRegistryOwnerIdentity =
+    buildEnsureIpCreationRegistryOwnerIdentity({db, admin});
 
 exports.createIpCreationPriorityDraft =
     buildCreateIpCreationPriorityDraft({db, admin});

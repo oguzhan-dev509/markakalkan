@@ -5416,7 +5416,8 @@ allow delete: if request.auth != null
           && serverRegistryCollection in [
             'supply_security_protection_controls',
             'ip_creation_priority_records',
-            'ip_creation_priority_versions'
+            'ip_creation_priority_versions',
+            'ip_creation_registry_owners'
           ]
           && resource.data.tenantId == request.auth.uid;
 

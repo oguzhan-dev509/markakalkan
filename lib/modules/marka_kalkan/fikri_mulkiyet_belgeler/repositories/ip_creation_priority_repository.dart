@@ -22,6 +22,10 @@ class IpCreationPriorityRepository {
   final IpCreationPriorityFirestoreRefs _refs;
   final IpCreationPriorityCommandService _commandService;
 
+  Future<String> ensureOwnerIdentity() {
+    return _commandService.ensureOwnerIdentity();
+  }
+
   Future<IpCreationPriorityRecordModel> createDraft({
     required IpCreationPriorityRecordModel record,
     required IpCreationPriorityVersionModel version,
