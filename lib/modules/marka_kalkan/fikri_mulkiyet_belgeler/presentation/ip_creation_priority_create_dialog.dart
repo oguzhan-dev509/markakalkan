@@ -539,6 +539,13 @@ class _LegalNotice extends StatelessWidget {
                   ),
                   TextSpan(
                     text:
+                        'Oluşturulan kayıt ve delil paketi, gerektiğinde hukuki '
+                        've idari süreçlerde delil olarak sunulabilir. Delilin kabulü '
+                        've ispat gücü, ilgili makam veya mahkemenin '
+                        'değerlendirmesine tabidir. ',
+                  ),
+                  TextSpan(
+                    text:
                         'Taslak kaydedildikten sonra kayıt içeriği '
                         'değiştirilemez. ',
                     style: TextStyle(
