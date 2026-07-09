@@ -319,7 +319,7 @@ class _CorporateModuleCard extends StatelessWidget {
   void _openModule(BuildContext context) {
     switch (module.id) {
       case 'brands':
-        AppRouter.openBrandOperations(context);
+        AppRouter.openBrandPortfolio(context);
         return;
       case 'new_brand':
         AppRouter.openBrandApplication(context);
@@ -334,7 +334,7 @@ class _CorporateModuleCard extends StatelessWidget {
         AppRouter.openIpTradeSecretShield(context);
         return;
       case 'traceability':
-        AppRouter.openBrandOperations(context);
+        AppRouter.openTraceabilityHub(context);
         return;
       case 'detective':
         AppRouter.openBrandDetectiveHub(context);

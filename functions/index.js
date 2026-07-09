@@ -36,6 +36,10 @@ const {
     "./ip_creation_priority/ip_creation_registry_owner_identity",
 );
 
+const {
+  buildListMyBrandApplications,
+} = require("./brand_portfolio/brand_applications");
+
 setGlobalOptions({
   region: "europe-west3",
   maxInstances: 3,
@@ -222,6 +226,9 @@ exports.updateSupplyProductionAsset =
 
 exports.listSupplyProductionAssets =
     buildListSupplyProductionAssets({db});
+
+exports.listMyBrandApplications =
+    buildListMyBrandApplications({db});
 
 exports.createCounterfeitTwinRecord =
     buildCreateCounterfeitTwinRecord({db, admin});

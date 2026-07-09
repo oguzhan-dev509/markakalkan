@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/features/auth/presentation/brand_application_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/brand_dashboard_page.dart';
+import 'package:markakalkan/features/dashboard/presentation/brand_portfolio_page.dart';
 import 'package:markakalkan/features/product_codes/presentation/product_codes_page.dart';
 import 'package:markakalkan/features/production_batches/presentation/production_batches_page.dart';
 import 'package:markakalkan/features/products/presentation/products_page.dart';
@@ -314,10 +315,20 @@ abstract final class AppRouter {
     );
   }
 
-  static Future<void> openBrandOperations(BuildContext context) {
+  static Future<void> openBrandPortfolio(BuildContext context) {
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const BrandPortfolioPage()));
+  }
+
+  static Future<void> openTraceabilityHub(BuildContext context) {
     return Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const BrandDashboardPage()));
+  }
+
+  static Future<void> openBrandOperations(BuildContext context) {
+    return openTraceabilityHub(context);
   }
 
   static void openProducts(BuildContext context) {

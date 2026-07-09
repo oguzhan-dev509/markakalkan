@@ -8,13 +8,6 @@ class BrandDashboardPage extends StatelessWidget {
 
   static const List<_DashboardModule> _modules = [
     _DashboardModule(
-      title: 'Dijital Pazar İzleme',
-      description:
-          'Pazaryerlerini, satıcıları, ürün ilanlarını ve dijital sayfa değişikliklerini izleyin.',
-      icon: Icons.travel_explore_outlined,
-      statusText: 'İzleme merkezi',
-    ),
-    _DashboardModule(
       title: 'Ürünler',
       description:
           'Markanıza ait ürün modellerini oluşturun ve ürün bilgilerini yönetin.',
@@ -61,7 +54,7 @@ class BrandDashboardPage extends StatelessWidget {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         title: const Text(
-          'Marka Paneli',
+          'Ürün Kimliği ve İzlenebilirlik',
           style: TextStyle(
             color: MarkaKalkanTheme.navy,
             fontWeight: FontWeight.w800,
@@ -93,7 +86,7 @@ class BrandDashboardPage extends StatelessWidget {
                 _DashboardHeader(email: user?.email),
                 const SizedBox(height: 26),
                 const Text(
-                  'Yönetim Modülleri',
+                  'İzlenebilirlik Merkezleri',
                   style: TextStyle(
                     color: MarkaKalkanTheme.navy,
                     fontSize: 25,
@@ -102,7 +95,7 @@ class BrandDashboardPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Ürün kimliği ve marka koruma operasyonlarınızı tek panelden yönetin.',
+                  'Ürün, üretim partisi, tekil kod ve yaşam döngüsü kayıtlarınızı tek merkezden yönetin.',
                   style: TextStyle(color: Color(0xFF687580), fontSize: 15),
                 ),
                 const SizedBox(height: 22),
@@ -187,7 +180,7 @@ class _DashboardHeader extends StatelessWidget {
                 : CrossAxisAlignment.start,
             children: [
               const Text(
-                'MarkaKalkan Yönetim Paneli',
+                'Ürün Kimliği ve İzlenebilirlik',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -243,10 +236,6 @@ class _DashboardModuleCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () {
-        if (module.title == 'Dijital Pazar İzleme') {
-          AppRouter.openDijitalPazarIzleme(context);
-          return;
-        }
         if (module.title == 'Ürünler') {
           AppRouter.openProducts(context);
           return;
