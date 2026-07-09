@@ -7,25 +7,25 @@ void main() {
   const rulesPath = 'firestore.rules';
   const indexesPath = 'firestore.indexes.json';
   const collectionName = 'supply_security_protection_controls';
-  const collectionMatch =
-      'match /supply_security_protection_controls/{controlId}';
+  const sharedMatch =
+      'match /{serverRegistryCollection}/{registryDocumentId}';
 
   late String rules;
   late List<dynamic> indexes;
-  late String collectionRules;
+  late String sharedRules;
 
   setUpAll(() {
     rules = File(rulesPath).readAsStringSync();
 
-    final collectionStart = rules.indexOf(collectionMatch);
-    expect(collectionStart, greaterThanOrEqualTo(0));
+    final sharedStart = rules.indexOf(sharedMatch);
+    expect(sharedStart, greaterThanOrEqualTo(0));
 
-    final followingSection = rules.substring(collectionStart);
-    final collectionEnd = followingSection.indexOf('\n    match /');
+    final followingSection = rules.substring(sharedStart);
+    final sharedEnd = followingSection.indexOf('\n    match /');
 
-    collectionRules = collectionEnd < 0
+    sharedRules = sharedEnd < 0
         ? followingSection
-        : followingSection.substring(0, collectionEnd);
+        : followingSection.substring(0, sharedEnd);
 
     final json =
         jsonDecode(File(indexesPath).readAsStringSync())
@@ -34,28 +34,28 @@ void main() {
     indexes = json['indexes'] as List<dynamic>;
   });
 
-  test('rules expose protection control collection', () {
-    expect(rules, contains(collectionMatch));
+  test('shared rules expose protection control collection', () {
+    expect(sharedRules, contains("'$collectionName'"));
   });
 
-  test('rules keep reads tenant safe', () {
-    expect(collectionRules, contains('request.auth != null'));
+  test('shared rules keep reads tenant safe', () {
+    expect(sharedRules, contains('request.auth != null'));
 
     expect(
-      collectionRules,
+      sharedRules,
       contains('resource.data.tenantId == request.auth.uid'),
     );
   });
 
-  test('rules reject all direct client writes', () {
-    final combinedWriteRule = collectionRules.contains(
+  test('shared rules reject all direct client writes', () {
+    final combinedWriteRule = sharedRules.contains(
       'allow create, update, delete: if false;',
     );
 
     final splitWriteRules =
-        collectionRules.contains('allow create: if false;') &&
-        collectionRules.contains('allow update: if false;') &&
-        collectionRules.contains('allow delete: if false;');
+        sharedRules.contains('allow create: if false;') &&
+        sharedRules.contains('allow update: if false;') &&
+        sharedRules.contains('allow delete: if false;');
 
     expect(
       combinedWriteRule || splitWriteRules,
@@ -67,13 +67,13 @@ void main() {
   });
 
   test('rules do not reintroduce business validation helpers', () {
-    expect(collectionRules, isNot(contains('ssProtectionControlIsValid()')));
+    expect(sharedRules, isNot(contains('ssProtectionControlIsValid()')));
 
-    expect(collectionRules, isNot(contains('controlCodeNormalized')));
+    expect(sharedRules, isNot(contains('controlCodeNormalized')));
 
-    expect(collectionRules, isNot(contains('failed|critical_failure')));
+    expect(sharedRules, isNot(contains('failed|critical_failure')));
 
-    expect(collectionRules, isNot(contains('correctiveAction.size()')));
+    expect(sharedRules, isNot(contains('correctiveAction.size()')));
   });
 
   test('exactly eight protection control indexes exist', () {

@@ -4988,104 +4988,6 @@ allow delete: if request.auth != null
     // SUPPLY SECURITY ORTAK KURAL FONKSİYONLARI
     // ============================================================
 
-    function ssPartnerFields() {
-      return [
-        'tenantId',
-        'brandId',
-        'partnerCode',
-        'partnerCodeNormalized',
-        'legalName',
-        'tradeName',
-        'taxNumber',
-        'registrationNumber',
-        'roles',
-        'status',
-        'verificationStatus',
-        'riskLevel',
-        'trustScore',
-        'countryCode',
-        'city',
-        'region',
-        'address',
-        'website',
-        'contactPersonName',
-        'email',
-        'phone',
-        'isCriticalPartner',
-        'contractManufacturingAuthorized',
-        'subcontractingAllowed',
-        'hasNda',
-        'auditRequired',
-        'lastAuditAt',
-        'nextAuditAt',
-        'certificateDocumentIds',
-        'relatedFacilityIds',
-        'relatedProductIds',
-        'productCategoryCodes',
-        'notes',
-        'archiveReason',
-        'archivedAt',
-        'metadata',
-        'createdAt',
-        'createdBy',
-        'updatedAt',
-        'updatedBy'
-      ];
-    }
-
-    function ssFacilityFields() {
-      return [
-        'tenantId',
-        'brandId',
-        'partnerId',
-        'facilityCode',
-        'facilityCodeNormalized',
-        'name',
-        'facilityType',
-        'status',
-        'verificationStatus',
-        'riskLevel',
-        'authorizationStatus',
-        'parentFacilityId',
-        'countryCode',
-        'city',
-        'region',
-        'address',
-        'latitude',
-        'longitude',
-        'monthlyCapacity',
-        'capacityUnit',
-        'shiftCodes',
-        'relatedProductIds',
-        'productCategoryCodes',
-        'certificateDocumentIds',
-        'auditDocumentIds',
-        'isPrimaryFacility',
-        'isCriticalFacility',
-        'productionAuthorized',
-        'storageAuthorized',
-        'packagingAuthorized',
-        'labelPrintingAuthorized',
-        'destructionAuthorized',
-        'subcontractingObserved',
-        'suspiciousNightShiftObserved',
-        'capacityMismatchObserved',
-        'unregisteredShipmentObserved',
-        'auditRequired',
-        'lastAuditAt',
-        'nextAuditAt',
-        'lastVerifiedAt',
-        'riskReason',
-        'notes',
-        'archiveReason',
-        'archivedAt',
-        'metadata',
-        'createdAt',
-        'createdBy',
-        'updatedAt',
-        'updatedBy'
-      ];
-    }
 
     function ssMetadataIsSafe() {
       return request.resource.data.metadata is map
@@ -5181,9 +5083,7 @@ allow delete: if request.auth != null
           );
     }
     function ssPartnerIsValid() {
-      return request.resource.data.keys().hasOnly(ssPartnerFields())
-          && request.resource.data.keys().size() == 40
-          && ssCommonIsValid()
+      return ssCommonIsValid()
           && isValidRequiredText(
             request.resource.data.partnerCode,
             100
@@ -5308,9 +5208,7 @@ allow delete: if request.auth != null
           );
     }
     function ssFacilityIsValid() {
-      return request.resource.data.keys().hasOnly(ssFacilityFields())
-          && request.resource.data.keys().size() == 49
-          && ssCommonIsValid()
+      return ssCommonIsValid()
           && request.resource.data.partnerId is string
           && request.resource.data.partnerId.size() > 0
           && isValidRequiredText(
@@ -5509,24 +5407,21 @@ allow delete: if request.auth != null
           && resource.data.auditDocumentIds.size() == 0;
     }
     // ============================================================
-    // FASON ÜRETİM VE TEDARİK GÜVENLİĞİ — KORUMA KONTROLLERİ
+    // SERVER-ONLY SİCİLLER
     // Okuma tenant-safe; tüm yazmalar güvenilir callable katmanında.
     // ============================================================
 
-    match /supply_security_protection_controls/{controlId} {
+    match /{serverRegistryCollection}/{registryDocumentId} {
       allow read: if request.auth != null
+          && serverRegistryCollection in [
+            'supply_security_protection_controls',
+            'ip_creation_priority_records',
+            'ip_creation_priority_versions'
+          ]
           && resource.data.tenantId == request.auth.uid;
 
       allow create, update, delete: if false;
     }
-
-    // ============================================================
-    // FİKRİ MÜLKİYET — HAK SAHİPLİĞİ KAYITLARI
-    // tenantId, marka hesabının Firebase Auth UID değeridir.
-    // Hak sahipliği kimliği, tenant ve ilk oluşturma bilgileri
-    // güncelleme sırasında değiştirilemez.
-    // ============================================================
-
     match /ip_ownership_records/{ownershipRecordId} {
       allow read: if request.auth != null
           && resource.data.tenantId == request.auth.uid;
@@ -5872,24 +5767,6 @@ allow delete: if request.auth != null
     }
     match /{document=**} {
       allow read, write: if false;
-    }
-
-    // ============================================================
-    // YARATIM ÖNCELİK SİCİLİ
-    // Okuma tenant-safe; tüm yazmalar güvenilir callable katmanında.
-    // ============================================================
-    match /ip_creation_priority_records/{recordId} {
-      allow read: if request.auth != null
-          && resource.data.tenantId == request.auth.uid;
-
-      allow create, update, delete: if false;
-    }
-
-    match /ip_creation_priority_versions/{versionId} {
-      allow read: if request.auth != null
-          && resource.data.tenantId == request.auth.uid;
-
-      allow create, update, delete: if false;
     }
 
     // ============================================================

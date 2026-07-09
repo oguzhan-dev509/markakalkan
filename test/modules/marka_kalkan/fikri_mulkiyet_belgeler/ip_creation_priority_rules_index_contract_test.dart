@@ -15,49 +15,35 @@ void main() {
         .whereType<Map<String, dynamic>>()
         .toList(growable: false);
 
-    test('rules isolate tenant reads and deny every direct write', () {
+    test('shared server-only rule protects priority collections', () {
       expect(
         rulesSource,
-        contains('match /ip_creation_priority_records/{recordId}'),
+        contains('match /{serverRegistryCollection}/{registryDocumentId}'),
       );
       expect(
         rulesSource,
-        contains('match /ip_creation_priority_versions/{versionId}'),
+        contains("'ip_creation_priority_records'"),
+      );
+      expect(
+        rulesSource,
+        contains("'ip_creation_priority_versions'"),
       );
       expect(
         rulesSource,
         contains('resource.data.tenantId == request.auth.uid'),
       );
-
-      final recordBlockStart = rulesSource.indexOf(
-        'match /ip_creation_priority_records/{recordId}',
+      expect(
+        rulesSource,
+        contains('allow create, update, delete: if false;'),
       );
-      final versionBlockStart = rulesSource.indexOf(
-        'match /ip_creation_priority_versions/{versionId}',
+      expect(
+        rulesSource,
+        isNot(contains('match /ip_creation_priority_records/{recordId}')),
       );
-
-      expect(recordBlockStart, greaterThanOrEqualTo(0));
-      expect(versionBlockStart, greaterThan(recordBlockStart));
-
-      final recordBlock = rulesSource.substring(
-        recordBlockStart,
-        versionBlockStart,
+      expect(
+        rulesSource,
+        isNot(contains('match /ip_creation_priority_versions/{versionId}')),
       );
-
-      final nextBlockStart = rulesSource.indexOf(
-        'match /counterfeit_twin_records/{recordId}',
-        versionBlockStart,
-      );
-
-      expect(nextBlockStart, greaterThan(versionBlockStart));
-
-      final versionBlock = rulesSource.substring(
-        versionBlockStart,
-        nextBlockStart,
-      );
-
-      expect(recordBlock, contains('allow create, update, delete: if false;'));
-      expect(versionBlock, contains('allow create, update, delete: if false;'));
     });
 
     test('defines required record and version composite indexes', () {
