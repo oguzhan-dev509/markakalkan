@@ -369,7 +369,47 @@ function buildUpdateSupplyProductionAsset({db, admin}) {
   );
 }
 
+function buildListSupplyProductionAssets({db}) {
+  return onCall(
+      {enforceAppCheck: false, maxInstances: 3},
+      async (request) => {
+        const uid = request.auth?.uid;
+        if (!uid) {
+          throw new HttpsError(
+              "unauthenticated",
+              "Uretim varliklarini listelemek icin oturum acmalisiniz.",
+          );
+        }
+
+        const snapshot = await db
+            .collection("supply_security_production_assets")
+            .where("tenantId", "==", uid)
+            .limit(500)
+            .get();
+
+        const assets = snapshot.docs.map((document) => {
+          const data = document.data();
+          return {
+            id: document.id,
+            ...data,
+            createdAt: data.createdAt?.toMillis?.() ?? null,
+            updatedAt: data.updatedAt?.toMillis?.() ?? null,
+            destroyedAt: data.destroyedAt?.toMillis?.() ?? null,
+            archivedAt: data.archivedAt?.toMillis?.() ?? null,
+          };
+        });
+
+        assets.sort((left, right) => {
+          return (right.createdAt ?? 0) - (left.createdAt ?? 0);
+        });
+
+        return {assets};
+      },
+  );
+}
+
 module.exports = {
   buildCreateSupplyProductionAsset,
   buildUpdateSupplyProductionAsset,
+  buildListSupplyProductionAssets,
 };

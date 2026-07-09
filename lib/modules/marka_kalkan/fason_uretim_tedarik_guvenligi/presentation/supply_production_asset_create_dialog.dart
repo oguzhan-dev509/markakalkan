@@ -148,7 +148,11 @@ class _DialogState extends State<_Dialog> {
       await widget.repository.create(asset);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (!mounted) return;
+      final message = e.toString().contains('already-exists')
+          ? 'Bu varlık kodu zaten kullanılıyor. Başka bir kod girin.'
+          : 'Üretim varlığı kaydedilemedi. Bilgileri kontrol edip yeniden deneyin.';
+      setState(() => _error = message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -243,7 +247,12 @@ class _DialogState extends State<_Dialog> {
                 ),
                 initialValue: _facilityId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Bağlı tesis'),
+                decoration: InputDecoration(
+                  labelText: 'Bağlı tesis',
+                  helperText: _partnerId != null && _facilities.isEmpty
+                      ? 'Bu partnere bağlı aktif tesis bulunamadı.'
+                      : null,
+                ),
                 items: _facilities
                     .map(
                       (e) => DropdownMenuItem(
@@ -252,7 +261,7 @@ class _DialogState extends State<_Dialog> {
                       ),
                     )
                     .toList(),
-                onChanged: _saving
+                onChanged: _saving || _facilities.isEmpty
                     ? null
                     : (v) => setState(() => _facilityId = v),
               ),

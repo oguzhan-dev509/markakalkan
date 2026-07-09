@@ -21,6 +21,47 @@ class SupplyProductionAssetCommandService {
     return assetId.trim();
   }
 
+  Future<List<SupplyProductionAssetModel>> listAll() async {
+    final response = await _functions
+        .httpsCallable('listSupplyProductionAssets')
+        .call<Map<String, dynamic>>();
+
+    final rawAssets = response.data['assets'];
+    if (rawAssets is! List) {
+      throw StateError('Üretim varlığı listesi sunucudan alınamadı.');
+    }
+
+    return rawAssets
+        .map((item) {
+          if (item is! Map) {
+            throw const FormatException(
+              'Üretim varlığı kayıt biçimi geçersiz.',
+            );
+          }
+
+          final data = Map<String, dynamic>.from(item);
+          final id = data.remove('id')?.toString().trim() ?? '';
+          if (id.isEmpty) {
+            throw const FormatException('Üretim varlığı kimliği eksik.');
+          }
+
+          for (final field in <String>[
+            'createdAt',
+            'updatedAt',
+            'destroyedAt',
+            'archivedAt',
+          ]) {
+            final value = data[field];
+            if (value is int) {
+              data[field] = DateTime.fromMillisecondsSinceEpoch(value);
+            }
+          }
+
+          return SupplyProductionAssetModel.fromMap(id: id, data: data);
+        })
+        .toList(growable: false);
+  }
+
   Future<void> update(SupplyProductionAssetModel asset) async {
     final assetId = asset.id.trim();
     if (assetId.isEmpty) {

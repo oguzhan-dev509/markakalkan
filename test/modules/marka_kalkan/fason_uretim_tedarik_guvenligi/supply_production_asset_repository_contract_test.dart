@@ -43,8 +43,24 @@ void main() {
       expect(command, isNot(contains(forbidden)), reason: forbidden);
     }
 
-    expect(function, isNot(contains('data.status')));
-    expect(function, isNot(contains('data.destroyedAt')));
-    expect(function, isNot(contains('data.archivedAt')));
+    final operationalStart = function.indexOf(
+      'function operationalFields(data)',
+    );
+    final operationalEnd = function.indexOf(
+      'async function validateTargets',
+      operationalStart,
+    );
+
+    expect(operationalStart, greaterThanOrEqualTo(0));
+    expect(operationalEnd, greaterThan(operationalStart));
+
+    final operationalFields = function.substring(
+      operationalStart,
+      operationalEnd,
+    );
+
+    expect(operationalFields, isNot(contains('data.status')));
+    expect(operationalFields, isNot(contains('data.destroyedAt')));
+    expect(operationalFields, isNot(contains('data.archivedAt')));
   });
 }

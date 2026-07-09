@@ -24,6 +24,7 @@ class _SupplyProductionAssetRegistryPageState
   SupplyProductionAssetType? _typeFilter;
   SupplyProductionAssetStatus? _statusFilter;
   String _searchText = '';
+  int _refreshVersion = 0;
 
   @override
   void dispose() {
@@ -81,6 +82,9 @@ class _SupplyProductionAssetRegistryPageState
             ),
           );
           if (created && context.mounted) {
+            setState(() {
+              _refreshVersion++;
+            });
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Üretim varlığı taslak olarak sicile eklendi.'),
@@ -96,8 +100,9 @@ class _SupplyProductionAssetRegistryPageState
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
-      body: StreamBuilder<List<SupplyProductionAssetModel>>(
-        stream: repository.watchAll(),
+      body: FutureBuilder<List<SupplyProductionAssetModel>>(
+        key: ValueKey(_refreshVersion),
+        future: repository.listAllFromServer(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _RegistryMessage(

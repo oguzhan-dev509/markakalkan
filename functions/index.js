@@ -15,6 +15,7 @@ const {
 const {
   buildCreateSupplyProductionAsset,
   buildUpdateSupplyProductionAsset,
+  buildListSupplyProductionAssets,
 } = require("./supply_security/production_assets");
 
 const {
@@ -218,6 +219,9 @@ exports.createSupplyProductionAsset =
 
 exports.updateSupplyProductionAsset =
     buildUpdateSupplyProductionAsset({db, admin});
+
+exports.listSupplyProductionAssets =
+    buildListSupplyProductionAssets({db});
 
 exports.createCounterfeitTwinRecord =
     buildCreateCounterfeitTwinRecord({db, admin});

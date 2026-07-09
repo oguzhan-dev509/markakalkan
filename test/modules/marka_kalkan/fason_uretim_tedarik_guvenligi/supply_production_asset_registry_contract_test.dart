@@ -8,13 +8,15 @@ void main() {
       'lib/modules/marka_kalkan/fason_uretim_tedarik_guvenligi/presentation/supply_production_asset_registry_page.dart',
     ).readAsStringSync(),
   );
-  test('authenticated tenant stream', () {
+  test('authenticated tenant callable list', () {
     expect(source, contains('FirebaseAuth.instance.currentUser'));
     expect(
       source,
       contains('SupplyProductionAssetRepository(tenantId: user.uid)'),
     );
-    expect(source, contains('stream: repository.watchAll()'));
+    expect(source, contains('FutureBuilder<List<SupplyProductionAssetModel>>'));
+    expect(source, contains('future: repository.listAllFromServer()'));
+    expect(source, isNot(contains('stream: repository.watchAll()')));
   });
   test('filters and metrics', () {
     expect(source, contains('SupplyProductionAssetClass? _classFilter'));

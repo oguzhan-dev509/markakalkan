@@ -85,20 +85,8 @@ class SupplyProductionAssetRepository {
         .toList(growable: false);
   }
 
-  Stream<List<SupplyProductionAssetModel>> watchAll({int limit = 500}) {
-    return _collection
-        .where('tenantId', isEqualTo: tenantId)
-        .limit(_validateLimit(limit))
-        .snapshots()
-        .map((snapshot) {
-          final assets = snapshot.docs
-              .map(SupplyProductionAssetModel.fromDocument)
-              .toList(growable: false);
-          assets.sort(
-            (left, right) => right.createdAt.compareTo(left.createdAt),
-          );
-          return assets;
-        });
+  Future<List<SupplyProductionAssetModel>> listAllFromServer() {
+    return _commandService.listAll();
   }
 
   void _validate(SupplyProductionAssetModel asset, {required bool requireId}) {
