@@ -64,7 +64,7 @@ class _BrandPortfolioPageState extends State<BrandPortfolioPage> {
                         ),
                         SizedBox(height: 12),
                         Text(
-                          'Markalarım',
+                          'Bir marka güçlenir, bir ekonomi harekete geçer.',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 29,
@@ -73,7 +73,7 @@ class _BrandPortfolioPageState extends State<BrandPortfolioPage> {
                         ),
                         SizedBox(height: 8),
                         Text(
-                          'Marka portföyünüzü ve başvuru durumlarını tek yerde görün.',
+                          'Marka portföyünüzü yönetin, pazar güvenini büyütün ve şirketinizin üretim, yatırım ve küresel değer yaratan en güçlü varlığını koruyun.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFFD9E5EA),
