@@ -9,6 +9,34 @@ const {
 const REPORTS = "counterfeit_twin_reports";
 const PUBLIC_COMPARISONS = "counterfeit_twin_public_comparisons";
 
+const TARGET_TYPES = new Set([
+  "physical_product", "digital_product", "service", "saas_platform",
+  "ecommerce_platform", "marketplace_store",
+  "tourism_booking_platform", "financial_service", "payment_page",
+  "mobile_application", "website", "social_media_account",
+  "customer_support_channel", "institution", "other",
+]);
+
+const INCIDENT_TYPES = new Set([
+  "product_imitation", "brand_impersonation", "platform_impersonation",
+  "website_clone", "mobile_app_impersonation", "interface_clone",
+  "fake_checkout", "fake_payment_page", "fake_subscription",
+  "fake_reservation", "fake_financial_service",
+  "fake_investment_service", "fake_customer_support",
+  "credential_phishing", "payment_diversion", "iban_diversion",
+  "merchant_identity_deception", "unauthorized_card_charge",
+  "personal_data_harvesting", "other",
+]);
+
+const DISPUTE_STATUSES = new Set([
+  "not_submitted", "submitted", "under_review", "accepted", "rejected",
+  "partially_resolved", "resolved",
+]);
+
+const RECOVERY_STATUSES = new Set([
+  "no_recovery", "pending", "partial", "full", "unknown",
+]);
+
 function text(value, fieldName, maxLength, required = false) {
   if (value === null || value === undefined) {
     if (required) {
@@ -44,36 +72,203 @@ function positiveAmount(value, fieldName) {
   return Math.round(value * 100) / 100;
 }
 
-function cleanReportPayload(data) {
+function enumValue(value, fieldName, allowed, fallback) {
+  const cleaned = text(value ?? fallback, fieldName, 80, true);
+  if (!allowed.has(cleaned)) {
+    throw new HttpsError("invalid-argument", `${fieldName} gecersiz.`);
+  }
+  return cleaned;
+}
+
+function enumList(value, fieldName, allowed) {
+  const values = stringList(value, fieldName, 20, 80);
+  for (const item of values) {
+    if (!allowed.has(item)) {
+      throw new HttpsError("invalid-argument", `${fieldName} gecersiz.`);
+    }
+  }
+  return values;
+}
+
+function booleanValue(value, fieldName, fallback = false) {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value !== "boolean") {
+    throw new HttpsError("invalid-argument", `${fieldName} gecersiz.`);
+  }
+  return value;
+}
+
+function isoDate(value, fieldName) {
+  if (value === null || value === undefined || value === "") return "";
+  const cleaned = text(value, fieldName, 80, true);
+  const parsed = new Date(cleaned);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new HttpsError("invalid-argument", `${fieldName} gecersiz.`);
+  }
+  return parsed.toISOString();
+}
+
+function cleanFinancialImpact(value) {
+  const data = value ?? {};
+  if (typeof data !== "object" || Array.isArray(data)) {
+    throw new HttpsError("invalid-argument", "financialImpact gecersiz.");
+  }
+  const hasMonetaryLoss = booleanValue(
+      data.hasMonetaryLoss,
+      "financialImpact.hasMonetaryLoss",
+  );
+  const lossAmount = positiveAmount(
+      data.lossAmount,
+      "financialImpact.lossAmount",
+  );
+  if (hasMonetaryLoss && (lossAmount === null || lossAmount <= 0)) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Maddi kayip varsa lossAmount zorunludur.",
+    );
+  }
+  const disputeSubmitted = booleanValue(
+      data.disputeSubmitted,
+      "financialImpact.disputeSubmitted",
+  );
+
   return {
+    hasMonetaryLoss,
+    lossAmount,
+    currency: text(
+        data.currency || "TRY",
+        "financialImpact.currency",
+        12,
+        true,
+    ).toUpperCase(),
+    transactionDate: isoDate(
+        data.transactionDate,
+        "financialImpact.transactionDate",
+    ),
+    paymentMethod: text(
+        data.paymentMethod,
+        "financialImpact.paymentMethod",
+        120,
+    ),
+    bankOrPaymentProvider: text(
+        data.bankOrPaymentProvider,
+        "financialImpact.bankOrPaymentProvider",
+        240,
+    ),
+    merchantDescriptor: text(
+        data.merchantDescriptor,
+        "financialImpact.merchantDescriptor",
+        300,
+    ),
+    transactionReferenceMasked: text(
+        data.transactionReferenceMasked,
+        "financialImpact.transactionReferenceMasked",
+        240,
+    ),
+    recipientNameMasked: text(
+        data.recipientNameMasked,
+        "financialImpact.recipientNameMasked",
+        240,
+    ),
+    ibanMasked: text(data.ibanMasked, "financialImpact.ibanMasked", 120),
+    disputeSubmitted,
+    disputeSubmittedAt: isoDate(
+        data.disputeSubmittedAt,
+        "financialImpact.disputeSubmittedAt",
+    ),
+    disputeReference: text(
+        data.disputeReference,
+        "financialImpact.disputeReference",
+        240,
+    ),
+    disputeStatus: enumValue(
+        data.disputeStatus,
+        "financialImpact.disputeStatus",
+        DISPUTE_STATUSES,
+        disputeSubmitted ? "submitted" : "not_submitted",
+    ),
+    refundAmount: positiveAmount(
+        data.refundAmount,
+        "financialImpact.refundAmount",
+    ),
+    recoveryStatus: enumValue(
+        data.recoveryStatus,
+        "financialImpact.recoveryStatus",
+        RECOVERY_STATUSES,
+        "unknown",
+    ),
+  };
+}
+
+function comparisonLabel(targetType) {
+  if (targetType === "physical_product") {
+    return "Gercek Urun - Sahte Ikiz";
+  }
+  if (targetType === "mobile_application") {
+    return "Gercek Uygulama - Sahte Uygulama";
+  }
+  if (targetType === "institution" || targetType === "financial_service") {
+    return "Gercek Kurum - Sahte Kurum";
+  }
+  if (targetType === "payment_page") {
+    return "Gercek Odeme Sayfasi - Sahte Odeme Sayfasi";
+  }
+  return "Gercek Platform - Sahte Platform";
+}
+
+function cleanReportPayload(data) {
+  const targetType = enumValue(
+      data.targetType,
+      "targetType",
+      TARGET_TYPES,
+      "physical_product",
+  );
+  const legacyOriginal = text(
+      data.originalProductName,
+      "originalProductName",
+      500,
+  );
+  const legacySuspected = text(
+      data.suspectedProductName,
+      "suspectedProductName",
+      500,
+  );
+  const originalEntityName = text(
+      data.originalEntityName || legacyOriginal,
+      "originalEntityName",
+      500,
+      true,
+  );
+  const suspectedEntityName = text(
+      data.suspectedEntityName || legacySuspected,
+      "suspectedEntityName",
+      500,
+      true,
+  );
+
+  return {
+    targetType,
+    originalEntityName,
+    suspectedEntityName,
     originalBrandName: text(
         data.originalBrandName,
         "originalBrandName",
         240,
-        true,
+        targetType === "physical_product",
     ),
-    originalProductName: text(
-        data.originalProductName,
-        "originalProductName",
-        500,
-        true,
-    ),
+    originalProductName: legacyOriginal || originalEntityName,
     originalCountry: text(data.originalCountry, "originalCountry", 120),
     originalImageUrls: stringList(
         data.originalImageUrls,
         "originalImageUrls",
     ),
+    originalUrls: stringList(data.originalUrls, "originalUrls", 20, 1200),
     suspectedBrandName: text(
         data.suspectedBrandName,
         "suspectedBrandName",
         240,
     ),
-    suspectedProductName: text(
-        data.suspectedProductName,
-        "suspectedProductName",
-        500,
-        true,
-    ),
+    suspectedProductName: legacySuspected || suspectedEntityName,
     claimedOriginCountry: text(
         data.claimedOriginCountry,
         "claimedOriginCountry",
@@ -87,6 +282,17 @@ function cleanReportPayload(data) {
     suspectedImageUrls: stringList(
         data.suspectedImageUrls,
         "suspectedImageUrls",
+    ),
+    suspectedUrls: stringList(
+        data.suspectedUrls,
+        "suspectedUrls",
+        20,
+        1200,
+    ),
+    incidentTypes: enumList(
+        data.incidentTypes,
+        "incidentTypes",
+        INCIDENT_TYPES,
     ),
     platformName: text(data.platformName, "platformName", 160, true),
     storeDisplayName: text(
@@ -112,6 +318,7 @@ function cleanReportPayload(data) {
         500,
     ),
     evidenceNotes: text(data.evidenceNotes, "evidenceNotes", 5000, true),
+    financialImpact: cleanFinancialImpact(data.financialImpact),
   };
 }
 
@@ -213,17 +420,29 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
         transaction.create(publicRef, {
           reportId,
           counterfeitTwinRecordId: null,
-          title: `${report.originalBrandName}: Gercek Urun - Sahte Ikiz`,
-          originalBrandName: report.originalBrandName,
-          originalProductName: report.originalProductName,
+          targetType: report.targetType || "physical_product",
+          comparisonLabel: comparisonLabel(
+              report.targetType || "physical_product",
+          ),
+          title: `${report.originalEntityName || report.originalBrandName}: ` +
+            comparisonLabel(report.targetType || "physical_product"),
+          originalEntityName:
+            report.originalEntityName || report.originalProductName,
+          suspectedEntityName:
+            report.suspectedEntityName || report.suspectedProductName,
+          originalBrandName: report.originalBrandName || "",
+          originalProductName: report.originalProductName || "",
           originalCountry: report.originalCountry || "",
           originalImageUrls: report.originalImageUrls || [],
+          originalUrls: report.originalUrls || [],
           suspectedBrandName:
-            report.suspectedBrandName || report.originalBrandName,
-          suspectedProductName: report.suspectedProductName,
+            report.suspectedBrandName || report.originalBrandName || "",
+          suspectedProductName: report.suspectedProductName || "",
           claimedOriginCountry: report.claimedOriginCountry || "",
           allegedSupplyCountry: report.allegedSupplyCountry || "",
           suspectedImageUrls: report.suspectedImageUrls || [],
+          suspectedUrls: report.suspectedUrls || [],
+          incidentTypes: report.incidentTypes || [],
           platformName: report.platformName,
           storeDisplayName: report.storeDisplayName || "",
           authorizedPriceMin: report.authorizedPriceMin ?? null,
@@ -231,6 +450,21 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
           suspectedPrice: report.suspectedPrice ?? null,
           currency: report.currency || "TRY",
           differenceNotes: report.differenceNotes || [],
+          financialImpactSummary: {
+            hasMonetaryLoss:
+              report.financialImpact?.hasMonetaryLoss === true,
+            lossAmount: report.financialImpact?.lossAmount ?? null,
+            currency: report.financialImpact?.currency || "TRY",
+            bankOrPaymentProvider:
+              report.financialImpact?.bankOrPaymentProvider || "",
+            disputeSubmitted:
+              report.financialImpact?.disputeSubmitted === true,
+            disputeStatus:
+              report.financialImpact?.disputeStatus || "not_submitted",
+            refundAmount: report.financialImpact?.refundAmount ?? null,
+            recoveryStatus:
+              report.financialImpact?.recoveryStatus || "unknown",
+          },
           publicSummary: reviewNote,
           verificationLabel: "delille_dogrulandi",
           publishedAt: now,
