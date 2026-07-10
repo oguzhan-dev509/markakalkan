@@ -5771,6 +5771,23 @@ allow delete: if request.auth != null
     }
 
     // ============================================================
+    // MARKAKALKAN YONETIM MERKEZI VE SAHTE IKIZ RADARI
+    // Tum yazmalar ve yonetici kontrolleri callable/Admin SDK katmanindadir.
+    // ============================================================
+    match /platform_admins/{adminUid} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /counterfeit_twin_reports/{reportId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /counterfeit_twin_public_comparisons/{comparisonId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
+    // ============================================================
     // SAHTE İKİZ SİCİLİ
     // Okuma tenant-safe; tüm yazmalar güvenilir callable katmanında.
     // ============================================================

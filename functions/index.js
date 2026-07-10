@@ -40,6 +40,19 @@ const {
   buildListMyBrandApplications,
 } = require("./brand_portfolio/brand_applications");
 
+const {
+  buildGetMyPlatformAdminAccess,
+  buildListBrandApplicationsForAdmin,
+  buildReviewBrandApplication,
+} = require("./admin/brand_application_admin");
+
+const {
+  buildSubmitCounterfeitTwinReport,
+  buildListCounterfeitTwinReportsForAdmin,
+  buildReviewCounterfeitTwinReport,
+  buildListPublicCounterfeitTwinComparisons,
+} = require("./counterfeit_twin/counterfeit_twin_radar");
+
 setGlobalOptions({
   region: "europe-west3",
   maxInstances: 3,
@@ -229,6 +242,27 @@ exports.listSupplyProductionAssets =
 
 exports.listMyBrandApplications =
     buildListMyBrandApplications({db});
+
+exports.getMyPlatformAdminAccess =
+    buildGetMyPlatformAdminAccess({db});
+
+exports.listBrandApplicationsForAdmin =
+    buildListBrandApplicationsForAdmin({db});
+
+exports.reviewBrandApplication =
+    buildReviewBrandApplication({db, admin});
+
+exports.submitCounterfeitTwinReport =
+    buildSubmitCounterfeitTwinReport({db, admin});
+
+exports.listCounterfeitTwinReportsForAdmin =
+    buildListCounterfeitTwinReportsForAdmin({db});
+
+exports.reviewCounterfeitTwinReport =
+    buildReviewCounterfeitTwinReport({db, admin});
+
+exports.listPublicCounterfeitTwinComparisons =
+    buildListPublicCounterfeitTwinComparisons({db});
 
 exports.createCounterfeitTwinRecord =
     buildCreateCounterfeitTwinRecord({db, admin});
