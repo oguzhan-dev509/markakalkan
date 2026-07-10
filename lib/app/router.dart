@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:markakalkan/features/admin/presentation/management_center_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_application_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/brand_dashboard_page.dart';
@@ -44,6 +45,12 @@ import 'package:markakalkan/modules/marka_kalkan/fason_uretim_tedarik_guvenligi/
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_registry_page.dart';
 
 abstract final class AppRouter {
+  static Future<void> openManagementCenter(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ManagementCenterPage()),
+    );
+  }
+
   static Future<void> openIpCreationPriorityRegistry(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(

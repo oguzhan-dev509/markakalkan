@@ -8,6 +8,15 @@ class CorporateHubPage extends StatelessWidget {
 
   static const List<_CorporateModule> _modules = [
     _CorporateModule(
+      id: 'management_center',
+      title: 'MarkaKalkan Yönetim Merkezi',
+      description:
+          'Platform başvurularını, Sahte İkiz Radarı bildirimlerini ve '
+          'yönetim kararlarını yetkili merkezden yönetin.',
+      icon: Icons.admin_panel_settings_outlined,
+      status: _ModuleStatus.active,
+    ),
+    _CorporateModule(
       id: 'brands',
       title: 'Markalarım',
       description:
@@ -318,6 +327,9 @@ class _CorporateModuleCard extends StatelessWidget {
 
   void _openModule(BuildContext context) {
     switch (module.id) {
+      case 'management_center':
+        AppRouter.openManagementCenter(context);
+        return;
       case 'brands':
         AppRouter.openBrandPortfolio(context);
         return;
