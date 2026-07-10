@@ -1,21 +1,33 @@
+import 'dart:async';
+
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/admin/data/admin_entry_gate_service.dart';
+import 'package:markakalkan/features/admin/data/platform_admin_access_service.dart';
 
-class CorporateHubPage extends StatelessWidget {
+class CorporateHubPage extends StatefulWidget {
   const CorporateHubPage({super.key});
 
+  @override
+  State<CorporateHubPage> createState() => _CorporateHubPageState();
+}
+
+class _CorporateHubPageState extends State<CorporateHubPage> {
+  final AdminEntryGateService _entryGateService = AdminEntryGateService();
+  final PlatformAdminAccessService _accessService =
+      PlatformAdminAccessService();
+
+  Timer? _hiddenHoldTimer;
+  bool _hiddenHoldCompleted = false;
+  bool _hiddenGestureArmed = false;
+  int _hiddenTapCount = 0;
+  DateTime? _hiddenGestureExpiresAt;
+  bool _entryDialogOpen = false;
+
   static const List<_CorporateModule> _modules = [
-    _CorporateModule(
-      id: 'management_center',
-      title: 'MarkaKalkan Yönetim Merkezi',
-      description:
-          'Platform başvurularını, Sahte İkiz Radarı bildirimlerini ve '
-          'yönetim kararlarını yetkili merkezden yönetin.',
-      icon: Icons.admin_panel_settings_outlined,
-      status: _ModuleStatus.active,
-    ),
     _CorporateModule(
       id: 'brands',
       title: 'Markalarım',
@@ -136,6 +148,271 @@ class CorporateHubPage extends StatelessWidget {
     ),
   ];
 
+  void _handleHiddenMarkPointerDown(Object _) {
+    if (_hiddenGestureArmed) {
+      return;
+    }
+
+    _hiddenHoldCompleted = false;
+    _hiddenHoldTimer?.cancel();
+    _hiddenHoldTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) {
+        return;
+      }
+
+      _hiddenHoldCompleted = true;
+      _hiddenGestureArmed = true;
+      _hiddenTapCount = 0;
+      _hiddenGestureExpiresAt = DateTime.now().add(const Duration(seconds: 10));
+    });
+  }
+
+  void _handleHiddenMarkPointerUp(Object _) {
+    _hiddenHoldTimer?.cancel();
+    _hiddenHoldTimer = null;
+
+    if (_hiddenHoldCompleted) {
+      _hiddenHoldCompleted = false;
+      return;
+    }
+
+    if (!_hiddenGestureArmed) {
+      return;
+    }
+
+    final expiresAt = _hiddenGestureExpiresAt;
+    if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
+      _resetHiddenGesture();
+      return;
+    }
+
+    _hiddenTapCount += 1;
+    if (_hiddenTapCount < 3) {
+      return;
+    }
+
+    _resetHiddenGesture();
+    _openAdminEntryDialog();
+  }
+
+  void _handleHiddenMarkPointerCancel(Object _) {
+    _hiddenHoldTimer?.cancel();
+    _hiddenHoldTimer = null;
+    _hiddenHoldCompleted = false;
+  }
+
+  void _resetHiddenGesture() {
+    _hiddenHoldTimer?.cancel();
+    _hiddenHoldTimer = null;
+    _hiddenHoldCompleted = false;
+    _hiddenGestureArmed = false;
+    _hiddenTapCount = 0;
+    _hiddenGestureExpiresAt = null;
+  }
+
+  String _gateErrorMessage(Object error) {
+    if (error is FirebaseFunctionsException) {
+      switch (error.code) {
+        case 'unauthenticated':
+          return 'Yönetim girişi için oturum açmanız gerekir.';
+        case 'resource-exhausted':
+          return 'Çok fazla hatalı deneme yapıldı. Lütfen daha sonra yeniden deneyin.';
+        case 'invalid-argument':
+          return 'Giriş kodu geçerli biçimde değil.';
+        case 'permission-denied':
+          return 'Kod veya yönetim yetkisi doğrulanamadı.';
+        case 'failed-precondition':
+          return 'Yönetim giriş hizmeti şu anda kullanılamıyor.';
+      }
+    }
+
+    return 'Yönetim erişimi doğrulanamadı. Lütfen yeniden deneyin.';
+  }
+
+  Future<void> _openAdminEntryDialog() async {
+    if (_entryDialogOpen || !mounted) {
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Yönetim girişi için önce oturum açmanız gerekir.'),
+        ),
+      );
+      return;
+    }
+
+    _entryDialogOpen = true;
+    final controller = TextEditingController();
+
+    try {
+      final granted = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          var isSubmitting = false;
+          String? errorText;
+
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> submit() async {
+                if (isSubmitting) {
+                  return;
+                }
+
+                final code = controller.text.trim();
+                if (code.length < 12) {
+                  setDialogState(() {
+                    errorText = 'Giriş kodu en az 12 karakter olmalıdır.';
+                  });
+                  return;
+                }
+
+                setDialogState(() {
+                  isSubmitting = true;
+                  errorText = null;
+                });
+
+                try {
+                  final gateGranted = await _entryGateService.verifyEntryCode(
+                    code,
+                  );
+                  final access = await _accessService.getMyAccess();
+
+                  if (!gateGranted || !access.isSuperAdmin) {
+                    throw StateError('Admin access denied');
+                  }
+
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop(true);
+                  }
+                } catch (error) {
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+                  setDialogState(() {
+                    isSubmitting = false;
+                    errorText = _gateErrorMessage(error);
+                  });
+                }
+              }
+
+              return AlertDialog(
+                title: const Text('Yetkili giriş'),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Bu alan yalnızca yetkili platform yöneticileri içindir.',
+                      ),
+                      const SizedBox(height: 18),
+                      TextField(
+                        controller: controller,
+                        autofocus: true,
+                        obscureText: true,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: 'Yönetim giriş kodu',
+                          errorText: errorText,
+                          border: const OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => submit(),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSubmitting
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('Vazgeç'),
+                  ),
+                  FilledButton(
+                    onPressed: isSubmitting ? null : submit,
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Doğrula'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (granted == true && mounted) {
+        await AppRouter.openManagementCenter(context);
+      }
+    } finally {
+      controller.dispose();
+      _entryDialogOpen = false;
+    }
+  }
+
+  Widget _buildHiddenAdminMark() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _handleHiddenMarkPointerDown,
+        onPointerUp: _handleHiddenMarkPointerUp,
+        onPointerCancel: _handleHiddenMarkPointerCancel,
+        child: const SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: Opacity(
+              opacity: 0.30,
+              child: SizedBox(
+                width: 21,
+                height: 21,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: Icon(
+                        Icons.shield_outlined,
+                        color: MarkaKalkanTheme.navy,
+                        size: 20,
+                      ),
+                    ),
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: MarkaKalkanTheme.teal,
+                          shape: BoxShape.circle,
+                        ),
+                        child: SizedBox(width: 5, height: 5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _hiddenHoldTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -153,6 +430,7 @@ class CorporateHubPage extends StatelessWidget {
           ),
         ),
         actions: [
+          _buildHiddenAdminMark(),
           Padding(
             padding: const EdgeInsets.only(right: 20),
             child: Center(
@@ -327,9 +605,6 @@ class _CorporateModuleCard extends StatelessWidget {
 
   void _openModule(BuildContext context) {
     switch (module.id) {
-      case 'management_center':
-        AppRouter.openManagementCenter(context);
-        return;
       case 'brands':
         AppRouter.openBrandPortfolio(context);
         return;

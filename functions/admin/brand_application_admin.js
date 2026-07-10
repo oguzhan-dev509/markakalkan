@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+const {defineSecret} = require("firebase-functions/params");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const {
@@ -8,6 +10,10 @@ const {
 
 const APPLICATIONS = "brandApplications";
 const BRANDS = "brands";
+const ADMIN_ENTRY_ATTEMPTS = "platform_admin_entry_attempts";
+const ADMIN_ENTRY_GATE_CODE = defineSecret("ADMIN_ENTRY_GATE_CODE");
+const MAX_ADMIN_ENTRY_FAILURES = 5;
+const ADMIN_ENTRY_LOCK_MILLIS = 15 * 60 * 1000;
 
 function cleanText(value, maxLength = 2000) {
   if (value === null || value === undefined) return "";
@@ -27,6 +33,147 @@ function requiredId(value, fieldName) {
     throw new HttpsError("invalid-argument", `${fieldName} gecersiz.`);
   }
   return cleaned;
+}
+
+function entryCode(value) {
+  if (typeof value !== "string") {
+    throw new HttpsError(
+        "invalid-argument",
+        "Yonetim giris kodu gecersiz.",
+    );
+  }
+
+  const cleaned = value.trim();
+  if (cleaned.length < 12 || cleaned.length > 128) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Yonetim giris kodu gecersiz.",
+    );
+  }
+  return cleaned;
+}
+
+function digest(value) {
+  return crypto.createHash("sha256").update(value, "utf8").digest();
+}
+
+function buildVerifyAdminEntryGate({db, admin}) {
+  return onCall(
+      {secrets: [ADMIN_ENTRY_GATE_CODE]},
+      async (request) => {
+        const actor = await requirePlatformRole(
+            request,
+            db,
+            ROLES.superAdmin,
+        );
+        const suppliedCode = entryCode(request.data?.code);
+        const configuredCode = ADMIN_ENTRY_GATE_CODE.value().trim();
+
+        if (configuredCode.length < 12 || configuredCode.length > 128) {
+          logger.error("Admin entry gate secret is not configured safely");
+          throw new HttpsError(
+              "failed-precondition",
+              "Yonetim giris hizmeti kullanilamiyor.",
+          );
+        }
+
+        const suppliedDigest = digest(suppliedCode);
+        const configuredDigest = digest(configuredCode);
+        const codeMatches = crypto.timingSafeEqual(
+            suppliedDigest,
+            configuredDigest,
+        );
+
+        const attemptRef = db
+            .collection(ADMIN_ENTRY_ATTEMPTS)
+            .doc(actor.uid);
+        const nowMillis = Date.now();
+
+        const result = await db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(attemptRef);
+          const data = snapshot.exists ? snapshot.data() || {} : {};
+          const lockedUntilMillis =
+            Number.isFinite(data.lockedUntilMillis) ?
+              data.lockedUntilMillis :
+              0;
+
+          if (lockedUntilMillis > nowMillis) {
+            return {status: "locked", lockedUntilMillis};
+          }
+
+          if (codeMatches) {
+            transaction.set(
+                attemptRef,
+                {
+                  failedAttempts: 0,
+                  lockedUntilMillis: 0,
+                  lastSuccessAt:
+                    admin.firestore.FieldValue.serverTimestamp(),
+                  updatedAt:
+                    admin.firestore.FieldValue.serverTimestamp(),
+                },
+                {merge: true},
+            );
+            return {status: "granted"};
+          }
+
+          const previousFailures =
+            Number.isInteger(data.failedAttempts) ?
+              data.failedAttempts :
+              0;
+          const failedAttempts = previousFailures + 1;
+          const shouldLock =
+            failedAttempts >= MAX_ADMIN_ENTRY_FAILURES;
+          const nextLockedUntil = shouldLock ?
+            nowMillis + ADMIN_ENTRY_LOCK_MILLIS :
+            0;
+
+          transaction.set(
+              attemptRef,
+              {
+                failedAttempts: shouldLock ? 0 : failedAttempts,
+                lockedUntilMillis: nextLockedUntil,
+                lastFailureAt:
+                  admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt:
+                  admin.firestore.FieldValue.serverTimestamp(),
+              },
+              {merge: true},
+          );
+
+          return {
+            status: shouldLock ? "locked" : "denied",
+            lockedUntilMillis: nextLockedUntil,
+          };
+        });
+
+        if (result.status === "granted") {
+          logger.info("Admin entry gate granted", {
+            adminUid: actor.uid,
+          });
+          return {granted: true};
+        }
+
+        if (result.status === "locked") {
+          logger.warn("Admin entry gate temporarily locked", {
+            adminUid: actor.uid,
+            lockedUntilMillis: result.lockedUntilMillis,
+          });
+          throw new HttpsError(
+              "resource-exhausted",
+              "Cok fazla hatali deneme yapildi.",
+          );
+        }
+
+        logger.warn("Admin entry gate denied", {
+          adminUid: actor.uid,
+        });
+        throw new HttpsError(
+            "permission-denied",
+            "Kod veya yonetim yetkisi dogrulanamadi.",
+        );
+      },
+  );
 }
 
 function buildGetMyPlatformAdminAccess({db}) {
@@ -163,6 +310,7 @@ function buildReviewBrandApplication({db, admin}) {
 }
 
 module.exports = {
+  buildVerifyAdminEntryGate,
   buildGetMyPlatformAdminAccess,
   buildListBrandApplicationsForAdmin,
   buildReviewBrandApplication,
