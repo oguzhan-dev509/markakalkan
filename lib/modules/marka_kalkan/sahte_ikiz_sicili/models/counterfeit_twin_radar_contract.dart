@@ -18,6 +18,8 @@ enum CounterfeitTwinTargetType {
   socialMediaAccount('social_media_account', 'Sosyal medya hesabı'),
   customerSupportChannel('customer_support_channel', 'Müşteri destek kanalı'),
   institution('institution', 'Kurum veya şirket'),
+  roboticSystem('robotic_system', 'Robotik sistem'),
+  autonomousAiAgent('autonomous_ai_agent', 'Otonom yapay zekâ ajanı'),
   other('other', 'Diğer');
 
   const CounterfeitTwinTargetType(this.value, this.label);
@@ -45,10 +47,39 @@ enum CounterfeitTwinIncidentType {
   merchantIdentityDeception('merchant_identity_deception'),
   unauthorizedCardCharge('unauthorized_card_charge'),
   personalDataHarvesting('personal_data_harvesting'),
+  counterfeitRobotHardware('counterfeit_robot_hardware'),
+  robotIdentityClone('robot_identity_clone'),
+  serialNumberClone('serial_number_clone'),
+  deviceCertificateClone('device_certificate_clone'),
+  controlSoftwareClone('control_software_clone'),
+  firmwareClone('firmware_clone'),
+  fakeRobotCertification('fake_robot_certification'),
+  teleoperationChannelImpersonation('teleoperation_channel_impersonation'),
+  robotFleetImpersonation('robot_fleet_impersonation'),
+  aiAgentImpersonation('ai_agent_impersonation'),
+  voicePersonaClone('voice_persona_clone'),
+  fakeRobotServiceNetwork('fake_robot_service_network'),
   other('other');
 
   const CounterfeitTwinIncidentType(this.value);
   final String value;
+}
+
+enum CounterfeitTwinRobotType {
+  industrialRobot('industrial_robot', 'Endüstriyel robot'),
+  serviceRobot('service_robot', 'Hizmet robotu'),
+  humanoidRobot('humanoid_robot', 'İnsansı robot'),
+  medicalRobot('medical_robot', 'Tıbbi robot'),
+  logisticsRobot('logistics_robot', 'Lojistik robotu'),
+  securityRobot('security_robot', 'Güvenlik robotu'),
+  domesticRobot('domestic_robot', 'Ev tipi robot'),
+  roboticDevice('robotic_device', 'Robotik cihaz'),
+  softwareRobot('software_robot', 'Yazılım robotu / ajan'),
+  other('other', 'Diğer');
+
+  const CounterfeitTwinRobotType(this.value, this.label);
+  final String value;
+  final String label;
 }
 
 class CounterfeitTwinFinancialImpact {
@@ -127,6 +158,7 @@ class CounterfeitTwinRadarReport {
     this.suspectedImageUrls = const <String>[],
     this.suspectedUrls = const <String>[],
     this.incidentTypes = const <CounterfeitTwinIncidentType>[],
+    this.robotType,
     this.storeDisplayName,
     this.listingUrl,
     this.authorizedPriceMin,
@@ -154,6 +186,7 @@ class CounterfeitTwinRadarReport {
   final List<String> suspectedImageUrls;
   final List<String> suspectedUrls;
   final List<CounterfeitTwinIncidentType> incidentTypes;
+  final CounterfeitTwinRobotType? robotType;
   final String? storeDisplayName;
   final String? listingUrl;
   final double? authorizedPriceMin;
@@ -181,6 +214,7 @@ class CounterfeitTwinRadarReport {
     'suspectedImageUrls': suspectedImageUrls,
     'suspectedUrls': suspectedUrls,
     'incidentTypes': incidentTypes.map((item) => item.value).toList(),
+    'robotType': robotType?.value,
     'storeDisplayName': storeDisplayName,
     'listingUrl': listingUrl,
     'authorizedPriceMin': authorizedPriceMin,

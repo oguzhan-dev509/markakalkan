@@ -14,7 +14,8 @@ const TARGET_TYPES = new Set([
   "ecommerce_platform", "marketplace_store",
   "tourism_booking_platform", "financial_service", "payment_page",
   "mobile_application", "website", "social_media_account",
-  "customer_support_channel", "institution", "other",
+  "customer_support_channel", "institution", "robotic_system",
+  "autonomous_ai_agent", "other",
 ]);
 
 const INCIDENT_TYPES = new Set([
@@ -25,7 +26,26 @@ const INCIDENT_TYPES = new Set([
   "fake_investment_service", "fake_customer_support",
   "credential_phishing", "payment_diversion", "iban_diversion",
   "merchant_identity_deception", "unauthorized_card_charge",
-  "personal_data_harvesting", "other",
+  "personal_data_harvesting", "counterfeit_robot_hardware",
+  "robot_identity_clone", "serial_number_clone",
+  "device_certificate_clone", "control_software_clone",
+  "firmware_clone", "fake_robot_certification",
+  "teleoperation_channel_impersonation",
+  "robot_fleet_impersonation", "ai_agent_impersonation",
+  "voice_persona_clone", "fake_robot_service_network", "other",
+]);
+
+const ROBOT_TYPES = new Set([
+  "industrial_robot",
+  "service_robot",
+  "humanoid_robot",
+  "medical_robot",
+  "logistics_robot",
+  "security_robot",
+  "domestic_robot",
+  "robotic_device",
+  "software_robot",
+  "other",
 ]);
 
 const DISPUTE_STATUSES = new Set([
@@ -213,6 +233,12 @@ function comparisonLabel(targetType) {
   if (targetType === "payment_page") {
     return "Gercek Odeme Sayfasi - Sahte Odeme Sayfasi";
   }
+  if (targetType === "robotic_system") {
+    return "Gercek Robot - Sahte Robot";
+  }
+  if (targetType === "autonomous_ai_agent") {
+    return "Gercek Otonom Ajan - Sahte Ajan";
+  }
   return "Gercek Platform - Sahte Platform";
 }
 
@@ -223,6 +249,21 @@ function cleanReportPayload(data) {
       TARGET_TYPES,
       "physical_product",
   );
+  const robotType = data.robotType === null ||
+      data.robotType === undefined ||
+      data.robotType === "" ?
+    "" :
+    enumValue(data.robotType, "robotType", ROBOT_TYPES, "other");
+
+  if (
+    ["robotic_system", "autonomous_ai_agent"].includes(targetType) &&
+    !robotType
+  ) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Robot veya otonom ajan vakalarinda robotType zorunludur.",
+    );
+  }
   const legacyOriginal = text(
       data.originalProductName,
       "originalProductName",
@@ -294,6 +335,7 @@ function cleanReportPayload(data) {
         "incidentTypes",
         INCIDENT_TYPES,
     ),
+    robotType,
     platformName: text(data.platformName, "platformName", 160, true),
     storeDisplayName: text(
         data.storeDisplayName,
@@ -443,6 +485,7 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
           suspectedImageUrls: report.suspectedImageUrls || [],
           suspectedUrls: report.suspectedUrls || [],
           incidentTypes: report.incidentTypes || [],
+          robotType: report.robotType || "",
           platformName: report.platformName,
           storeDisplayName: report.storeDisplayName || "",
           authorizedPriceMin: report.authorizedPriceMin ?? null,
