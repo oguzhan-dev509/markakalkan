@@ -32,55 +32,86 @@ class _Header extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: MarkaKalkanTheme.navy,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: const Icon(
-                  Icons.verified_user_outlined,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'MarkaKalkan',
-                      style: TextStyle(
-                        color: MarkaKalkanTheme.navy,
-                        fontSize: 21,
-                        fontWeight: FontWeight.w800,
-                      ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 720;
+
+              final identity = Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: MarkaKalkanTheme.navy,
+                      borderRadius: BorderRadius.circular(13),
                     ),
-                    Text(
-                      'Dijital ürün kimliği ve marka koruma',
-                      style: TextStyle(color: Color(0xFF66727D), fontSize: 12),
+                    child: const Icon(
+                      Icons.verified_user_outlined,
+                      color: Colors.white,
                     ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  AppRouter.openProductVerification(context);
-                },
-                child: const Text('Marka Dedektifi'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: () {
-                  AppRouter.openBrandLogin(context);
-                },
-                icon: const Icon(Icons.business_outlined),
-                label: const Text('Marka Girişi'),
-              ),
-            ],
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'MarkaKalkan',
+                          style: TextStyle(
+                            color: MarkaKalkanTheme.navy,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          'Dijital ürün kimliği ve marka koruma',
+                          style: TextStyle(
+                            color: Color(0xFF66727D),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+
+              final actions = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: isNarrow ? WrapAlignment.start : WrapAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      AppRouter.openProductVerification(context);
+                    },
+                    child: const Text('Marka Dedektifi'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () {
+                      AppRouter.openBrandLogin(context);
+                    },
+                    icon: const Icon(Icons.business_outlined),
+                    label: const Text('Marka Girişi'),
+                  ),
+                ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [identity, const SizedBox(height: 14), actions],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: identity),
+                  const SizedBox(width: 20),
+                  actions,
+                ],
+              );
+            },
           ),
         ),
       ),
