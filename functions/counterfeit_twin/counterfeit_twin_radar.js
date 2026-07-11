@@ -469,6 +469,52 @@ function safePublicStringList(value, maxItems = 20) {
       .slice(0, maxItems);
 }
 
+function approvedImageSelection(value, available, fieldName) {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new HttpsError(
+        "invalid-argument",
+        `${fieldName} liste olmalidir.`,
+    );
+  }
+  if (value.length > 4) {
+    throw new HttpsError(
+        "invalid-argument",
+        `${fieldName} en fazla 4 gorsel icerebilir.`,
+    );
+  }
+
+  const availableSet = new Set(safePublicStringList(available, 20));
+  const selected = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      throw new HttpsError(
+          "invalid-argument",
+          `${fieldName} yalniz metin URL icerebilir.`,
+      );
+    }
+    const url = item.trim();
+    if (!url || url.length > 2000) {
+      throw new HttpsError(
+          "invalid-argument",
+          `${fieldName} gecersiz URL iceriyor.`,
+      );
+    }
+    if (!availableSet.has(url)) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Secilen gorsel bildirime ait degil.",
+      );
+    }
+    if (!selected.includes(url)) {
+      selected.push(url);
+    }
+  }
+  return selected;
+}
+
 function timestampMillis(value) {
   return value?.toMillis?.() ?? null;
 }
@@ -834,6 +880,16 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
         throw new HttpsError("not-found", "Bildirim bulunamadi.");
       }
       const report = snapshot.data() || {};
+      const approvedOriginalImageUrls = approvedImageSelection(
+          request.data?.approvedOriginalImageUrls,
+          report.originalImageUrls,
+          "approvedOriginalImageUrls",
+      );
+      const approvedSuspectedImageUrls = approvedImageSelection(
+          request.data?.approvedSuspectedImageUrls,
+          report.suspectedImageUrls,
+          "approvedSuspectedImageUrls",
+      );
       if (!["submitted", "under_review"].includes(report.status)) {
         throw new HttpsError(
             "failed-precondition",
@@ -845,6 +901,8 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
         status: decision,
         reviewNote,
         publicSummary,
+        approvedOriginalImageUrls,
+        approvedSuspectedImageUrls,
         reviewedAt: now,
         reviewedByUid: actor.uid,
         reviewedByEmail: actor.email,
@@ -887,14 +945,14 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
           originalBrandName: report.originalBrandName || "",
           originalProductName: report.originalProductName || "",
           originalCountry: report.originalCountry || "",
-          originalImageUrls: report.originalImageUrls || [],
+          originalImageUrls: approvedOriginalImageUrls,
           originalUrls: report.originalUrls || [],
           suspectedBrandName:
             report.suspectedBrandName || report.originalBrandName || "",
           suspectedProductName: report.suspectedProductName || "",
           claimedOriginCountry: report.claimedOriginCountry || "",
           allegedSupplyCountry: report.allegedSupplyCountry || "",
-          suspectedImageUrls: report.suspectedImageUrls || [],
+          suspectedImageUrls: approvedSuspectedImageUrls,
           suspectedUrls: report.suspectedUrls || [],
           incidentTypes: report.incidentTypes || [],
           robotType: report.robotType || "",

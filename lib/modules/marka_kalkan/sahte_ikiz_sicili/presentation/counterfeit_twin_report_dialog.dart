@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 import '../models/counterfeit_twin_radar_contract.dart';
+import 'counterfeit_twin_comparison_codec.dart';
+import 'counterfeit_twin_evidence_editor.dart';
 
 Future<String?> showCounterfeitTwinReportDialog({
   required BuildContext context,
@@ -26,6 +28,7 @@ class _CounterfeitTwinReportDialogState
     extends State<_CounterfeitTwinReportDialog> {
   final _formKey = GlobalKey<FormState>();
   final _service = CounterfeitTwinRadarService();
+  final _evidenceEditorKey = GlobalKey<CounterfeitTwinEvidenceEditorState>();
 
   final _originalEntityName = TextEditingController();
   final _suspectedEntityName = TextEditingController();
@@ -330,6 +333,24 @@ class _CounterfeitTwinReportDialogState
     });
 
     try {
+      final evidence = await _evidenceEditorKey.currentState!
+          .prepareForSubmit();
+      final encodedDifferenceNotes = CounterfeitTwinComparisonCodec.encode(
+        rows: evidence.rows,
+        legacyNotes: _lines(_differenceNotes.text),
+        priceObservedAt: evidence.priceObservedAt,
+        originalImageSource: evidence.originalImageSource,
+        suspectedImageSource: evidence.suspectedImageSource,
+      );
+      final mergedOriginalUrls = <String>{
+        ...originalUrls,
+        ...evidence.originalSourceUrls,
+      }.toList(growable: false);
+      final mergedSuspectedUrls = <String>{
+        ...suspectedUrls,
+        ...evidence.suspectedSourceUrls,
+      }.toList(growable: false);
+
       final report = CounterfeitTwinRadarReport(
         targetType: _targetType,
         publicCategory: _publicCategory,
@@ -347,13 +368,20 @@ class _CounterfeitTwinReportDialogState
             : null,
         platformName: _platformName.text.trim(),
         storeDisplayName: _nullable(_storeDisplayName.text),
-        originalUrls: originalUrls,
-        suspectedUrls: suspectedUrls,
-        listingUrl: suspectedUrls.isEmpty ? null : suspectedUrls.first,
+        originalImageUrls: evidence.originalImageUrls,
+        originalUrls: mergedOriginalUrls,
+        suspectedImageUrls: evidence.suspectedImageUrls,
+        suspectedUrls: mergedSuspectedUrls,
+        listingUrl: mergedSuspectedUrls.isEmpty
+            ? null
+            : mergedSuspectedUrls.first,
         incidentTypes: _incidentTypes.toList(growable: false),
-        differenceNotes: _lines(_differenceNotes.text),
+        authorizedPriceMin: evidence.originalPrice,
+        authorizedPriceMax: evidence.originalPrice,
+        suspectedPrice: evidence.suspectedPrice,
+        differenceNotes: encodedDifferenceNotes,
         evidenceNotes: _evidenceNotes.text.trim(),
-        currency: _currency,
+        currency: evidence.currency,
         financialImpact: CounterfeitTwinFinancialImpact(
           hasMonetaryLoss: _hasMonetaryLoss,
           lossAmount: _hasMonetaryLoss ? _amount(_lossAmount.text) : null,
@@ -370,6 +398,7 @@ class _CounterfeitTwinReportDialogState
       );
 
       final reportId = await _service.submit(report);
+      _evidenceEditorKey.currentState?.markCommitted();
       if (mounted) {
         Navigator.of(context).pop(reportId);
       }
@@ -656,7 +685,12 @@ class _CounterfeitTwinReportDialogState
                   ),
                   validator: _validateDifferenceNotes,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 18),
+                CounterfeitTwinEvidenceEditor(
+                  key: _evidenceEditorKey,
+                  enabled: !_isSubmitting,
+                ),
+                const SizedBox(height: 18),
                 TextFormField(
                   controller: _evidenceNotes,
                   enabled: !_isSubmitting,

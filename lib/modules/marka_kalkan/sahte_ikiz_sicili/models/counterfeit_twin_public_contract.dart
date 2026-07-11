@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_comparison_codec.dart';
 
 enum CounterfeitTwinPublicCategory {
   physical('physical'),
@@ -165,6 +166,9 @@ class CounterfeitTwinPublicDetail {
     if (suspectedProductName.isNotEmpty) return suspectedProductName;
     return suspectedBrandName;
   }
+
+  CounterfeitTwinDecodedComparison get decodedComparison =>
+      CounterfeitTwinComparisonCodec.decode(differenceNotes);
 
   final String id;
   final String slug;

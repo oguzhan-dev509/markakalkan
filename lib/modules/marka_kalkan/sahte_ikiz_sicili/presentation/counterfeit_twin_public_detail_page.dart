@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_public_contract.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_comparison_codec.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class CounterfeitTwinPublicDetailPage extends StatefulWidget {
@@ -165,6 +166,10 @@ class _CounterfeitTwinPublicDetailPageState
                             ],
                             const SizedBox(height: 18),
                             _ComparisonSection(detail: detail),
+                            if (_hasExtendedEvidence(detail)) ...[
+                              const SizedBox(height: 18),
+                              _PublicEvidenceSection(detail: detail),
+                            ],
                             if (detail.incidentTypes.isNotEmpty) ...[
                               const SizedBox(height: 18),
                               _SectionCard(
@@ -183,7 +188,10 @@ class _CounterfeitTwinPublicDetailPageState
                                 ),
                               ),
                             ],
-                            if (detail.differenceNotes.isNotEmpty) ...[
+                            if (detail
+                                .decodedComparison
+                                .legacyNotes
+                                .isNotEmpty) ...[
                               const SizedBox(height: 18),
                               _SectionCard(
                                 title: 'Belirlenen farklar',
@@ -191,7 +199,7 @@ class _CounterfeitTwinPublicDetailPageState
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
-                                  children: detail.differenceNotes
+                                  children: detail.decodedComparison.legacyNotes
                                       .map(
                                         (note) => Padding(
                                           padding: const EdgeInsets.only(
@@ -667,6 +675,245 @@ class _InfoLine extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PublicEvidenceSection extends StatelessWidget {
+  const _PublicEvidenceSection({required this.detail});
+
+  final CounterfeitTwinPublicDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_hasExtendedEvidence(detail)) {
+      return const SizedBox.shrink();
+    }
+
+    final decoded = detail.decodedComparison;
+    final originalPrice =
+        detail.authorizedPriceMin ?? detail.authorizedPriceMax;
+    final suspectedPrice = detail.suspectedPrice;
+    final priceComparison = _priceComparisonText(detail);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (decoded.rows.isNotEmpty)
+          _SectionCard(
+            title: 'Gerçek–Sahte Karşılaştırma Tablosu',
+            icon: Icons.table_chart_outlined,
+            child: _PublicComparisonTable(rows: decoded.rows),
+          ),
+        if (decoded.rows.isNotEmpty) const SizedBox(height: 18),
+        _SectionCard(
+          title: 'Fiyat ve görsel doğrulama bilgileri',
+          icon: Icons.price_check_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PublicEvidenceRow(
+                label: 'Gerçek fiyat',
+                value: originalPrice == null
+                    ? ''
+                    : '${originalPrice.toStringAsFixed(2)} ${detail.currency}',
+              ),
+              _PublicEvidenceRow(
+                label: 'Sahte / şüpheli fiyat',
+                value: suspectedPrice == null
+                    ? ''
+                    : '${suspectedPrice.toStringAsFixed(2)} ${detail.currency}',
+              ),
+              _PublicEvidenceRow(label: 'Fiyat farkı', value: priceComparison),
+              _PublicEvidenceRow(
+                label: 'Fiyat tespit tarihi',
+                value: decoded.priceObservedAt,
+              ),
+              _PublicEvidenceRow(
+                label: 'Gerçek görsel kaynağı / atfı',
+                value: decoded.originalImageSource,
+              ),
+              _PublicEvidenceRow(
+                label: 'Şüpheli görsel kaynağı / atfı',
+                value: decoded.suspectedImageSource,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PublicComparisonTable extends StatelessWidget {
+  const _PublicComparisonTable({required this.rows});
+
+  final List<CounterfeitTwinComparisonRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 720) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: rows
+                .map(
+                  (row) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F9FA),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8EC)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            row.checkpoint,
+                            style: const TextStyle(
+                              color: MarkaKalkanTheme.navy,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _PublicEvidenceRow(
+                            label: 'Gerçek ürün / varlık',
+                            value: row.originalValue,
+                          ),
+                          _PublicEvidenceRow(
+                            label: 'Sahte / doğrulanmamış ürün',
+                            value: row.suspectedValue,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        }
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F5F7)),
+            columns: const [
+              DataColumn(label: Text('Kontrol noktası')),
+              DataColumn(label: Text('Gerçek ürün / varlık')),
+              DataColumn(label: Text('Sahte / doğrulanmamış ürün')),
+            ],
+            rows: rows
+                .map(
+                  (row) => DataRow(
+                    cells: [
+                      DataCell(
+                        SizedBox(
+                          width: 190,
+                          child: Text(
+                            row.checkpoint,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        SizedBox(width: 290, child: Text(row.originalValue)),
+                      ),
+                      DataCell(
+                        SizedBox(width: 290, child: Text(row.suspectedValue)),
+                      ),
+                    ],
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PublicEvidenceRow extends StatelessWidget {
+  const _PublicEvidenceRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final labelWidget = Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF667085),
+              fontWeight: FontWeight.w800,
+            ),
+          );
+          final valueWidget = SelectableText(
+            value,
+            style: const TextStyle(color: Color(0xFF344054), height: 1.45),
+          );
+
+          if (constraints.maxWidth < 620) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [labelWidget, const SizedBox(height: 4), valueWidget],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 210, child: labelWidget),
+              const SizedBox(width: 12),
+              Expanded(child: valueWidget),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+bool _hasExtendedEvidence(CounterfeitTwinPublicDetail detail) {
+  final decoded = detail.decodedComparison;
+  return decoded.rows.isNotEmpty ||
+      decoded.priceObservedAt.isNotEmpty ||
+      decoded.originalImageSource.isNotEmpty ||
+      decoded.suspectedImageSource.isNotEmpty ||
+      detail.authorizedPriceMin != null ||
+      detail.authorizedPriceMax != null ||
+      detail.suspectedPrice != null;
+}
+
+String _priceComparisonText(CounterfeitTwinPublicDetail detail) {
+  final original = detail.authorizedPriceMin ?? detail.authorizedPriceMax;
+  final suspected = detail.suspectedPrice;
+
+  if (original == null || suspected == null) return '';
+
+  final difference = suspected - original;
+  final absoluteDifference = difference.abs();
+
+  if (difference == 0) {
+    return 'Fiyatlar aynı seviyede.';
+  }
+
+  final direction = difference < 0 ? 'daha düşük' : 'daha yüksek';
+
+  if (original <= 0) {
+    return '${absoluteDifference.toStringAsFixed(2)} ${detail.currency} '
+        '$direction';
+  }
+
+  final percentage = (absoluteDifference / original) * 100;
+  return '${absoluteDifference.toStringAsFixed(2)} ${detail.currency} '
+      '$direction (%${percentage.toStringAsFixed(1)})';
 }
 
 class _FinancialImpactCard extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/admin/data/counterfeit_twin_admin_service.dart';
 import 'package:markakalkan/features/admin/models/counterfeit_twin_admin_report.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_comparison_codec.dart';
 
 class CounterfeitTwinReviewQueuePage extends StatefulWidget {
   const CounterfeitTwinReviewQueuePage({super.key});
@@ -452,6 +453,8 @@ class _ReviewDialog extends StatefulWidget {
 class _ReviewDialogState extends State<_ReviewDialog> {
   late final TextEditingController _reviewNote;
   late final TextEditingController _publicSummary;
+  late Set<String> _approvedOriginalImageUrls;
+  late Set<String> _approvedSuspectedImageUrls;
 
   String? _error;
   String? _saving;
@@ -461,6 +464,12 @@ class _ReviewDialogState extends State<_ReviewDialog> {
     super.initState();
     _reviewNote = TextEditingController(text: widget.report.reviewNote);
     _publicSummary = TextEditingController(text: widget.report.publicSummary);
+    _approvedOriginalImageUrls = widget.report
+        .texts('approvedOriginalImageUrls')
+        .toSet();
+    _approvedSuspectedImageUrls = widget.report
+        .texts('approvedSuspectedImageUrls')
+        .toSet();
   }
 
   @override
@@ -494,6 +503,12 @@ class _ReviewDialogState extends State<_ReviewDialog> {
         decision: decision,
         reviewNote: reviewNote,
         publicSummary: publicSummary,
+        approvedOriginalImageUrls: _approvedOriginalImageUrls.toList(
+          growable: false,
+        ),
+        approvedSuspectedImageUrls: _approvedSuspectedImageUrls.toList(
+          growable: false,
+        ),
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -643,7 +658,7 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                       rows: [
                         (
                           'Fark notları',
-                          _list(report.texts('differenceNotes')),
+                          _list(report.decodedComparison.legacyNotes),
                         ),
                         ('Delil açıklaması', report.evidenceNotes),
                         (
@@ -655,6 +670,16 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                           _list(report.texts('suspectedImageUrls')),
                         ),
                       ],
+                    ),
+                    _ReviewEvidenceSection(
+                      report: report,
+                      approvedOriginalImageUrls: _approvedOriginalImageUrls,
+                      approvedSuspectedImageUrls: _approvedSuspectedImageUrls,
+                      enabled: report.isOpen && _saving == null,
+                      onOriginalChanged: (value) =>
+                          setState(() => _approvedOriginalImageUrls = value),
+                      onSuspectedChanged: (value) =>
+                          setState(() => _approvedSuspectedImageUrls = value),
                     ),
                     _Financial(report: report),
                     _Section(
@@ -1143,3 +1168,262 @@ String _fallback(String value) =>
     value.trim().isEmpty ? 'Ad bilgisi belirtilmedi' : value.trim();
 
 String _list(List<String> values) => values.isEmpty ? '' : values.join('\n');
+
+class _ReviewEvidenceSection extends StatelessWidget {
+  const _ReviewEvidenceSection({
+    required this.report,
+    required this.approvedOriginalImageUrls,
+    required this.approvedSuspectedImageUrls,
+    required this.enabled,
+    required this.onOriginalChanged,
+    required this.onSuspectedChanged,
+  });
+
+  final CounterfeitTwinAdminReport report;
+  final Set<String> approvedOriginalImageUrls;
+  final Set<String> approvedSuspectedImageUrls;
+  final bool enabled;
+  final ValueChanged<Set<String>> onOriginalChanged;
+  final ValueChanged<Set<String>> onSuspectedChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final decoded = report.decodedComparison;
+    final originalImages = report.texts('originalImageUrls');
+    final suspectedImages = report.texts('suspectedImageUrls');
+    final currency = report.text('currency').isEmpty
+        ? 'TRY'
+        : report.text('currency');
+    final originalPrice =
+        report.number('authorizedPriceMin') ??
+        report.number('authorizedPriceMax');
+    final suspectedPrice = report.number('suspectedPrice');
+
+    final hasContent =
+        decoded.rows.isNotEmpty ||
+        originalImages.isNotEmpty ||
+        suspectedImages.isNotEmpty ||
+        originalPrice != null ||
+        suspectedPrice != null ||
+        decoded.priceObservedAt.isNotEmpty ||
+        decoded.originalImageSource.isNotEmpty ||
+        decoded.suspectedImageSource.isNotEmpty;
+
+    if (!hasContent) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (decoded.rows.isNotEmpty) _AdminComparisonTable(rows: decoded.rows),
+        if (decoded.rows.isNotEmpty) const SizedBox(height: 12),
+        _Section(
+          title: 'Fiyat ve görsel kaynakları',
+          rows: [
+            (
+              'Gerçek fiyat',
+              originalPrice == null
+                  ? ''
+                  : '${originalPrice.toStringAsFixed(2)} $currency',
+            ),
+            (
+              'Sahte / şüpheli fiyat',
+              suspectedPrice == null
+                  ? ''
+                  : '${suspectedPrice.toStringAsFixed(2)} $currency',
+            ),
+            ('Fiyat tespit tarihi', decoded.priceObservedAt),
+            ('Gerçek görsel kaynağı / atfı', decoded.originalImageSource),
+            ('Şüpheli görsel kaynağı / atfı', decoded.suspectedImageSource),
+          ],
+        ),
+        if (originalImages.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _AdminImageSelection(
+            title: 'Gerçek ürün görselleri',
+            images: originalImages,
+            selected: approvedOriginalImageUrls,
+            enabled: enabled,
+            onChanged: onOriginalChanged,
+          ),
+        ],
+        if (suspectedImages.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _AdminImageSelection(
+            title: 'Sahte / şüpheli ürün görselleri',
+            images: suspectedImages,
+            selected: approvedSuspectedImageUrls,
+            enabled: enabled,
+            onChanged: onSuspectedChanged,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AdminComparisonTable extends StatelessWidget {
+  const _AdminComparisonTable({required this.rows});
+
+  final List<CounterfeitTwinComparisonRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Gerçek–Sahte Karşılaştırma Tablosu',
+              style: TextStyle(
+                color: MarkaKalkanTheme.navy,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columns: const [
+                  DataColumn(label: Text('Kontrol noktası')),
+                  DataColumn(label: Text('Gerçek ürün / varlık')),
+                  DataColumn(label: Text('Sahte / doğrulanmamış ürün')),
+                ],
+                rows: rows
+                    .map(
+                      (row) => DataRow(
+                        cells: [
+                          DataCell(
+                            SizedBox(width: 190, child: Text(row.checkpoint)),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 250,
+                              child: Text(row.originalValue),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 250,
+                              child: Text(row.suspectedValue),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminImageSelection extends StatelessWidget {
+  const _AdminImageSelection({
+    required this.title,
+    required this.images,
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String title;
+  final List<String> images;
+  final Set<String> selected;
+  final bool enabled;
+  final ValueChanged<Set<String>> onChanged;
+
+  void _toggle(String url, bool checked) {
+    final next = <String>{...selected};
+    if (checked) {
+      next.add(url);
+    } else {
+      next.remove(url);
+    }
+    onChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '$title — kamuya yayımla',
+              style: const TextStyle(
+                color: MarkaKalkanTheme.navy,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Yalnız doğrulanmış, kullanım hakkı uygun ve kişisel veri '
+              'içermeyen görselleri seçin.',
+              style: TextStyle(color: Color(0xFF667085), height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: images
+                  .map(
+                    (url) => SizedBox(
+                      width: 220,
+                      child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        margin: EdgeInsets.zero,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AspectRatio(
+                              aspectRatio: 4 / 3,
+                              child: Image.network(
+                                url,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const ColoredBox(
+                                  color: Color(0xFFF2F4F7),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      size: 42,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            CheckboxListTile(
+                              value: selected.contains(url),
+                              onChanged: enabled
+                                  ? (value) => _toggle(url, value == true)
+                                  : null,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              dense: true,
+                              title: const Text(
+                                'Kamuya yayımla',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

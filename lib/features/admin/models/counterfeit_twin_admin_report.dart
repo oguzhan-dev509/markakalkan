@@ -1,3 +1,5 @@
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_comparison_codec.dart';
+
 class CounterfeitTwinAdminReport {
   CounterfeitTwinAdminReport({
     required this.id,
@@ -28,6 +30,15 @@ class CounterfeitTwinAdminReport {
   }
 
   Map<String, dynamic> object(String key) => _map(data[key]);
+
+  double? number(String key) {
+    final value = data[key];
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString().trim() ?? '');
+  }
+
+  CounterfeitTwinDecodedComparison get decodedComparison =>
+      CounterfeitTwinComparisonCodec.decode(texts('differenceNotes'));
 
   DateTime? dateFromMillis(String key) {
     final value = data[key];

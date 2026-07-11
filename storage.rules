@@ -76,6 +76,66 @@ service firebase.storage {
           && resource.metadata.documentId == documentId;
     }
 
+    function isCounterfeitTwinMediaOwner(ownerUid) {
+      return signedIn() && request.auth.uid == ownerUid;
+    }
+
+    function hasValidCounterfeitTwinMediaMetadata(
+      ownerUid,
+      sessionId,
+      side,
+      fileName
+    ) {
+      return request.resource.metadata != null
+          && request.resource.metadata.ownerUid == ownerUid
+          && request.resource.metadata.sessionId == sessionId
+          && request.resource.metadata.side == side
+          && request.resource.metadata.originalFileName is string
+          && request.resource.metadata.originalFileName.size() > 0
+          && request.resource.metadata.originalFileName.size() <= 160
+          && request.resource.metadata.sha256 is string
+          && request.resource.metadata.sha256.matches('^[a-f0-9]{64}$')
+          && request.resource.metadata.hashAlgorithm == 'SHA-256'
+          && sessionId.matches('^[a-zA-Z0-9_-]{10,80}$')
+          && side in ['original', 'suspected']
+          && fileName.matches(
+            '^' + request.resource.metadata.sha256
+            + '\\.(jpg|jpeg|png|webp)$'
+          );
+    }
+
+    match /counterfeit_twin_report_media/{ownerUid}/{sessionId}/{side}/{fileName} {
+      allow get: if isCounterfeitTwinMediaOwner(ownerUid)
+          && resource.metadata.ownerUid == ownerUid
+          && resource.metadata.sessionId == sessionId
+          && resource.metadata.side == side;
+
+      allow list: if false;
+
+      allow create: if resource == null
+          && isCounterfeitTwinMediaOwner(ownerUid)
+          && request.resource.size > 0
+          && request.resource.size <= 8 * 1024 * 1024
+          && request.resource.contentType in [
+            'image/jpeg',
+            'image/png',
+            'image/webp'
+          ]
+          && hasValidCounterfeitTwinMediaMetadata(
+            ownerUid,
+            sessionId,
+            side,
+            fileName
+          );
+
+      allow update: if false;
+
+      allow delete: if isCounterfeitTwinMediaOwner(ownerUid)
+          && resource.metadata.ownerUid == ownerUid
+          && resource.metadata.sessionId == sessionId
+          && resource.metadata.side == side;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

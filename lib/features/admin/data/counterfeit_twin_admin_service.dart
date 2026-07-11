@@ -28,6 +28,8 @@ class CounterfeitTwinAdminService {
     required String decision,
     required String reviewNote,
     required String publicSummary,
+    List<String> approvedOriginalImageUrls = const <String>[],
+    List<String> approvedSuspectedImageUrls = const <String>[],
   }) async {
     final result = await _functions
         .httpsCallable('reviewCounterfeitTwinReport')
@@ -36,6 +38,8 @@ class CounterfeitTwinAdminService {
           'decision': decision,
           'reviewNote': reviewNote.trim(),
           'publicSummary': publicSummary.trim(),
+          'approvedOriginalImageUrls': approvedOriginalImageUrls,
+          'approvedSuspectedImageUrls': approvedSuspectedImageUrls,
         });
 
     final data = _map(result.data);
