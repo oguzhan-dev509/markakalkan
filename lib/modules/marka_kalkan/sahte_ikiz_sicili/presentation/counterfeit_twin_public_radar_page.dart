@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_public_contract.dart';
 
+import 'counterfeit_twin_public_detail_page.dart';
 import 'counterfeit_twin_report_dialog.dart';
 
 class CounterfeitTwinPublicRadarPage extends StatefulWidget {
@@ -20,21 +22,30 @@ class _CounterfeitTwinPublicRadarPageState
     region: 'europe-west3',
   );
 
-  List<_PublicComparison> _comparisons = const <_PublicComparison>[];
+  List<CounterfeitTwinPublicDetail> _comparisons =
+      const <CounterfeitTwinPublicDetail>[];
+  String _selectedCategory = 'all';
   String _selectedTarget = 'all';
   bool _isLoading = true;
   String? _error;
 
-  List<_PublicComparison> get _visibleComparisons {
-    if (_selectedTarget == 'all') return _comparisons;
+  List<CounterfeitTwinPublicDetail> get _categoryComparisons {
+    if (_selectedCategory == 'all') return _comparisons;
     return _comparisons
+        .where((item) => item.publicCategory.value == _selectedCategory)
+        .toList(growable: false);
+  }
+
+  List<CounterfeitTwinPublicDetail> get _visibleComparisons {
+    if (_selectedTarget == 'all') return _categoryComparisons;
+    return _categoryComparisons
         .where((item) => item.targetType == _selectedTarget)
         .toList(growable: false);
   }
 
   List<String> get _targetFilters {
     final values =
-        _comparisons
+        _categoryComparisons
             .map((item) => item.targetType)
             .where((item) => item.isNotEmpty)
             .toSet()
@@ -59,17 +70,14 @@ class _CounterfeitTwinPublicRadarPageState
       final result = await _functions
           .httpsCallable('listPublicCounterfeitTwinComparisons')
           .call<dynamic>(const <String, dynamic>{});
-
       final data = result.data;
       final raw = data is Map ? data['comparisons'] : data;
-      final parsed = <_PublicComparison>[];
+      final parsed = <CounterfeitTwinPublicDetail>[];
 
       if (raw is List) {
         for (final item in raw) {
           if (item is Map) {
-            parsed.add(
-              _PublicComparison.fromMap(Map<String, dynamic>.from(item)),
-            );
+            parsed.add(CounterfeitTwinPublicDetail.fromMap(item));
           }
         }
       }
@@ -124,28 +132,41 @@ class _CounterfeitTwinPublicRadarPageState
       await Navigator.of(
         context,
       ).push(MaterialPageRoute<void>(builder: (_) => const BrandLoginPage()));
-      if (!mounted) return;
-
-      if (FirebaseAuth.instance.currentUser == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Bildirim formunu açmak için giriş işlemini tamamlayın.',
-            ),
-          ),
-        );
-        return;
-      }
+      if (!mounted || FirebaseAuth.instance.currentUser == null) return;
     }
 
     final reportId = await showCounterfeitTwinReportDialog(context: context);
     if (!mounted || reportId == null) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Bildiriminiz incelemeye alındı. Başvuru: $reportId'),
       ),
     );
+  }
+
+  void _selectCategory(String value) {
+    setState(() {
+      _selectedCategory = value;
+      _selectedTarget = 'all';
+    });
+  }
+
+  Future<void> _openDetail(CounterfeitTwinPublicDetail comparison) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: RouteSettings(name: comparison.canonicalPath),
+        builder: (_) => CounterfeitTwinPublicDetailPage(
+          slug: comparison.slug,
+          initialDetail: comparison,
+        ),
+      ),
+    );
+  }
+
+  int _categoryCount(String value) {
+    return _comparisons
+        .where((item) => item.publicCategory.value == value)
+        .length;
   }
 
   @override
@@ -169,6 +190,7 @@ class _CounterfeitTwinPublicRadarPageState
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(child: _buildHero()),
+            SliverToBoxAdapter(child: _buildCategoryCards()),
             SliverToBoxAdapter(child: _buildFilters()),
             if (_isLoading)
               const SliverFillRemaining(
@@ -183,7 +205,10 @@ class _CounterfeitTwinPublicRadarPageState
             else if (_visibleComparisons.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: _EmptyState(onReport: _openReport),
+                child: _EmptyState(
+                  onReport: _openReport,
+                  selectedCategory: _selectedCategory,
+                ),
               )
             else
               SliverPadding(
@@ -192,8 +217,10 @@ class _CounterfeitTwinPublicRadarPageState
                   itemCount: _visibleComparisons.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 16),
                   itemBuilder: (context, index) {
+                    final item = _visibleComparisons[index];
                     return _ComparisonCard(
-                      comparison: _visibleComparisons[index],
+                      comparison: item,
+                      onOpen: () => _openDetail(item),
                     );
                   },
                 ),
@@ -218,28 +245,40 @@ class _CounterfeitTwinPublicRadarPageState
           end: Alignment.bottomRight,
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 52),
       child: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 1040),
-          child: Column(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: const Column(
             children: [
-              Icon(Icons.radar_outlined, size: 68, color: Color(0xFFBCE7E3)),
+              Icon(Icons.radar_outlined, size: 72, color: Color(0xFFBCE7E3)),
               SizedBox(height: 18),
               Text(
                 'Gerçek Ürün – Sahte İkiz Karşılaştırmaları',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 32,
+                  fontSize: 34,
                   height: 1.2,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               SizedBox(height: 14),
               Text(
-                'Doğrulanmış ürün, platform, hizmet, finans, turizm, '
-                'robot ve otonom ajan taklitlerini inceleyin.',
+                'Gerçeği doğrula, sahte ikizi görünür kıl.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFBCE7E3),
+                  fontSize: 20,
+                  height: 1.4,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Fiziksel ürünlerden dijital platformlara, yapay zekâ '
+                'ajanlarından robotik sistemlere kadar doğrulanmış '
+                'karşılaştırmaları inceleyin.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xFFD9E5EA),
@@ -254,30 +293,125 @@ class _CounterfeitTwinPublicRadarPageState
     );
   }
 
-  Widget _buildFilters() {
-    if (_comparisons.isEmpty) return const SizedBox(height: 20);
+  Widget _buildCategoryCards() {
+    final cards = <_CategoryCardData>[
+      _CategoryCardData(
+        value: 'physical',
+        title: 'Fiziksel Sahte İkizler',
+        description:
+            'Ürün, ambalaj, etiket, parça ve diğer somut varlık taklitleri.',
+        icon: Icons.inventory_2_outlined,
+        accent: const Color(0xFF167D71),
+        background: const Color(0xFFEAF7F4),
+        count: _categoryCount('physical'),
+      ),
+      _CategoryCardData(
+        value: 'digital',
+        title: 'Dijital Sahte İkizler',
+        description:
+            'Web sitesi, uygulama, platform, ödeme ve hizmet taklitleri.',
+        icon: Icons.language_outlined,
+        accent: const Color(0xFF1769AA),
+        background: const Color(0xFFEAF3FB),
+        count: _categoryCount('digital'),
+      ),
+      _CategoryCardData(
+        value: 'ai_robot',
+        title: 'Yapay Zekâ ve Robot Sahte İkizleri',
+        description:
+            'Robot, dijital ajan, ses, persona ve otonom sistem taklitleri.',
+        icon: Icons.smart_toy_outlined,
+        accent: const Color(0xFF6941C6),
+        background: const Color(0xFFF2EEFF),
+        count: _categoryCount('ai_robot'),
+      ),
+    ];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 8),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1040),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _targetFilters
-                .map((target) {
-                  return ChoiceChip(
-                    label: Text(
-                      target == 'all' ? 'Tümü' : _targetLabel(target),
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth >= 900
+                  ? (constraints.maxWidth - 32) / 3
+                  : constraints.maxWidth >= 620
+                  ? (constraints.maxWidth - 16) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: cards
+                    .map(
+                      (data) => SizedBox(
+                        width: width,
+                        child: _CategoryCard(
+                          data: data,
+                          selected: _selectedCategory == data.value,
+                          onTap: () => _selectCategory(data.value),
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilters() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Doğrulanmış karşılaştırmalar',
+                      style: TextStyle(
+                        color: MarkaKalkanTheme.navy,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                    selected: _selectedTarget == target,
-                    onSelected: (_) {
-                      setState(() => _selectedTarget = target);
-                    },
-                  );
-                })
-                .toList(growable: false),
+                  ),
+                  if (_selectedCategory != 'all')
+                    TextButton.icon(
+                      onPressed: () => _selectCategory('all'),
+                      icon: const Icon(Icons.grid_view_outlined),
+                      label: const Text('Tüm kategoriler'),
+                    ),
+                ],
+              ),
+              if (_targetFilters.length > 1) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _targetFilters
+                      .map(
+                        (target) => ChoiceChip(
+                          label: Text(
+                            target == 'all' ? 'Tümü' : _targetLabel(target),
+                          ),
+                          selected: _selectedTarget == target,
+                          onSelected: (_) {
+                            setState(() => _selectedTarget = target);
+                          },
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -285,203 +419,220 @@ class _CounterfeitTwinPublicRadarPageState
   }
 }
 
-class _PublicComparison {
-  const _PublicComparison({
+class _CategoryCardData {
+  const _CategoryCardData({
+    required this.value,
     required this.title,
-    required this.comparisonLabel,
-    required this.targetType,
-    required this.originalEntityName,
-    required this.suspectedEntityName,
-    required this.originalBrandName,
-    required this.suspectedBrandName,
-    required this.platformName,
-    required this.robotType,
-    required this.incidentTypes,
-    required this.differenceNotes,
-    required this.hasMonetaryLoss,
-    required this.lossAmount,
-    required this.currency,
+    required this.description,
+    required this.icon,
+    required this.accent,
+    required this.background,
+    required this.count,
   });
 
-  factory _PublicComparison.fromMap(Map<String, dynamic> map) {
-    final financial = map['financialImpactSummary'] is Map
-        ? Map<String, dynamic>.from(map['financialImpactSummary'] as Map)
-        : const <String, dynamic>{};
-
-    return _PublicComparison(
-      title: _string(map['title']),
-      comparisonLabel: _string(map['comparisonLabel']),
-      targetType: _string(map['targetType'], fallback: 'other'),
-      originalEntityName: _string(
-        map['originalEntityName'],
-        fallback: _string(map['originalProductName']),
-      ),
-      suspectedEntityName: _string(
-        map['suspectedEntityName'],
-        fallback: _string(map['suspectedProductName']),
-      ),
-      originalBrandName: _string(map['originalBrandName']),
-      suspectedBrandName: _string(map['suspectedBrandName']),
-      platformName: _string(map['platformName']),
-      robotType: _string(map['robotType']),
-      incidentTypes: _stringList(map['incidentTypes']),
-      differenceNotes: _stringList(map['differenceNotes']),
-      hasMonetaryLoss: financial['hasMonetaryLoss'] == true,
-      lossAmount: _number(financial['lossAmount']),
-      currency: _string(financial['currency'], fallback: 'TRY'),
-    );
-  }
-
+  final String value;
   final String title;
-  final String comparisonLabel;
-  final String targetType;
-  final String originalEntityName;
-  final String suspectedEntityName;
-  final String originalBrandName;
-  final String suspectedBrandName;
-  final String platformName;
-  final String robotType;
-  final List<String> incidentTypes;
-  final List<String> differenceNotes;
-  final bool hasMonetaryLoss;
-  final double? lossAmount;
-  final String currency;
+  final String description;
+  final IconData icon;
+  final Color accent;
+  final Color background;
+  final int count;
 }
 
-class _ComparisonCard extends StatelessWidget {
-  const _ComparisonCard({required this.comparison});
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({
+    required this.data,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final _PublicComparison comparison;
+  final _CategoryCardData data;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final originalName = comparison.originalEntityName.isNotEmpty
-        ? comparison.originalEntityName
-        : comparison.originalBrandName;
-    final suspectedName = comparison.suspectedEntityName.isNotEmpty
-        ? comparison.suspectedEntityName
-        : comparison.suspectedBrandName;
+    return Material(
+      color: data.background,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          constraints: const BoxConstraints(minHeight: 235),
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: selected
+                  ? data.accent
+                  : data.accent.withValues(alpha: 0.18),
+              width: selected ? 2.2 : 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: data.accent.withValues(alpha: selected ? 0.16 : 0.07),
+                blurRadius: selected ? 22 : 12,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(17),
+                    ),
+                    child: Icon(data.icon, color: data.accent, size: 30),
+                  ),
+                  const Spacer(),
+                  Chip(label: Text('${data.count} kayıt')),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                data.title,
+                style: const TextStyle(
+                  color: MarkaKalkanTheme.navy,
+                  fontSize: 20,
+                  height: 1.25,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                data.description,
+                style: const TextStyle(color: Color(0xFF475467), height: 1.5),
+              ),
+              const Spacer(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    'Karşılaştırmaları incele',
+                    style: TextStyle(
+                      color: data.accent,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.arrow_forward_rounded, color: data.accent),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
+class _ComparisonCard extends StatelessWidget {
+  const _ComparisonCard({required this.comparison, required this.onOpen});
+
+  final CounterfeitTwinPublicDetail comparison;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1040),
+        constraints: const BoxConstraints(maxWidth: 1100),
         child: Card(
           margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    Chip(label: Text(_targetLabel(comparison.targetType))),
-                    if (comparison.robotType.isNotEmpty)
-                      Chip(label: Text(_robotLabel(comparison.robotType))),
-                    if (comparison.platformName.isNotEmpty)
-                      Chip(label: Text(comparison.platformName)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  comparison.title.isNotEmpty
-                      ? comparison.title
-                      : comparison.comparisonLabel,
-                  style: const TextStyle(
-                    color: MarkaKalkanTheme.navy,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final left = _IdentityPanel(
-                      title: 'Gerçek',
-                      name: originalName,
-                      background: const Color(0xFFEAF7F4),
-                    );
-                    final right = _IdentityPanel(
-                      title: 'Sahte / Şüpheli İkiz',
-                      name: suspectedName,
-                      background: const Color(0xFFFFF4E8),
-                    );
-
-                    if (constraints.maxWidth < 680) {
-                      return Column(
-                        children: [left, const SizedBox(height: 12), right],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(child: left),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 14),
-                          child: Icon(Icons.compare_arrows_outlined),
-                        ),
-                        Expanded(child: right),
-                      ],
-                    );
-                  },
-                ),
-                if (comparison.incidentTypes.isNotEmpty) ...[
-                  const SizedBox(height: 16),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                   Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: comparison.incidentTypes
-                        .map(
-                          (item) => Chip(
-                            label: Text(_incidentLabel(item)),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
-                ],
-                if (comparison.differenceNotes.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Belirlenen farklar',
-                    style: TextStyle(
-                      color: MarkaKalkanTheme.navy,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...comparison.differenceNotes
-                      .take(6)
-                      .map(
-                        (note) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Text('• $note'),
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      Chip(label: Text(_targetLabel(comparison.targetType))),
+                      if (comparison.robotType.isNotEmpty)
+                        Chip(label: Text(_robotLabel(comparison.robotType))),
+                      if (comparison.publicRecordCode.isNotEmpty)
+                        Chip(
+                          avatar: const Icon(Icons.verified_outlined, size: 17),
+                          label: Text(comparison.publicRecordCode),
                         ),
-                      ),
-                ],
-                if (comparison.hasMonetaryLoss) ...[
+                    ],
+                  ),
                   const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF5F4),
-                      borderRadius: BorderRadius.circular(12),
+                  Text(
+                    comparison.title.isNotEmpty
+                        ? comparison.title
+                        : comparison.comparisonLabel,
+                    style: const TextStyle(
+                      color: MarkaKalkanTheme.navy,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900,
                     ),
-                    child: Text(
-                      comparison.lossAmount == null
-                          ? 'Bu vaka için maddi kayıp bildirilmiştir.'
-                          : 'Bildirilen maddi kayıp: '
-                                '${comparison.lossAmount!.toStringAsFixed(2)} '
-                                '${comparison.currency}',
-                      style: const TextStyle(
-                        color: Color(0xFFB42318),
-                        fontWeight: FontWeight.w800,
-                      ),
+                  ),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final original = _IdentityPanel(
+                        title: 'Gerçek',
+                        name: comparison.originalDisplayName,
+                        imageUrls: comparison.originalImageUrls,
+                        background: const Color(0xFFEAF7F4),
+                      );
+                      final suspected = _IdentityPanel(
+                        title: 'Sahte / Şüpheli İkiz',
+                        name: comparison.suspectedDisplayName,
+                        imageUrls: comparison.suspectedImageUrls,
+                        background: const Color(0xFFFFF4E8),
+                      );
+                      if (constraints.maxWidth < 680) {
+                        return Column(
+                          children: [
+                            original,
+                            const SizedBox(height: 12),
+                            suspected,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: original),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 14),
+                            child: Icon(Icons.compare_arrows_outlined),
+                          ),
+                          Expanded(child: suspected),
+                        ],
+                      );
+                    },
+                  ),
+                  if (comparison.differenceNotes.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    ...comparison.differenceNotes
+                        .take(4)
+                        .map((note) => Text('• $note')),
+                  ],
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onOpen,
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Doğrulanmış kaydı aç'),
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -494,40 +645,50 @@ class _IdentityPanel extends StatelessWidget {
   const _IdentityPanel({
     required this.title,
     required this.name,
+    required this.imageUrls,
     required this.background,
   });
 
   final String title;
   final String name;
+  final List<String> imageUrls;
   final Color background;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 110),
+      constraints: const BoxConstraints(minHeight: 150),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF667085),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            name.isEmpty ? 'Ad bilgisi yayımlanmadı' : name,
-            style: const TextStyle(
-              color: MarkaKalkanTheme.navy,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
+          _PreviewImage(url: imageUrls.isEmpty ? '' : imageUrls.first),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  name.isEmpty ? 'Ad bilgisi yayımlanmadı' : name,
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -536,13 +697,55 @@ class _IdentityPanel extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onReport});
+class _PreviewImage extends StatelessWidget {
+  const _PreviewImage({required this.url});
 
-  final VoidCallback onReport;
+  final String url;
 
   @override
   Widget build(BuildContext context) {
+    final placeholder = Container(
+      width: 82,
+      height: 82,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Icon(
+        Icons.image_outlined,
+        color: Color(0xFF98A2B3),
+        size: 30,
+      ),
+    );
+
+    if (url.isEmpty) return placeholder;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Image.network(
+        url,
+        width: 82,
+        height: 82,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => placeholder,
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onReport, required this.selectedCategory});
+
+  final VoidCallback onReport;
+  final String selectedCategory;
+
+  @override
+  Widget build(BuildContext context) {
+    final category = switch (selectedCategory) {
+      'physical' => 'fiziksel',
+      'digital' => 'dijital',
+      'ai_robot' => 'yapay zekâ ve robot',
+      _ => '',
+    };
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -557,10 +760,12 @@ class _EmptyState extends StatelessWidget {
                 color: MarkaKalkanTheme.teal,
               ),
               const SizedBox(height: 18),
-              const Text(
-                'Yayımlanmış karşılaştırma henüz bulunmuyor',
+              Text(
+                category.isEmpty
+                    ? 'Yayımlanmış karşılaştırma henüz bulunmuyor'
+                    : 'Yayımlanmış $category karşılaştırması henüz yok',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: MarkaKalkanTheme.navy,
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
@@ -568,8 +773,7 @@ class _EmptyState extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               const Text(
-                'Bildirilen kayıtlar MarkaKalkan tarafından incelendikten '
-                've delilleri doğrulandıktan sonra burada yayımlanır.',
+                'Kayıtlar delilleri doğrulandıktan sonra burada yayımlanır.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -620,24 +824,6 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-String _string(Object? value, {String fallback = ''}) {
-  final text = value?.toString().trim() ?? '';
-  return text.isEmpty ? fallback : text;
-}
-
-double? _number(Object? value) {
-  if (value is num) return value.toDouble();
-  return double.tryParse(value?.toString() ?? '');
-}
-
-List<String> _stringList(Object? value) {
-  if (value is! List) return const <String>[];
-  return value
-      .map((item) => item?.toString().trim() ?? '')
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
-}
-
 String _targetLabel(String value) {
   const labels = <String, String>{
     'physical_product': 'Fiziksel ürün',
@@ -672,44 +858,6 @@ String _robotLabel(String value) {
     'domestic_robot': 'Ev tipi robot',
     'robotic_device': 'Robotik cihaz',
     'software_robot': 'Yazılım robotu / ajan',
-    'other': 'Diğer',
-  };
-  return labels[value] ?? value;
-}
-
-String _incidentLabel(String value) {
-  const labels = <String, String>{
-    'product_imitation': 'Ürün taklidi',
-    'brand_impersonation': 'Marka kimliği taklidi',
-    'platform_impersonation': 'Platform kimliği taklidi',
-    'website_clone': 'Web sitesi klonu',
-    'mobile_app_impersonation': 'Mobil uygulama taklidi',
-    'interface_clone': 'Arayüz klonu',
-    'fake_checkout': 'Sahte ödeme adımı',
-    'fake_payment_page': 'Sahte ödeme sayfası',
-    'fake_subscription': 'Sahte abonelik',
-    'fake_reservation': 'Sahte rezervasyon',
-    'fake_financial_service': 'Sahte finansal hizmet',
-    'fake_investment_service': 'Sahte yatırım hizmeti',
-    'fake_customer_support': 'Sahte müşteri desteği',
-    'credential_phishing': 'Kimlik bilgisi avı',
-    'payment_diversion': 'Ödeme yönlendirme',
-    'iban_diversion': 'IBAN yönlendirme',
-    'merchant_identity_deception': 'İşyeri kimliği yanıltması',
-    'unauthorized_card_charge': 'Yetkisiz kart işlemi',
-    'personal_data_harvesting': 'Kişisel veri toplama',
-    'counterfeit_robot_hardware': 'Sahte robot donanımı',
-    'robot_identity_clone': 'Robot kimliği klonu',
-    'serial_number_clone': 'Seri numarası klonu',
-    'device_certificate_clone': 'Cihaz sertifikası klonu',
-    'control_software_clone': 'Kontrol yazılımı klonu',
-    'firmware_clone': 'Firmware klonu',
-    'fake_robot_certification': 'Sahte robot sertifikası',
-    'teleoperation_channel_impersonation': 'Uzaktan kontrol kanalı taklidi',
-    'robot_fleet_impersonation': 'Robot filosu kimliği taklidi',
-    'ai_agent_impersonation': 'Yapay zekâ ajanı taklidi',
-    'voice_persona_clone': 'Ses / persona klonu',
-    'fake_robot_service_network': 'Sahte robot servis ağı',
     'other': 'Diğer',
   };
   return labels[value] ?? value;

@@ -66,11 +66,22 @@ class CounterfeitTwinPublicDetail {
     required this.originalEntityName,
     required this.suspectedEntityName,
     required this.originalBrandName,
+    required this.originalProductName,
+    required this.originalCountry,
+    required this.originalImageUrls,
+    required this.originalUrls,
     required this.suspectedBrandName,
+    required this.suspectedProductName,
+    required this.claimedOriginCountry,
+    required this.allegedSupplyCountry,
+    required this.suspectedImageUrls,
+    required this.suspectedUrls,
     required this.platformName,
+    required this.storeDisplayName,
     required this.robotType,
     required this.incidentTypes,
     required this.differenceNotes,
+    required this.currency,
     required this.publicSummary,
     required this.verificationLabel,
     required this.canonicalPath,
@@ -78,8 +89,12 @@ class CounterfeitTwinPublicDetail {
     required this.shareDescription,
     required this.publicationState,
     required this.financialImpact,
+    this.authorizedPriceMin,
+    this.authorizedPriceMax,
+    this.suspectedPrice,
     this.publishedAt,
     this.updatedAt,
+    this.withdrawnAt,
   });
 
   factory CounterfeitTwinPublicDetail.fromMap(Object? value) {
@@ -97,11 +112,25 @@ class CounterfeitTwinPublicDetail {
       originalEntityName: _string(map['originalEntityName']),
       suspectedEntityName: _string(map['suspectedEntityName']),
       originalBrandName: _string(map['originalBrandName']),
+      originalProductName: _string(map['originalProductName']),
+      originalCountry: _string(map['originalCountry']),
+      originalImageUrls: _stringList(map['originalImageUrls']),
+      originalUrls: _stringList(map['originalUrls']),
       suspectedBrandName: _string(map['suspectedBrandName']),
+      suspectedProductName: _string(map['suspectedProductName']),
+      claimedOriginCountry: _string(map['claimedOriginCountry']),
+      allegedSupplyCountry: _string(map['allegedSupplyCountry']),
+      suspectedImageUrls: _stringList(map['suspectedImageUrls']),
+      suspectedUrls: _stringList(map['suspectedUrls']),
       platformName: _string(map['platformName']),
+      storeDisplayName: _string(map['storeDisplayName']),
       robotType: _string(map['robotType']),
       incidentTypes: _stringList(map['incidentTypes']),
       differenceNotes: _stringList(map['differenceNotes']),
+      authorizedPriceMin: _number(map['authorizedPriceMin']),
+      authorizedPriceMax: _number(map['authorizedPriceMax']),
+      suspectedPrice: _number(map['suspectedPrice']),
+      currency: _string(map['currency'], fallback: 'TRY'),
       publicSummary: _string(map['publicSummary']),
       verificationLabel: _string(
         map['verificationLabel'],
@@ -116,7 +145,20 @@ class CounterfeitTwinPublicDetail {
       ),
       publishedAt: _dateFromMillis(map['publishedAtMillis']),
       updatedAt: _dateFromMillis(map['updatedAtMillis']),
+      withdrawnAt: _dateFromMillis(map['withdrawnAtMillis']),
     );
+  }
+
+  String get originalDisplayName {
+    if (originalEntityName.isNotEmpty) return originalEntityName;
+    if (originalProductName.isNotEmpty) return originalProductName;
+    return originalBrandName;
+  }
+
+  String get suspectedDisplayName {
+    if (suspectedEntityName.isNotEmpty) return suspectedEntityName;
+    if (suspectedProductName.isNotEmpty) return suspectedProductName;
+    return suspectedBrandName;
   }
 
   final String id;
@@ -129,11 +171,25 @@ class CounterfeitTwinPublicDetail {
   final String originalEntityName;
   final String suspectedEntityName;
   final String originalBrandName;
+  final String originalProductName;
+  final String originalCountry;
+  final List<String> originalImageUrls;
+  final List<String> originalUrls;
   final String suspectedBrandName;
+  final String suspectedProductName;
+  final String claimedOriginCountry;
+  final String allegedSupplyCountry;
+  final List<String> suspectedImageUrls;
+  final List<String> suspectedUrls;
   final String platformName;
+  final String storeDisplayName;
   final String robotType;
   final List<String> incidentTypes;
   final List<String> differenceNotes;
+  final double? authorizedPriceMin;
+  final double? authorizedPriceMax;
+  final double? suspectedPrice;
+  final String currency;
   final String publicSummary;
   final String verificationLabel;
   final String canonicalPath;
@@ -143,6 +199,7 @@ class CounterfeitTwinPublicDetail {
   final CounterfeitTwinPublicFinancialImpact financialImpact;
   final DateTime? publishedAt;
   final DateTime? updatedAt;
+  final DateTime? withdrawnAt;
 }
 
 class CounterfeitTwinPublicDetailService {

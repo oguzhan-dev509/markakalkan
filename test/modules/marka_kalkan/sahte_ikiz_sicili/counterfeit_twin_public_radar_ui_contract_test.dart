@@ -46,7 +46,7 @@ void main() {
   test('public page loads published comparisons', () {
     expect(publicPage, contains("'listPublicCounterfeitTwinComparisons'"));
     expect(publicPage, contains("data['comparisons']"));
-    expect(publicPage, contains('financialImpactSummary'));
+    expect(publicPage, contains('CounterfeitTwinPublicDetail.fromMap'));
   });
 
   test('public report entry requires authentication', () {

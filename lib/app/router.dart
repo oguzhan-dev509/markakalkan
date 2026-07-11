@@ -44,6 +44,7 @@ import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/present
 import 'package:markakalkan/modules/marka_kalkan/fason_uretim_tedarik_guvenligi/presentation/supply_security_hub_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_registry_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_public_radar_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_public_detail_page.dart';
 
 abstract final class AppRouter {
   static Future<void> openManagementCenter(BuildContext context) {
@@ -72,6 +73,18 @@ abstract final class AppRouter {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const CounterfeitTwinPublicRadarPage(),
+      ),
+    );
+  }
+
+  static Future<void> openCounterfeitTwinPublicDetail(
+    BuildContext context, {
+    required String slug,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: RouteSettings(name: '/sahte-ikiz/$slug'),
+        builder: (_) => CounterfeitTwinPublicDetailPage(slug: slug),
       ),
     );
   }
