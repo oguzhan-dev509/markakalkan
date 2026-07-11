@@ -247,11 +247,13 @@ class _CounterfeitTwinPublicRadarPageState
                 child: _ErrorState(message: _error!, onRetry: _load),
               )
             else if (_visibleComparisons.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _EmptyState(
-                  onReport: _openReport,
-                  selectedCategory: _selectedCategory,
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+                  child: _EmptyState(
+                    onReport: _openReport,
+                    selectedCategory: _selectedCategory,
+                  ),
                 ),
               )
             else
