@@ -20,13 +20,12 @@ void main() {
     'functions/counterfeit_twin/counterfeit_twin_radar.js',
   ).readAsStringSync();
 
-  test('management entry is one click but remains protected', () {
-    expect(hub, contains("'management-entry-action'"));
+  test('management entry requires five taps and remains protected', () {
+    expect(hub, contains("'management-entry-five-tap-action'"));
     expect(hub, contains("'Yetkili yönetim girişi'"));
-    expect(
-      hub,
-      contains('onPressed: _entryDialogOpen ? null : _openAdminEntryDialog'),
-    );
+    expect(hub, contains('_handleManagementEntryTap'));
+    expect(hub, contains('_managementTapCount < 5'));
+    expect(hub, contains('Duration(seconds: 8)'));
     expect(hub, contains('verifyEntryCode'));
     expect(hub, contains('access.isSuperAdmin'));
     expect(hub, isNot(contains('_handleHiddenMarkPointerDown')));

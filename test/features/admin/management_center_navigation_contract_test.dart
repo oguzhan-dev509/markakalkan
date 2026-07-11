@@ -19,13 +19,12 @@ void main() {
       expect(routerSource, contains('openManagementCenter'));
     });
 
-    test('corporate hub exposes an accessible protected management entry', () {
-      expect(hubSource, contains("'management-entry-action'"));
+    test('corporate hub opens protected management entry after five taps', () {
+      expect(hubSource, contains("'management-entry-five-tap-action'"));
       expect(hubSource, contains("'Yetkili yönetim girişi'"));
-      expect(
-        hubSource,
-        contains('onPressed: _entryDialogOpen ? null : _openAdminEntryDialog'),
-      );
+      expect(hubSource, contains('_handleManagementEntryTap'));
+      expect(hubSource, contains('_managementTapCount < 5'));
+      expect(hubSource, contains('Duration(seconds: 8)'));
       expect(hubSource, contains('verifyEntryCode'));
       expect(hubSource, contains('access.isSuperAdmin'));
       expect(hubSource, isNot(contains("id: 'management_center'")));

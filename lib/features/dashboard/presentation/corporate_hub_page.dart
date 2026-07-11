@@ -19,6 +19,8 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
       PlatformAdminAccessService();
 
   bool _entryDialogOpen = false;
+  int _managementTapCount = 0;
+  DateTime? _managementTapExpiresAt;
 
   static const List<_CorporateModule> _modules = [
     _CorporateModule(
@@ -299,29 +301,65 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
     }
   }
 
+  void _handleManagementEntryTap() {
+    if (_entryDialogOpen) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final expiresAt = _managementTapExpiresAt;
+    if (expiresAt == null || now.isAfter(expiresAt)) {
+      _managementTapCount = 0;
+    }
+
+    _managementTapCount += 1;
+    _managementTapExpiresAt = now.add(const Duration(seconds: 8));
+
+    if (_managementTapCount < 5) {
+      return;
+    }
+
+    _managementTapCount = 0;
+    _managementTapExpiresAt = null;
+    _openAdminEntryDialog();
+  }
+
   Widget _buildHiddenAdminMark() {
     return Padding(
       padding: const EdgeInsets.only(right: 4),
-      child: IconButton(
-        key: const ValueKey<String>('management-entry-action'),
-        tooltip: 'Yetkili yönetim girişi',
-        onPressed: _entryDialogOpen ? null : _openAdminEntryDialog,
-        icon: const Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Icon(Icons.shield_outlined, color: MarkaKalkanTheme.navy, size: 22),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: MarkaKalkanTheme.teal,
-                  shape: BoxShape.circle,
-                ),
-                child: SizedBox(width: 6, height: 6),
+      child: Tooltip(
+        message: 'Yetkili yönetim girişi',
+        child: GestureDetector(
+          key: const ValueKey<String>('management-entry-five-tap-action'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _handleManagementEntryTap,
+          child: const SizedBox(
+            width: 48,
+            height: 48,
+            child: Center(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    Icons.shield_outlined,
+                    color: MarkaKalkanTheme.navy,
+                    size: 24,
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: MarkaKalkanTheme.teal,
+                        shape: BoxShape.circle,
+                      ),
+                      child: SizedBox(width: 7, height: 7),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
