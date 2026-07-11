@@ -52,6 +52,7 @@ const {
   buildListCounterfeitTwinReportsForAdmin,
   buildReviewCounterfeitTwinReport,
   buildListPublicCounterfeitTwinComparisons,
+  buildGetPublicCounterfeitTwinComparison,
 } = require("./counterfeit_twin/counterfeit_twin_radar");
 
 setGlobalOptions({
@@ -267,6 +268,9 @@ exports.reviewCounterfeitTwinReport =
 
 exports.listPublicCounterfeitTwinComparisons =
     buildListPublicCounterfeitTwinComparisons({db});
+
+exports.getPublicCounterfeitTwinComparison =
+    buildGetPublicCounterfeitTwinComparison({db});
 
 exports.createCounterfeitTwinRecord =
     buildCreateCounterfeitTwinRecord({db, admin});

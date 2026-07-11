@@ -242,6 +242,243 @@ function comparisonLabel(targetType) {
   return "Gercek Platform - Sahte Platform";
 }
 
+function publicCategory(targetType) {
+  if (targetType === "physical_product") {
+    return "physical";
+  }
+  if (
+    targetType === "robotic_system" ||
+    targetType === "autonomous_ai_agent"
+  ) {
+    return "ai_robot";
+  }
+  return "digital";
+}
+
+function slugifyPublicValue(value) {
+  const replacements = Object.freeze({
+    "ç": "c",
+    "ğ": "g",
+    "ı": "i",
+    "ö": "o",
+    "ş": "s",
+    "ü": "u",
+  });
+
+  return String(value || "")
+      .trim()
+      .toLocaleLowerCase("tr-TR")
+      .split("")
+      .map((character) => replacements[character] || character)
+      .join("")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 72);
+}
+
+function buildPublicSlug(report, publicId) {
+  const source =
+    report.originalEntityName ||
+    report.originalBrandName ||
+    report.originalProductName ||
+    "sahte-ikiz";
+  const base = slugifyPublicValue(source) || "sahte-ikiz";
+  const suffix = String(publicId || "").slice(0, 10).toLowerCase();
+  return `${base}-${suffix}`;
+}
+
+function buildPublicRecordCode(now, publicId) {
+  const timestampDate = now?.toDate?.();
+  const year = timestampDate instanceof Date ?
+    timestampDate.getUTCFullYear() :
+    new Date().getUTCFullYear();
+  const suffix = String(publicId || "").slice(0, 8).toUpperCase();
+  return `MK-SI-${year}-${suffix}`;
+}
+
+function buildShareTitle(report) {
+  const original =
+    report.originalEntityName ||
+    report.originalBrandName ||
+    report.originalProductName ||
+    "Gerçek varlık";
+  return `Doğrulanmış Sahte İkiz Kaydı: ${original}`.slice(0, 160);
+}
+
+function buildShareDescription(report) {
+  const original =
+    report.originalEntityName ||
+    report.originalBrandName ||
+    report.originalProductName ||
+    "Gerçek varlık";
+  const suspected =
+    report.suspectedEntityName ||
+    report.suspectedBrandName ||
+    report.suspectedProductName ||
+    "şüpheli ikiz";
+  return (
+    `${original} ile ${suspected} karşılaştırması. ` +
+    "Gerçeği doğrula, sahte ikizi görünür kıl."
+  ).slice(0, 240);
+}
+
+function safePublicStringList(value, maxItems = 20) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, maxItems);
+}
+
+function timestampMillis(value) {
+  return value?.toMillis?.() ?? null;
+}
+
+function safeFinancialImpactSummary(value) {
+  const data = value && typeof value === "object" ? value : {};
+  return {
+    hasMonetaryLoss: data.hasMonetaryLoss === true,
+    lossAmount:
+      typeof data.lossAmount === "number" ? data.lossAmount : null,
+    currency:
+      typeof data.currency === "string" ? data.currency : "TRY",
+    bankOrPaymentProvider:
+      typeof data.bankOrPaymentProvider === "string" ?
+        data.bankOrPaymentProvider :
+        "",
+    disputeSubmitted: data.disputeSubmitted === true,
+    disputeStatus:
+      typeof data.disputeStatus === "string" ?
+        data.disputeStatus :
+        "not_submitted",
+    refundAmount:
+      typeof data.refundAmount === "number" ? data.refundAmount : null,
+    recoveryStatus:
+      typeof data.recoveryStatus === "string" ?
+        data.recoveryStatus :
+        "unknown",
+  };
+}
+
+function safePublicComparison(doc) {
+  const data = doc.data() || {};
+  const publicationState = data.publicationState || "published";
+  if (publicationState !== "published") {
+    return null;
+  }
+
+  const targetType = data.targetType || "physical_product";
+  const slug = data.slug || buildPublicSlug(data, doc.id);
+  const canonicalPath = data.canonicalPath || `/sahte-ikiz/${slug}`;
+  const recordCode =
+    data.publicRecordCode ||
+    buildPublicRecordCode(data.publishedAt, doc.id);
+
+  return {
+    id: doc.id,
+    slug,
+    publicRecordCode: recordCode,
+    publicCategory:
+      data.publicCategory || publicCategory(targetType),
+    targetType,
+    comparisonLabel:
+      data.comparisonLabel || comparisonLabel(targetType),
+    title: typeof data.title === "string" ? data.title : "",
+    originalEntityName:
+      typeof data.originalEntityName === "string" ?
+        data.originalEntityName :
+        "",
+    suspectedEntityName:
+      typeof data.suspectedEntityName === "string" ?
+        data.suspectedEntityName :
+        "",
+    originalBrandName:
+      typeof data.originalBrandName === "string" ?
+        data.originalBrandName :
+        "",
+    originalProductName:
+      typeof data.originalProductName === "string" ?
+        data.originalProductName :
+        "",
+    originalCountry:
+      typeof data.originalCountry === "string" ?
+        data.originalCountry :
+        "",
+    originalImageUrls: safePublicStringList(data.originalImageUrls),
+    originalUrls: safePublicStringList(data.originalUrls),
+    suspectedBrandName:
+      typeof data.suspectedBrandName === "string" ?
+        data.suspectedBrandName :
+        "",
+    suspectedProductName:
+      typeof data.suspectedProductName === "string" ?
+        data.suspectedProductName :
+        "",
+    claimedOriginCountry:
+      typeof data.claimedOriginCountry === "string" ?
+        data.claimedOriginCountry :
+        "",
+    allegedSupplyCountry:
+      typeof data.allegedSupplyCountry === "string" ?
+        data.allegedSupplyCountry :
+        "",
+    suspectedImageUrls: safePublicStringList(data.suspectedImageUrls),
+    suspectedUrls: safePublicStringList(data.suspectedUrls),
+    incidentTypes: safePublicStringList(data.incidentTypes),
+    robotType:
+      typeof data.robotType === "string" ? data.robotType : "",
+    platformName:
+      typeof data.platformName === "string" ? data.platformName : "",
+    storeDisplayName:
+      typeof data.storeDisplayName === "string" ?
+        data.storeDisplayName :
+        "",
+    authorizedPriceMin:
+      typeof data.authorizedPriceMin === "number" ?
+        data.authorizedPriceMin :
+        null,
+    authorizedPriceMax:
+      typeof data.authorizedPriceMax === "number" ?
+        data.authorizedPriceMax :
+        null,
+    suspectedPrice:
+      typeof data.suspectedPrice === "number" ?
+        data.suspectedPrice :
+        null,
+    currency:
+      typeof data.currency === "string" ? data.currency : "TRY",
+    differenceNotes: safePublicStringList(data.differenceNotes),
+    financialImpactSummary:
+      safeFinancialImpactSummary(data.financialImpactSummary),
+    publicSummary:
+      typeof data.publicSummary === "string" ?
+        data.publicSummary :
+        "",
+    verificationLabel:
+      typeof data.verificationLabel === "string" ?
+        data.verificationLabel :
+        "delille_dogrulandi",
+    canonicalPath,
+    shareTitle:
+      typeof data.shareTitle === "string" ?
+        data.shareTitle :
+        buildShareTitle(data),
+    shareDescription:
+      typeof data.shareDescription === "string" ?
+        data.shareDescription :
+        buildShareDescription(data),
+    publicationState,
+    publishedAtMillis: timestampMillis(data.publishedAt),
+    updatedAtMillis: timestampMillis(data.updatedAt),
+    withdrawnAtMillis: timestampMillis(data.withdrawnAt),
+  };
+}
+
 function cleanReportPayload(data) {
   const targetType = enumValue(
       data.targetType,
@@ -381,6 +618,7 @@ function buildSubmitCounterfeitTwinReport({db, admin}) {
       reviewedByUid: null,
       reviewedByEmail: null,
       reviewNote: "",
+      publicSummary: "",
       counterfeitTwinRecordId: null,
       publicComparisonId: null,
     });
@@ -430,8 +668,19 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
       throw new HttpsError("invalid-argument", "reportId gecersiz.");
     }
     const reviewNote = text(request.data?.reviewNote, "reviewNote", 5000);
+    const publicSummary = text(
+        request.data?.publicSummary,
+        "publicSummary",
+        5000,
+    );
     if (decision === "rejected" && !reviewNote) {
       throw new HttpsError("invalid-argument", "Ret gerekcesi zorunludur.");
+    }
+    if (decision === "published" && !publicSummary) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Kamuya acik ozet zorunludur.",
+      );
     }
 
     const reportRef = db.collection(REPORTS).doc(reportId);
@@ -451,6 +700,7 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
       const update = {
         status: decision,
         reviewNote,
+        publicSummary,
         reviewedAt: now,
         reviewedByUid: actor.uid,
         reviewedByEmail: actor.email,
@@ -459,15 +709,26 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
 
       if (decision === "published") {
         const publicRef = db.collection(PUBLIC_COMPARISONS).doc();
+        const targetType = report.targetType || "physical_product";
+        const slug = buildPublicSlug(report, publicRef.id);
+        const publicRecordCode =
+          buildPublicRecordCode(now, publicRef.id);
+        const canonicalPath = `/sahte-ikiz/${slug}`;
+
         transaction.create(publicRef, {
           reportId,
           counterfeitTwinRecordId: null,
-          targetType: report.targetType || "physical_product",
-          comparisonLabel: comparisonLabel(
-              report.targetType || "physical_product",
-          ),
+          publicCategory: publicCategory(targetType),
+          targetType,
+          comparisonLabel: comparisonLabel(targetType),
           title: `${report.originalEntityName || report.originalBrandName}: ` +
-            comparisonLabel(report.targetType || "physical_product"),
+            comparisonLabel(targetType),
+          slug,
+          publicRecordCode,
+          canonicalPath,
+          shareTitle: buildShareTitle(report),
+          shareDescription: buildShareDescription(report),
+          publicationState: "published",
           originalEntityName:
             report.originalEntityName || report.originalProductName,
           suspectedEntityName:
@@ -508,9 +769,11 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
             recoveryStatus:
               report.financialImpact?.recoveryStatus || "unknown",
           },
-          publicSummary: reviewNote,
+          publicSummary,
           verificationLabel: "delille_dogrulandi",
           publishedAt: now,
+          updatedAt: now,
+          withdrawnAt: null,
         });
         update.counterfeitTwinRecordId = null;
         update.publicComparisonId = publicRef.id;
@@ -534,17 +797,41 @@ function buildListPublicCounterfeitTwinComparisons({db}) {
         .orderBy("publishedAt", "desc")
         .limit(100)
         .get();
-    return {
-      comparisons: snapshot.docs.map((doc) => {
-        const data = doc.data();
-        const {publishedAt, ...safeData} = data;
-        return {
-          id: doc.id,
-          ...safeData,
-          publishedAtMillis: publishedAt?.toMillis?.() ?? null,
-        };
-      }),
-    };
+    const comparisons = snapshot.docs
+        .map((doc) => safePublicComparison(doc))
+        .filter((item) => item !== null);
+    return {comparisons};
+  });
+}
+
+function buildGetPublicCounterfeitTwinComparison({db}) {
+  return onCall(async (request) => {
+    const slug = text(request.data?.slug, "slug", 120, true);
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      throw new HttpsError("invalid-argument", "slug gecersiz.");
+    }
+
+    const snapshot = await db.collection(PUBLIC_COMPARISONS)
+        .where("slug", "==", slug)
+        .limit(1)
+        .get();
+
+    if (snapshot.empty) {
+      throw new HttpsError(
+          "not-found",
+          "Yayimlanmis sahte ikiz kaydi bulunamadi.",
+      );
+    }
+
+    const comparison = safePublicComparison(snapshot.docs[0]);
+    if (comparison === null) {
+      throw new HttpsError(
+          "not-found",
+          "Yayimlanmis sahte ikiz kaydi bulunamadi.",
+      );
+    }
+
+    return {comparison};
   });
 }
 
@@ -553,4 +840,5 @@ module.exports = {
   buildListCounterfeitTwinReportsForAdmin,
   buildReviewCounterfeitTwinReport,
   buildListPublicCounterfeitTwinComparisons,
+  buildGetPublicCounterfeitTwinComparison,
 };
