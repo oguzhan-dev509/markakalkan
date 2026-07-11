@@ -76,6 +76,9 @@ class CounterfeitTwinAdminReport {
   String get reporterEmail => text('reporterEmail');
   String get reporterUid => text('reporterUid');
   String get evidenceNotes => text('evidenceNotes');
+  String get usagePurpose => text('usagePurpose');
+  String get technicalIdentity => text('technicalIdentity');
+  String get counterfeitRisk => text('counterfeitRisk');
   String get reviewNote => text('reviewNote');
   String get publicSummary => text('publicSummary');
   String get publicComparisonId => text('publicComparisonId');

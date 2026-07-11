@@ -91,6 +91,9 @@ class CounterfeitTwinPublicDetail {
     required this.shareDescription,
     required this.publicationState,
     required this.financialImpact,
+    this.usagePurpose = '',
+    this.technicalIdentity = '',
+    this.counterfeitRisk = '',
     this.authorizedPriceMin,
     this.authorizedPriceMax,
     this.suspectedPrice,
@@ -115,6 +118,9 @@ class CounterfeitTwinPublicDetail {
       targetType: _string(map['targetType'], fallback: 'other'),
       comparisonLabel: _string(map['comparisonLabel']),
       title: _string(map['title']),
+      usagePurpose: _string(map['usagePurpose']),
+      technicalIdentity: _string(map['technicalIdentity']),
+      counterfeitRisk: _string(map['counterfeitRisk']),
       originalEntityName: _string(map['originalEntityName']),
       suspectedEntityName: _string(map['suspectedEntityName']),
       originalBrandName: _string(map['originalBrandName']),
@@ -178,6 +184,9 @@ class CounterfeitTwinPublicDetail {
   final String targetType;
   final String comparisonLabel;
   final String title;
+  final String usagePurpose;
+  final String technicalIdentity;
+  final String counterfeitRisk;
   final String originalEntityName;
   final String suspectedEntityName;
   final String originalBrandName;

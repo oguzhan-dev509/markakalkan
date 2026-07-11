@@ -499,6 +499,9 @@ class CounterfeitTwinRadarReport {
     required this.suspectedEntityName,
     required this.platformName,
     required this.evidenceNotes,
+    this.usagePurpose = '',
+    this.technicalIdentity = '',
+    this.counterfeitRisk = '',
     this.originalBrandName,
     this.originalProductName,
     this.originalCountry,
@@ -529,6 +532,9 @@ class CounterfeitTwinRadarReport {
   final String suspectedEntityName;
   final String platformName;
   final String evidenceNotes;
+  final String usagePurpose;
+  final String technicalIdentity;
+  final String counterfeitRisk;
   final String? originalBrandName;
   final String? originalProductName;
   final String? originalCountry;
@@ -559,6 +565,9 @@ class CounterfeitTwinRadarReport {
     'suspectedEntityName': suspectedEntityName,
     'platformName': platformName,
     'evidenceNotes': evidenceNotes,
+    'usagePurpose': usagePurpose,
+    'technicalIdentity': technicalIdentity,
+    'counterfeitRisk': counterfeitRisk,
     'originalBrandName': originalBrandName,
     'originalProductName': originalProductName,
     'originalCountry': originalCountry,

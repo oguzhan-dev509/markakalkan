@@ -164,6 +164,10 @@ class _CounterfeitTwinPublicDetailPageState
                                 ),
                               ),
                             ],
+                            if (_hasCoreProductInformation(detail)) ...[
+                              const SizedBox(height: 18),
+                              _CoreProductInformationSection(detail: detail),
+                            ],
                             const SizedBox(height: 18),
                             _ComparisonSection(detail: detail),
                             if (_hasExtendedEvidence(detail)) ...[
@@ -400,6 +404,107 @@ class _VerificationStrip extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+bool _hasCoreProductInformation(CounterfeitTwinPublicDetail detail) {
+  return detail.usagePurpose.isNotEmpty ||
+      detail.technicalIdentity.isNotEmpty ||
+      detail.counterfeitRisk.isNotEmpty;
+}
+
+class _CoreProductInformationSection extends StatelessWidget {
+  const _CoreProductInformationSection({required this.detail});
+
+  final CounterfeitTwinPublicDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: 'Ürün amacı, teknik kimlik ve risk',
+      icon: Icons.info_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (detail.usagePurpose.isNotEmpty)
+            _CoreInformationRow(
+              label: 'Ne için kullanılır?',
+              value: detail.usagePurpose,
+            ),
+          if (detail.technicalIdentity.isNotEmpty)
+            _CoreInformationRow(
+              label: 'Ayırt edici teknik bilgi / ürün kimliği',
+              value: detail.technicalIdentity,
+            ),
+          if (detail.counterfeitRisk.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4E5),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFF5C26B)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFB54708),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Sahte olduğunda doğabilecek risk',
+                          style: TextStyle(
+                            color: Color(0xFF7A2E0E),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          detail.counterfeitRisk,
+                          style: const TextStyle(height: 1.55),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoreInformationRow extends StatelessWidget {
+  const _CoreInformationRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(value, style: const TextStyle(height: 1.55)),
         ],
       ),
     );

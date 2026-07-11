@@ -40,6 +40,9 @@ class _CounterfeitTwinReportDialogState
   final _suspectedUrls = TextEditingController();
   final _differenceNotes = TextEditingController();
   final _evidenceNotes = TextEditingController();
+  final _usagePurpose = TextEditingController();
+  final _technicalIdentity = TextEditingController();
+  final _counterfeitRisk = TextEditingController();
 
   final _lossAmount = TextEditingController();
   final _paymentMethod = TextEditingController();
@@ -47,6 +50,18 @@ class _CounterfeitTwinReportDialogState
   final _merchantDescriptor = TextEditingController();
   final _disputeReference = TextEditingController();
   final _refundAmount = TextEditingController();
+
+  static const Set<String> _criticalRiskSubcategoryValues = <String>{
+    'food_beverage',
+    'pharma_medical_health',
+    'cosmetics_personal_care',
+    'electronics_electrical',
+    'automotive_machinery',
+    'home_furniture_construction',
+    'production_tool_mold_component',
+    'toy_child_sports',
+    'agriculture_chemical_industrial',
+  };
 
   CounterfeitTwinPublicSection _publicCategory =
       CounterfeitTwinPublicSection.physical;
@@ -75,6 +90,9 @@ class _CounterfeitTwinReportDialogState
   List<CounterfeitTwinPublicSubcategory> get _availableSubcategories =>
       CounterfeitTwinPublicSubcategory.forSection(_publicCategory);
 
+  bool get _counterfeitRiskRequired =>
+      _criticalRiskSubcategoryValues.contains(_publicSubcategory.value);
+
   bool get _showFinancialSection => _hasMonetaryLoss || _disputeSubmitted;
 
   @override
@@ -90,6 +108,9 @@ class _CounterfeitTwinReportDialogState
       _suspectedUrls,
       _differenceNotes,
       _evidenceNotes,
+      _usagePurpose,
+      _technicalIdentity,
+      _counterfeitRisk,
       _lossAmount,
       _paymentMethod,
       _bankOrPaymentProvider,
@@ -381,6 +402,9 @@ class _CounterfeitTwinReportDialogState
         suspectedPrice: evidence.suspectedPrice,
         differenceNotes: encodedDifferenceNotes,
         evidenceNotes: _evidenceNotes.text.trim(),
+        usagePurpose: _usagePurpose.text.trim(),
+        technicalIdentity: _technicalIdentity.text.trim(),
+        counterfeitRisk: _counterfeitRisk.text.trim(),
         currency: evidence.currency,
         financialImpact: CounterfeitTwinFinancialImpact(
           hasMonetaryLoss: _hasMonetaryLoss,
@@ -589,6 +613,71 @@ class _CounterfeitTwinReportDialogState
                     ),
                   ),
                 ],
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _usagePurpose,
+                  enabled: !_isSubmitting,
+                  minLines: 2,
+                  maxLines: 5,
+                  maxLength: 300,
+                  decoration: const InputDecoration(
+                    labelText: 'Ne için kullanılır? *',
+                    hintText:
+                        'Ürünün, hizmetin, platformun veya sistemin temel kullanım amacını açıklayın.',
+                    alignLabelWithHint: true,
+                  ),
+                  validator: (value) =>
+                      _required(value, 'Ne için kullanılır?', 300),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _technicalIdentity,
+                  enabled: !_isSubmitting,
+                  minLines: 2,
+                  maxLines: 6,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Ayırt edici teknik bilgi / ürün kimliği',
+                    hintText:
+                        'Model, sürüm, seri yapısı, bileşim, ölçü, teknik özellik veya doğrulama unsurunu yazın.',
+                    alignLabelWithHint: true,
+                  ),
+                  validator: (value) => _optional(
+                    value,
+                    'Ayırt edici teknik bilgi / ürün kimliği',
+                    500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _counterfeitRisk,
+                  enabled: !_isSubmitting,
+                  minLines: 2,
+                  maxLines: 6,
+                  maxLength: 500,
+                  decoration: InputDecoration(
+                    labelText: _counterfeitRiskRequired
+                        ? 'Sahte olduğunda doğabilecek risk *'
+                        : 'Sahte olduğunda doğabilecek risk',
+                    hintText:
+                        'Sağlık, güvenlik, veri, mali kayıp, hizmet kesintisi veya itibar riskini açıklayın.',
+                    helperText: _counterfeitRiskRequired
+                        ? 'Seçilen sağlık veya güvenlik açısından kritik kategoride zorunludur.'
+                        : 'Bu kategoride isteğe bağlıdır.',
+                    alignLabelWithHint: true,
+                  ),
+                  validator: (value) => _counterfeitRiskRequired
+                      ? _required(
+                          value,
+                          'Sahte olduğunda doğabilecek risk',
+                          500,
+                        )
+                      : _optional(
+                          value,
+                          'Sahte olduğunda doğabilecek risk',
+                          500,
+                        ),
+                ),
                 const SizedBox(height: 18),
                 const _SectionTitle('2. Kaynak ve bağlantılar'),
                 _ResponsivePair(

@@ -671,6 +671,20 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                         ),
                       ],
                     ),
+                    _Section(
+                      title: 'Ürün amacı, teknik kimlik ve risk',
+                      rows: [
+                        ('Ne için kullanılır?', report.usagePurpose),
+                        (
+                          'Ayırt edici teknik bilgi / ürün kimliği',
+                          report.technicalIdentity,
+                        ),
+                        (
+                          'Sahte olduğunda doğabilecek risk',
+                          report.counterfeitRisk,
+                        ),
+                      ],
+                    ),
                     _ReviewEvidenceSection(
                       report: report,
                       approvedOriginalImageUrls: _approvedOriginalImageUrls,
