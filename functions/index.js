@@ -51,6 +51,7 @@ const {
   buildSubmitCounterfeitTwinReport,
   buildListCounterfeitTwinReportsForAdmin,
   buildReviewCounterfeitTwinReport,
+  buildDeleteCounterfeitTwinReport,
   buildListPublicCounterfeitTwinComparisons,
   buildGetPublicCounterfeitTwinComparison,
 } = require("./counterfeit_twin/counterfeit_twin_radar");
@@ -265,6 +266,9 @@ exports.listCounterfeitTwinReportsForAdmin =
 
 exports.reviewCounterfeitTwinReport =
     buildReviewCounterfeitTwinReport({db, admin});
+
+exports.deleteCounterfeitTwinReport =
+    buildDeleteCounterfeitTwinReport({db, admin});
 
 exports.listPublicCounterfeitTwinComparisons =
     buildListPublicCounterfeitTwinComparisons({db});

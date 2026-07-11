@@ -41,6 +41,18 @@ class CounterfeitTwinAdminService {
     final data = _map(result.data);
     return (data['status'] ?? decision).toString().trim();
   }
+
+  Future<void> deleteReport({
+    required String reportId,
+    required String deleteReason,
+  }) async {
+    await _functions.httpsCallable('deleteCounterfeitTwinReport').call<dynamic>(
+      <String, dynamic>{
+        'reportId': reportId,
+        'deleteReason': deleteReason.trim(),
+      },
+    );
+  }
 }
 
 Map<String, dynamic> _map(Object? value) {

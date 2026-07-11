@@ -60,7 +60,7 @@ class _CounterfeitTwinReviewQueuePageState
     if (changed == true && mounted) {
       _reload();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Yönetim kararı kaydedildi.')),
+        const SnackBar(content: Text('Yönetim işlemi tamamlandı.')),
       );
     }
   }
@@ -512,6 +512,53 @@ class _ReviewDialogState extends State<_ReviewDialog> {
     }
   }
 
+  Future<void> _deleteReport() async {
+    if (_saving != null) {
+      return;
+    }
+
+    final deleteReason = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DeleteReportDialog(reportId: widget.report.id),
+    );
+    if (deleteReason == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _saving = 'deleted';
+    });
+
+    try {
+      await widget.service.deleteReport(
+        reportId: widget.report.id,
+        deleteReason: deleteReason,
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _saving = null;
+        _error = error.message ?? 'Kayıt silinemedi.';
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _saving = null;
+        _error = 'Kayıt şu anda silinemiyor.';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final report = widget.report;
@@ -685,6 +732,21 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                           child: const Text('Vazgeç'),
                         ),
                         OutlinedButton.icon(
+                          key: ValueKey<String>(
+                            'counterfeit-twin-delete-${report.id}',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFB42318),
+                            side: const BorderSide(color: Color(0xFFB42318)),
+                          ),
+                          onPressed: _saving == null ? _deleteReport : null,
+                          icon: _DecisionIcon(
+                            active: _saving == 'deleted',
+                            fallback: Icons.delete_outline,
+                          ),
+                          label: const Text('Kaydı Sil'),
+                        ),
+                        OutlinedButton.icon(
                           onPressed: _saving == null
                               ? () => _decide('under_review')
                               : null,
@@ -727,6 +789,92 @@ class _ReviewDialogState extends State<_ReviewDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DeleteReportDialog extends StatefulWidget {
+  const _DeleteReportDialog({required this.reportId});
+
+  final String reportId;
+
+  @override
+  State<_DeleteReportDialog> createState() => _DeleteReportDialogState();
+}
+
+class _DeleteReportDialogState extends State<_DeleteReportDialog> {
+  final TextEditingController _reason = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final reason = _reason.text.trim();
+    if (reason.length < 10) {
+      setState(() {
+        _error = 'Silme nedeni en az 10 karakter olmalıdır.';
+      });
+      return;
+    }
+    Navigator.of(context).pop(reason);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Kaydı kalıcı olarak sil'),
+      content: SizedBox(
+        width: 500,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Bu işlem geri alınamaz. Yayımlanmış kayıtlar bu işlemle '
+              'silinemez. Yönetim denetimi için yalnız silme işleminin '
+              'kimliği, nedeni ve zamanı saklanır.',
+            ),
+            const SizedBox(height: 12),
+            SelectableText(
+              'Başvuru: ${widget.reportId}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _reason,
+              autofocus: true,
+              minLines: 3,
+              maxLines: 5,
+              decoration: InputDecoration(
+                labelText: 'Silme nedeni',
+                hintText: 'Örneğin: Teknik test kaydı oluşturuldu.',
+                errorText: _error,
+                border: const OutlineInputBorder(),
+                alignLabelWithHint: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFB42318),
+            foregroundColor: Colors.white,
+          ),
+          onPressed: _confirm,
+          icon: const Icon(Icons.delete_forever_outlined),
+          label: const Text('Kalıcı Olarak Sil'),
+        ),
+      ],
     );
   }
 }

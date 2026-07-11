@@ -7,6 +7,7 @@ const {
 } = require("../common/platform_admin");
 
 const REPORTS = "counterfeit_twin_reports";
+const REPORT_DELETIONS = "counterfeit_twin_report_deletions";
 const PUBLIC_COMPARISONS = "counterfeit_twin_public_comparisons";
 
 const TARGET_TYPES = new Set([
@@ -941,6 +942,86 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
   });
 }
 
+
+function buildDeleteCounterfeitTwinReport({db, admin}) {
+  return onCall(async (request) => {
+    const actor = await requirePlatformRole(
+        request,
+        db,
+        ROLES.superAdmin,
+    );
+    const reportId = text(
+        request.data?.reportId,
+        "reportId",
+        240,
+        true,
+    );
+    if (reportId.includes("/")) {
+      throw new HttpsError("invalid-argument", "reportId gecersiz.");
+    }
+
+    const deleteReason = text(
+        request.data?.deleteReason,
+        "deleteReason",
+        1000,
+        true,
+    );
+    if (deleteReason.length < 10) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Silme nedeni en az 10 karakter olmalidir.",
+      );
+    }
+
+    const reportRef = db.collection(REPORTS).doc(reportId);
+    const auditRef = db.collection(REPORT_DELETIONS).doc();
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reportRef);
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Bildirim bulunamadi.");
+      }
+
+      const report = snapshot.data() || {};
+      if (report.status === "published" || report.publicComparisonId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Yayimlanmis bildirim silinemez.",
+        );
+      }
+
+      const deletableStatuses = [
+        "submitted",
+        "under_review",
+        "rejected",
+      ];
+      if (!deletableStatuses.includes(report.status)) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Bildirim silme icin uygun durumda degil.",
+        );
+      }
+
+      const now = admin.firestore.Timestamp.now();
+      transaction.create(auditRef, {
+        reportId,
+        previousStatus: report.status,
+        deleteReason,
+        deletedAt: now,
+        deletedByUid: actor.uid,
+        deletedByEmail: actor.email,
+      });
+      transaction.delete(reportRef);
+    });
+
+    logger.warn("Counterfeit twin report deleted", {
+      reportId,
+      adminUid: actor.uid,
+    });
+    return {reportId, status: "deleted"};
+  });
+}
+
 function buildListPublicCounterfeitTwinComparisons({db}) {
   return onCall(async () => {
     const snapshot = await db.collection(PUBLIC_COMPARISONS)
@@ -989,6 +1070,7 @@ module.exports = {
   buildSubmitCounterfeitTwinReport,
   buildListCounterfeitTwinReportsForAdmin,
   buildReviewCounterfeitTwinReport,
+  buildDeleteCounterfeitTwinReport,
   buildListPublicCounterfeitTwinComparisons,
   buildGetPublicCounterfeitTwinComparison,
 };
