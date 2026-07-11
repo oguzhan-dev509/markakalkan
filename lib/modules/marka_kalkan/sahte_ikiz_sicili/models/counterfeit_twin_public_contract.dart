@@ -60,6 +60,7 @@ class CounterfeitTwinPublicDetail {
     required this.slug,
     required this.publicRecordCode,
     required this.publicCategory,
+    required this.publicSubcategory,
     required this.targetType,
     required this.comparisonLabel,
     required this.title,
@@ -105,6 +106,10 @@ class CounterfeitTwinPublicDetail {
       publicRecordCode: _string(map['publicRecordCode']),
       publicCategory: CounterfeitTwinPublicCategory.fromValue(
         map['publicCategory'],
+      ),
+      publicSubcategory: _string(
+        map['publicSubcategory'],
+        fallback: _legacyPublicSubcategory(map['targetType'], map['robotType']),
       ),
       targetType: _string(map['targetType'], fallback: 'other'),
       comparisonLabel: _string(map['comparisonLabel']),
@@ -165,6 +170,7 @@ class CounterfeitTwinPublicDetail {
   final String slug;
   final String publicRecordCode;
   final CounterfeitTwinPublicCategory publicCategory;
+  final String publicSubcategory;
   final String targetType;
   final String comparisonLabel;
   final String title;
@@ -245,6 +251,52 @@ List<String> _stringList(Object? value) {
       .map((item) => item?.toString().trim() ?? '')
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
+}
+
+String _legacyPublicSubcategory(
+  Object? targetTypeValue,
+  Object? robotTypeValue,
+) {
+  final targetType = targetTypeValue?.toString().trim() ?? '';
+  final robotType = robotTypeValue?.toString().trim() ?? '';
+
+  const digital = <String, String>{
+    'website': 'website_domain',
+    'mobile_application': 'mobile_application',
+    'ecommerce_platform': 'ecommerce_platform',
+    'marketplace_store': 'marketplace_store',
+    'saas_platform': 'saas_cloud',
+    'social_media_account': 'social_media',
+    'payment_page': 'payment_page',
+    'financial_service': 'financial_investment',
+    'tourism_booking_platform': 'tourism_booking',
+    'customer_support_channel': 'customer_support',
+    'digital_product': 'digital_product_software',
+    'institution': 'corporate_digital_identity',
+    'service': 'subscription_membership',
+    'other': 'other_digital',
+  };
+
+  if (targetType == 'physical_product') return 'other_physical';
+  if (targetType == 'autonomous_ai_agent') {
+    return 'autonomous_ai_agent';
+  }
+  if (targetType == 'robotic_system') {
+    const robot = <String, String>{
+      'industrial_robot': 'industrial_robot',
+      'service_robot': 'service_robot',
+      'humanoid_robot': 'humanoid_robot',
+      'medical_robot': 'medical_robot',
+      'logistics_robot': 'logistics_delivery_robot',
+      'security_robot': 'security_surveillance_robot',
+      'domestic_robot': 'domestic_robot',
+      'robotic_device': 'robotic_device_smart_machine',
+      'software_robot': 'control_software_firmware',
+      'other': 'other_ai_robot',
+    };
+    return robot[robotType] ?? 'other_ai_robot';
+  }
+  return digital[targetType] ?? 'other_digital';
 }
 
 DateTime? _dateFromMillis(Object? value) {

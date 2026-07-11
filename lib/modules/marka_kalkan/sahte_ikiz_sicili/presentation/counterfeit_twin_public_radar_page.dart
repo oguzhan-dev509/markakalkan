@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_public_contract.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_radar_contract.dart';
 
 import 'counterfeit_twin_public_detail_page.dart';
 import 'counterfeit_twin_report_dialog.dart';
@@ -25,7 +26,7 @@ class _CounterfeitTwinPublicRadarPageState
   List<CounterfeitTwinPublicDetail> _comparisons =
       const <CounterfeitTwinPublicDetail>[];
   String _selectedCategory = 'all';
-  String _selectedTarget = 'all';
+  String _selectedSubcategory = 'all';
   bool _isLoading = true;
   String? _error;
 
@@ -37,21 +38,20 @@ class _CounterfeitTwinPublicRadarPageState
   }
 
   List<CounterfeitTwinPublicDetail> get _visibleComparisons {
-    if (_selectedTarget == 'all') return _categoryComparisons;
+    if (_selectedSubcategory == 'all') return _categoryComparisons;
     return _categoryComparisons
-        .where((item) => item.targetType == _selectedTarget)
+        .where((item) => item.publicSubcategory == _selectedSubcategory)
         .toList(growable: false);
   }
 
-  List<String> get _targetFilters {
-    final values =
-        _categoryComparisons
-            .map((item) => item.targetType)
-            .where((item) => item.isNotEmpty)
-            .toSet()
-            .toList(growable: false)
-          ..sort();
-    return <String>['all', ...values];
+  List<CounterfeitTwinPublicSubcategory> get _subcategoryFilters {
+    if (_selectedCategory == 'all') {
+      return const <CounterfeitTwinPublicSubcategory>[];
+    }
+    final section = CounterfeitTwinPublicSection.values.firstWhere(
+      (item) => item.value == _selectedCategory,
+    );
+    return CounterfeitTwinPublicSubcategory.forSection(section);
   }
 
   @override
@@ -86,8 +86,10 @@ class _CounterfeitTwinPublicRadarPageState
       setState(() {
         _comparisons = parsed;
         _isLoading = false;
-        if (!_targetFilters.contains(_selectedTarget)) {
-          _selectedTarget = 'all';
+        if (!_subcategoryFilters.any(
+          (item) => item.value == _selectedSubcategory,
+        )) {
+          _selectedSubcategory = 'all';
         }
       });
     } on FirebaseFunctionsException catch (error) {
@@ -147,7 +149,7 @@ class _CounterfeitTwinPublicRadarPageState
   void _selectCategory(String value) {
     setState(() {
       _selectedCategory = value;
-      _selectedTarget = 'all';
+      _selectedSubcategory = 'all';
     });
   }
 
@@ -304,6 +306,9 @@ class _CounterfeitTwinPublicRadarPageState
         accent: const Color(0xFF167D71),
         background: const Color(0xFFEAF7F4),
         count: _categoryCount('physical'),
+        subcategories: CounterfeitTwinPublicSubcategory.forSection(
+          CounterfeitTwinPublicSection.physical,
+        ).map((item) => item.label).toList(growable: false),
       ),
       _CategoryCardData(
         value: 'digital',
@@ -314,6 +319,9 @@ class _CounterfeitTwinPublicRadarPageState
         accent: const Color(0xFF1769AA),
         background: const Color(0xFFEAF3FB),
         count: _categoryCount('digital'),
+        subcategories: CounterfeitTwinPublicSubcategory.forSection(
+          CounterfeitTwinPublicSection.digital,
+        ).map((item) => item.label).toList(growable: false),
       ),
       _CategoryCardData(
         value: 'ai_robot',
@@ -324,6 +332,9 @@ class _CounterfeitTwinPublicRadarPageState
         accent: const Color(0xFF6941C6),
         background: const Color(0xFFF2EEFF),
         count: _categoryCount('ai_robot'),
+        subcategories: CounterfeitTwinPublicSubcategory.forSection(
+          CounterfeitTwinPublicSection.aiRobot,
+        ).map((item) => item.label).toList(growable: false),
       ),
     ];
 
@@ -387,28 +398,50 @@ class _CounterfeitTwinPublicRadarPageState
                     TextButton.icon(
                       onPressed: () => _selectCategory('all'),
                       icon: const Icon(Icons.grid_view_outlined),
-                      label: const Text('Tüm kategoriler'),
+                      label: const Text('Tüm ana kategoriler'),
                     ),
                 ],
               ),
-              if (_targetFilters.length > 1) ...[
+              if (_selectedCategory == 'all') ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'Alt kategorileri görmek için yukarıdaki üç ana '
+                  'kategoriden birini seçin.',
+                  style: TextStyle(color: Color(0xFF667085), height: 1.5),
+                ),
+              ] else ...[
+                const SizedBox(height: 14),
+                const Text(
+                  'Alt kategoriler',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: _targetFilters
-                      .map(
-                        (target) => ChoiceChip(
-                          label: Text(
-                            target == 'all' ? 'Tümü' : _targetLabel(target),
-                          ),
-                          selected: _selectedTarget == target,
-                          onSelected: (_) {
-                            setState(() => _selectedTarget = target);
-                          },
-                        ),
-                      )
-                      .toList(growable: false),
+                  children: <Widget>[
+                    ChoiceChip(
+                      label: const Text('Bu bölümdeki tüm kayıtlar'),
+                      selected: _selectedSubcategory == 'all',
+                      onSelected: (_) {
+                        setState(() => _selectedSubcategory = 'all');
+                      },
+                    ),
+                    ..._subcategoryFilters.map(
+                      (subcategory) => ChoiceChip(
+                        label: Text(subcategory.label),
+                        selected: _selectedSubcategory == subcategory.value,
+                        onSelected: (_) {
+                          setState(
+                            () => _selectedSubcategory = subcategory.value,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],
@@ -428,6 +461,7 @@ class _CategoryCardData {
     required this.accent,
     required this.background,
     required this.count,
+    required this.subcategories,
   });
 
   final String value;
@@ -437,6 +471,7 @@ class _CategoryCardData {
   final Color accent;
   final Color background;
   final int count;
+  final List<String> subcategories;
 }
 
 class _CategoryCard extends StatelessWidget {
@@ -460,7 +495,7 @@ class _CategoryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          constraints: const BoxConstraints(minHeight: 235),
+          constraints: const BoxConstraints(minHeight: 355),
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
@@ -511,6 +546,54 @@ class _CategoryCard extends StatelessWidget {
                 data.description,
                 style: const TextStyle(color: Color(0xFF475467), height: 1.5),
               ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: <Widget>[
+                  ...data.subcategories
+                      .take(4)
+                      .map(
+                        (label) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: data.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                  if (data.subcategories.length > 4)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '+${data.subcategories.length - 4} kategori',
+                        style: TextStyle(
+                          color: data.accent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const Spacer(),
               const SizedBox(height: 16),
               Row(
@@ -560,6 +643,12 @@ class _ComparisonCard extends StatelessWidget {
                     runSpacing: 8,
                     children: [
                       Chip(label: Text(_targetLabel(comparison.targetType))),
+                      if (comparison.publicSubcategory.isNotEmpty)
+                        Chip(
+                          label: Text(
+                            _subcategoryLabel(comparison.publicSubcategory),
+                          ),
+                        ),
                       if (comparison.robotType.isNotEmpty)
                         Chip(label: Text(_robotLabel(comparison.robotType))),
                       if (comparison.publicRecordCode.isNotEmpty)
@@ -822,6 +911,10 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
+}
+
+String _subcategoryLabel(String value) {
+  return CounterfeitTwinPublicSubcategory.fromValue(value).label;
 }
 
 String _targetLabel(String value) {

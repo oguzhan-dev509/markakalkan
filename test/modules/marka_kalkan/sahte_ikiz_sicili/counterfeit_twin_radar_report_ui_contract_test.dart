@@ -27,8 +27,10 @@ void main() {
 
   test('report form supports dynamic target categories', () {
     expect(dialog, contains('CounterfeitTwinTargetType'));
-    expect(dialog, contains("'Taklit edilen varlık türü *'"));
-    expect(dialog, contains('_changeTarget'));
+    expect(dialog, contains("'Ana kategori *'"));
+    expect(dialog, contains("'Alt kategori *'"));
+    expect(dialog, contains('_changePublicSection'));
+    expect(dialog, contains('_changePublicSubcategory'));
     expect(dialog, contains('_availableIncidentTypes'));
   });
 

@@ -48,6 +48,66 @@ const ROBOT_TYPES = new Set([
   "other",
 ]);
 
+
+const PUBLIC_CATEGORIES = new Set(["physical", "digital", "ai_robot"]);
+
+const PUBLIC_SUBCATEGORY_RULES = Object.freeze({
+  food_beverage: ["physical", ["physical_product"]],
+  pharma_medical_health: ["physical", ["physical_product"]],
+  cosmetics_personal_care: ["physical", ["physical_product"]],
+  textile_fashion: ["physical", ["physical_product"]],
+  electronics_electrical: ["physical", ["physical_product"]],
+  automotive_machinery: ["physical", ["physical_product"]],
+  home_furniture_construction: ["physical", ["physical_product"]],
+  packaging_label_security: ["physical", ["physical_product"]],
+  document_certificate_identity: ["physical", ["physical_product"]],
+  production_tool_mold_component: ["physical", ["physical_product"]],
+  luxury_jewelry_collectible: ["physical", ["physical_product"]],
+  toy_child_sports: ["physical", ["physical_product"]],
+  agriculture_chemical_industrial: ["physical", ["physical_product"]],
+  other_physical: ["physical", ["physical_product"]],
+
+  website_domain: ["digital", ["website"]],
+  mobile_application: ["digital", ["mobile_application"]],
+  ecommerce_platform: ["digital", ["ecommerce_platform"]],
+  marketplace_store: ["digital", ["marketplace_store"]],
+  saas_cloud: ["digital", ["saas_platform"]],
+  social_media: ["digital", ["social_media_account"]],
+  payment_page: ["digital", ["payment_page"]],
+  financial_investment: ["digital", ["financial_service"]],
+  tourism_booking: ["digital", ["tourism_booking_platform"]],
+  customer_support: ["digital", ["customer_support_channel"]],
+  digital_product_software: ["digital", ["digital_product"]],
+  corporate_digital_identity: ["digital", ["institution"]],
+  email_messaging_identity: ["digital", ["service"]],
+  digital_document_certificate: ["digital", ["digital_product"]],
+  subscription_membership: ["digital", ["service"]],
+  other_digital: ["digital", ["other"]],
+
+  autonomous_ai_agent: ["ai_robot", ["autonomous_ai_agent"]],
+  chatbot_customer_agent: ["ai_robot", ["autonomous_ai_agent"]],
+  voice_persona_virtual_identity: ["ai_robot", ["autonomous_ai_agent"]],
+  software_robot_rpa: ["ai_robot", ["autonomous_ai_agent"]],
+  industrial_robot: ["ai_robot", ["robotic_system"]],
+  service_robot: ["ai_robot", ["robotic_system"]],
+  humanoid_robot: ["ai_robot", ["robotic_system"]],
+  medical_robot: ["ai_robot", ["robotic_system"]],
+  logistics_delivery_robot: ["ai_robot", ["robotic_system"]],
+  security_surveillance_robot: ["ai_robot", ["robotic_system"]],
+  domestic_robot: ["ai_robot", ["robotic_system"]],
+  robotic_device_smart_machine: ["ai_robot", ["robotic_system"]],
+  control_software_firmware: ["ai_robot", ["robotic_system"]],
+  robot_fleet_device_identity: ["ai_robot", ["robotic_system"]],
+  serial_device_certificate_clone: ["ai_robot", ["robotic_system"]],
+  teleoperation_channel: ["ai_robot", ["robotic_system"]],
+  robot_service_maintenance_network: ["ai_robot", ["robotic_system"]],
+  other_ai_robot: ["ai_robot", ["robotic_system"]],
+});
+
+const PUBLIC_SUBCATEGORIES =
+  new Set(Object.keys(PUBLIC_SUBCATEGORY_RULES));
+
+
 const DISPUTE_STATUSES = new Set([
   "not_submitted", "submitted", "under_review", "accepted", "rejected",
   "partially_resolved", "resolved",
@@ -255,6 +315,79 @@ function publicCategory(targetType) {
   return "digital";
 }
 
+
+function legacyPublicSubcategory(targetType, robotType) {
+  if (targetType === "physical_product") return "other_physical";
+  if (targetType === "website") return "website_domain";
+  if (targetType === "mobile_application") return "mobile_application";
+  if (targetType === "ecommerce_platform") return "ecommerce_platform";
+  if (targetType === "marketplace_store") return "marketplace_store";
+  if (targetType === "saas_platform") return "saas_cloud";
+  if (targetType === "social_media_account") return "social_media";
+  if (targetType === "payment_page") return "payment_page";
+  if (targetType === "financial_service") return "financial_investment";
+  if (targetType === "tourism_booking_platform") return "tourism_booking";
+  if (targetType === "customer_support_channel") return "customer_support";
+  if (targetType === "digital_product") return "digital_product_software";
+  if (targetType === "institution") return "corporate_digital_identity";
+  if (targetType === "service") return "subscription_membership";
+  if (targetType === "other") return "other_digital";
+
+  if (targetType === "autonomous_ai_agent") {
+    return "autonomous_ai_agent";
+  }
+
+  const robotMap = Object.freeze({
+    industrial_robot: "industrial_robot",
+    service_robot: "service_robot",
+    humanoid_robot: "humanoid_robot",
+    medical_robot: "medical_robot",
+    logistics_robot: "logistics_delivery_robot",
+    security_robot: "security_surveillance_robot",
+    domestic_robot: "domestic_robot",
+    robotic_device: "robotic_device_smart_machine",
+    software_robot: "control_software_firmware",
+    other: "other_ai_robot",
+  });
+
+  return robotMap[robotType] || "other_ai_robot";
+}
+
+function normalizePublicTaxonomy(data, targetType, robotType) {
+  const fallbackCategory = publicCategory(targetType);
+  const category = enumValue(
+      data.publicCategory,
+      "publicCategory",
+      PUBLIC_CATEGORIES,
+      fallbackCategory,
+  );
+  const fallbackSubcategory =
+    legacyPublicSubcategory(targetType, robotType);
+  const subcategory = enumValue(
+      data.publicSubcategory,
+      "publicSubcategory",
+      PUBLIC_SUBCATEGORIES,
+      fallbackSubcategory,
+  );
+  const rule = PUBLIC_SUBCATEGORY_RULES[subcategory];
+
+  if (!rule || rule[0] !== category) {
+    throw new HttpsError(
+        "invalid-argument",
+        "publicSubcategory secilen publicCategory ile uyumlu degil.",
+    );
+  }
+  if (!rule[1].includes(targetType)) {
+    throw new HttpsError(
+        "invalid-argument",
+        "publicSubcategory secilen targetType ile uyumlu degil.",
+    );
+  }
+
+  return {category, subcategory};
+}
+
+
 function slugifyPublicValue(value) {
   const replacements = Object.freeze({
     "ç": "c",
@@ -373,6 +506,11 @@ function safePublicComparison(doc) {
   }
 
   const targetType = data.targetType || "physical_product";
+  const category =
+    data.publicCategory || publicCategory(targetType);
+  const subcategory =
+    data.publicSubcategory ||
+    legacyPublicSubcategory(targetType, data.robotType || "");
   const slug = data.slug || buildPublicSlug(data, doc.id);
   const canonicalPath = data.canonicalPath || `/sahte-ikiz/${slug}`;
   const recordCode =
@@ -383,8 +521,8 @@ function safePublicComparison(doc) {
     id: doc.id,
     slug,
     publicRecordCode: recordCode,
-    publicCategory:
-      data.publicCategory || publicCategory(targetType),
+    publicCategory: category,
+    publicSubcategory: subcategory,
     targetType,
     comparisonLabel:
       data.comparisonLabel || comparisonLabel(targetType),
@@ -492,6 +630,9 @@ function cleanReportPayload(data) {
     "" :
     enumValue(data.robotType, "robotType", ROBOT_TYPES, "other");
 
+  const taxonomy =
+    normalizePublicTaxonomy(data, targetType, robotType);
+
   if (
     ["robotic_system", "autonomous_ai_agent"].includes(targetType) &&
     !robotType
@@ -526,6 +667,8 @@ function cleanReportPayload(data) {
 
   return {
     targetType,
+    publicCategory: taxonomy.category,
+    publicSubcategory: taxonomy.subcategory,
     originalEntityName,
     suspectedEntityName,
     originalBrandName: text(
@@ -718,7 +861,14 @@ function buildReviewCounterfeitTwinReport({db, admin}) {
         transaction.create(publicRef, {
           reportId,
           counterfeitTwinRecordId: null,
-          publicCategory: publicCategory(targetType),
+          publicCategory:
+            report.publicCategory || publicCategory(targetType),
+          publicSubcategory:
+            report.publicSubcategory ||
+            legacyPublicSubcategory(
+                targetType,
+                report.robotType || "",
+            ),
           targetType,
           comparisonLabel: comparisonLabel(targetType),
           title: `${report.originalEntityName || report.originalBrandName}: ` +

@@ -45,6 +45,10 @@ class _CounterfeitTwinReportDialogState
   final _disputeReference = TextEditingController();
   final _refundAmount = TextEditingController();
 
+  CounterfeitTwinPublicSection _publicCategory =
+      CounterfeitTwinPublicSection.physical;
+  CounterfeitTwinPublicSubcategory _publicSubcategory =
+      CounterfeitTwinPublicSubcategory.otherPhysical;
   CounterfeitTwinTargetType _targetType =
       CounterfeitTwinTargetType.physicalProduct;
   CounterfeitTwinRobotType? _robotType;
@@ -61,11 +65,12 @@ class _CounterfeitTwinReportDialogState
   String? _error;
 
   bool get _isPhysical =>
-      _targetType == CounterfeitTwinTargetType.physicalProduct;
+      _publicCategory == CounterfeitTwinPublicSection.physical;
 
-  bool get _isRobot =>
-      _targetType == CounterfeitTwinTargetType.roboticSystem ||
-      _targetType == CounterfeitTwinTargetType.autonomousAiAgent;
+  bool get _isRobot => _publicCategory == CounterfeitTwinPublicSection.aiRobot;
+
+  List<CounterfeitTwinPublicSubcategory> get _availableSubcategories =>
+      CounterfeitTwinPublicSubcategory.forSection(_publicCategory);
 
   bool get _showFinancialSection => _hasMonetaryLoss || _disputeSubmitted;
 
@@ -200,12 +205,26 @@ class _CounterfeitTwinReportDialogState
     }
   }
 
-  void _changeTarget(CounterfeitTwinTargetType value) {
+  void _changePublicSection(CounterfeitTwinPublicSection value) {
+    final subcategory = CounterfeitTwinPublicSubcategory.forSection(
+      value,
+    ).first;
     setState(() {
-      _targetType = value;
-      if (!_isRobot) {
-        _robotType = null;
-      }
+      _publicCategory = value;
+      _publicSubcategory = subcategory;
+      _targetType = subcategory.targetType;
+      _robotType = subcategory.robotType;
+      final allowed = _availableIncidentTypes.toSet();
+      _incidentTypes.removeWhere((item) => !allowed.contains(item));
+      _error = null;
+    });
+  }
+
+  void _changePublicSubcategory(CounterfeitTwinPublicSubcategory value) {
+    setState(() {
+      _publicSubcategory = value;
+      _targetType = value.targetType;
+      _robotType = value.robotType;
       final allowed = _availableIncidentTypes.toSet();
       _incidentTypes.removeWhere((item) => !allowed.contains(item));
       _error = null;
@@ -313,6 +332,8 @@ class _CounterfeitTwinReportDialogState
     try {
       final report = CounterfeitTwinRadarReport(
         targetType: _targetType,
+        publicCategory: _publicCategory,
+        publicSubcategory: _publicSubcategory,
         robotType: _robotType,
         originalEntityName: _originalEntityName.text.trim(),
         suspectedEntityName: _suspectedEntityName.text.trim(),
@@ -423,13 +444,13 @@ class _CounterfeitTwinReportDialogState
                 ),
                 const SizedBox(height: 18),
                 const _SectionTitle('1. Taklit edilen varlık'),
-                DropdownButtonFormField<CounterfeitTwinTargetType>(
-                  initialValue: _targetType,
+                DropdownButtonFormField<CounterfeitTwinPublicSection>(
+                  initialValue: _publicCategory,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'Taklit edilen varlık türü *',
+                    labelText: 'Ana kategori *',
                   ),
-                  items: CounterfeitTwinTargetType.values
+                  items: CounterfeitTwinPublicSection.values
                       .map(
                         (item) => DropdownMenuItem(
                           value: item,
@@ -440,7 +461,31 @@ class _CounterfeitTwinReportDialogState
                   onChanged: _isSubmitting
                       ? null
                       : (value) {
-                          if (value != null) _changeTarget(value);
+                          if (value != null) _changePublicSection(value);
+                        },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<CounterfeitTwinPublicSubcategory>(
+                  key: ValueKey<String>(_publicCategory.value),
+                  initialValue: _publicSubcategory,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Alt kategori *',
+                  ),
+                  items: _availableSubcategories
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item,
+                          child: Text(item.label),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: _isSubmitting
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            _changePublicSubcategory(value);
+                          }
                         },
                 ),
                 if (_isRobot) ...[
