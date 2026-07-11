@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/admin/data/platform_admin_access_service.dart';
 import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
@@ -209,27 +210,37 @@ class _AuthorizedManagementCenter extends StatelessWidget {
                   return Wrap(
                     spacing: spacing,
                     runSpacing: spacing,
-                    children:
-                        const [
-                              _ManagementModuleCard(
-                                title: 'Marka Başvuruları',
-                                description:
-                                    'Başvuruları inceleyin, değerlendirmeye alın, '
-                                    'onaylayın veya gerekçeli olarak reddedin.',
-                                icon: Icons.fact_check_outlined,
-                              ),
-                              _ManagementModuleCard(
-                                title: 'Sahte İkiz Radarı',
-                                description:
-                                    'Kullanıcı bildirimlerini, delilleri ve kamu '
-                                    'karşılaştırması yayın kararlarını yönetin.',
-                                icon: Icons.radar_outlined,
-                              ),
-                            ]
-                            .map(
-                              (card) => SizedBox(width: cardWidth, child: card),
-                            )
-                            .toList(growable: false),
+                    children: [
+                      SizedBox(
+                        width: cardWidth,
+                        child: const _ManagementModuleCard(
+                          title: 'Marka Başvuruları',
+                          description:
+                              'Başvuruları inceleyin, değerlendirmeye alın, '
+                              'onaylayın veya gerekçeli olarak reddedin.',
+                          icon: Icons.fact_check_outlined,
+                        ),
+                      ),
+                      GestureDetector(
+                        key: const ValueKey<String>(
+                          'counterfeit-twin-admin-review-action',
+                        ),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () =>
+                            AppRouter.openCounterfeitTwinReviewQueue(context),
+                        child: SizedBox(
+                          width: cardWidth,
+                          child: const _ManagementModuleCard(
+                            title: 'Sahte İkiz Radarı',
+                            description:
+                                'Kullanıcı bildirimlerini, delilleri ve kamu '
+                                'karşılaştırması yayın kararlarını yönetin.',
+                            icon: Icons.radar_outlined,
+                            actionLabel: 'İnceleme kuyruğunu aç',
+                          ),
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
@@ -273,11 +284,13 @@ class _ManagementModuleCard extends StatelessWidget {
     required this.title,
     required this.description,
     required this.icon,
+    this.actionLabel = 'Sıradaki aşamada etkinleştirilecek',
   });
 
   final String title;
   final String description;
   final IconData icon;
+  final String actionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -323,15 +336,26 @@ class _ManagementModuleCard extends StatelessWidget {
             style: const TextStyle(color: Color(0xFF687580), height: 1.5),
           ),
           const Spacer(),
-          const Padding(
-            padding: EdgeInsets.only(top: 18),
-            child: Text(
-              'Sıradaki aşamada etkinleştirilecek',
-              style: TextStyle(
-                color: MarkaKalkanTheme.blue,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+          Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    actionLabel,
+                    style: const TextStyle(
+                      color: MarkaKalkanTheme.blue,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (actionLabel != 'Sıradaki aşamada etkinleştirilecek')
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: MarkaKalkanTheme.blue,
+                  ),
+              ],
             ),
           ),
         ],

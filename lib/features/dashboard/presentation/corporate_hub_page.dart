@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -20,11 +18,6 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
   final PlatformAdminAccessService _accessService =
       PlatformAdminAccessService();
 
-  Timer? _hiddenHoldTimer;
-  bool _hiddenHoldCompleted = false;
-  bool _hiddenGestureArmed = false;
-  int _hiddenTapCount = 0;
-  DateTime? _hiddenGestureExpiresAt;
   bool _entryDialogOpen = false;
 
   static const List<_CorporateModule> _modules = [
@@ -156,68 +149,6 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
       status: _ModuleStatus.soon,
     ),
   ];
-
-  void _handleHiddenMarkPointerDown(Object _) {
-    if (_hiddenGestureArmed) {
-      return;
-    }
-
-    _hiddenHoldCompleted = false;
-    _hiddenHoldTimer?.cancel();
-    _hiddenHoldTimer = Timer(const Duration(seconds: 2), () {
-      if (!mounted) {
-        return;
-      }
-
-      _hiddenHoldCompleted = true;
-      _hiddenGestureArmed = true;
-      _hiddenTapCount = 0;
-      _hiddenGestureExpiresAt = DateTime.now().add(const Duration(seconds: 10));
-    });
-  }
-
-  void _handleHiddenMarkPointerUp(Object _) {
-    _hiddenHoldTimer?.cancel();
-    _hiddenHoldTimer = null;
-
-    if (_hiddenHoldCompleted) {
-      _hiddenHoldCompleted = false;
-      return;
-    }
-
-    if (!_hiddenGestureArmed) {
-      return;
-    }
-
-    final expiresAt = _hiddenGestureExpiresAt;
-    if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
-      _resetHiddenGesture();
-      return;
-    }
-
-    _hiddenTapCount += 1;
-    if (_hiddenTapCount < 3) {
-      return;
-    }
-
-    _resetHiddenGesture();
-    _openAdminEntryDialog();
-  }
-
-  void _handleHiddenMarkPointerCancel(Object _) {
-    _hiddenHoldTimer?.cancel();
-    _hiddenHoldTimer = null;
-    _hiddenHoldCompleted = false;
-  }
-
-  void _resetHiddenGesture() {
-    _hiddenHoldTimer?.cancel();
-    _hiddenHoldTimer = null;
-    _hiddenHoldCompleted = false;
-    _hiddenGestureArmed = false;
-    _hiddenTapCount = 0;
-    _hiddenGestureExpiresAt = null;
-  }
 
   String _gateErrorMessage(Object error) {
     if (error is FirebaseFunctionsException) {
@@ -371,55 +302,29 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
   Widget _buildHiddenAdminMark() {
     return Padding(
       padding: const EdgeInsets.only(right: 4),
-      child: Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: _handleHiddenMarkPointerDown,
-        onPointerUp: _handleHiddenMarkPointerUp,
-        onPointerCancel: _handleHiddenMarkPointerCancel,
-        child: const SizedBox(
-          width: 40,
-          height: 40,
-          child: Center(
-            child: Opacity(
-              opacity: 0.30,
-              child: SizedBox(
-                width: 21,
-                height: 21,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned.fill(
-                      child: Icon(
-                        Icons.shield_outlined,
-                        color: MarkaKalkanTheme.navy,
-                        size: 20,
-                      ),
-                    ),
-                    Positioned(
-                      right: 1,
-                      bottom: 1,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: MarkaKalkanTheme.teal,
-                          shape: BoxShape.circle,
-                        ),
-                        child: SizedBox(width: 5, height: 5),
-                      ),
-                    ),
-                  ],
+      child: IconButton(
+        key: const ValueKey<String>('management-entry-action'),
+        tooltip: 'Yetkili yönetim girişi',
+        onPressed: _entryDialogOpen ? null : _openAdminEntryDialog,
+        icon: const Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(Icons.shield_outlined, color: MarkaKalkanTheme.navy, size: 22),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: MarkaKalkanTheme.teal,
+                  shape: BoxShape.circle,
                 ),
+                child: SizedBox(width: 6, height: 6),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _hiddenHoldTimer?.cancel();
-    super.dispose();
   }
 
   @override

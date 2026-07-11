@@ -19,10 +19,16 @@ void main() {
       expect(routerSource, contains('openManagementCenter'));
     });
 
-    test('corporate hub exposes a dedicated management center card', () {
-      expect(hubSource, contains("id: 'management_center'"));
-      expect(hubSource, contains("title: 'MarkaKalkan Yönetim Merkezi'"));
-      expect(hubSource, contains('AppRouter.openManagementCenter(context)'));
+    test('corporate hub exposes an accessible protected management entry', () {
+      expect(hubSource, contains("'management-entry-action'"));
+      expect(hubSource, contains("'Yetkili yönetim girişi'"));
+      expect(
+        hubSource,
+        contains('onPressed: _entryDialogOpen ? null : _openAdminEntryDialog'),
+      );
+      expect(hubSource, contains('verifyEntryCode'));
+      expect(hubSource, contains('access.isSuperAdmin'));
+      expect(hubSource, isNot(contains("id: 'management_center'")));
     });
 
     test('page gates access and shows both first management modules', () {
