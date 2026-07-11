@@ -50,7 +50,13 @@ void main() {
   });
 
   test('public report entry requires authentication', () {
-    expect(publicPage, contains('FirebaseAuth.instance.currentUser'));
+    expect(publicPage, contains('final auth = FirebaseAuth.instance;'));
+    expect(publicPage, contains('auth.currentUser == null'));
+    expect(publicPage, contains('AppRouter.openBrandLogin(context)'));
+    expect(
+      publicPage,
+      contains('Bildirim formunu açmak için giriş işlemini tamamlayın.'),
+    );
     expect(publicPage, contains('Bildirim için giriş gerekli'));
     expect(publicPage, contains('showCounterfeitTwinReportDialog'));
     expect(home, contains('FirebaseAuth.instance.currentUser'));

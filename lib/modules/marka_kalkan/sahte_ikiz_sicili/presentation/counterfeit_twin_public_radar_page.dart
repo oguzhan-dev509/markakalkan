@@ -1,8 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
-import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_public_contract.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_radar_contract.dart';
 
@@ -53,6 +53,8 @@ class _CounterfeitTwinPublicRadarPageState
     );
     return CounterfeitTwinPublicSubcategory.forSection(section);
   }
+
+  bool _isOpeningReport = false;
 
   @override
   void initState() {
@@ -108,42 +110,82 @@ class _CounterfeitTwinPublicRadarPageState
   }
 
   Future<void> _openReport() async {
-    if (FirebaseAuth.instance.currentUser == null) {
-      final shouldLogin = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Bildirim için giriş gerekli'),
-          content: const Text(
-            'Sahte ikiz bildirimini güvenli biçimde göndermek için '
-            'önce MarkaKalkan hesabınızla giriş yapmalısınız.',
+    if (_isOpeningReport) return;
+    _isOpeningReport = true;
+
+    try {
+      final auth = FirebaseAuth.instance;
+
+      if (auth.currentUser == null) {
+        final shouldLogin = await showDialog<bool>(
+          context: context,
+          useRootNavigator: true,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Bildirim için giriş gerekli'),
+            content: const Text(
+              'Sahte ikiz bildirimini güvenli biçimde göndermek ve '
+              'başvuru kimliği almak için önce MarkaKalkan hesabınızla '
+              'giriş yapmalısınız.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext, rootNavigator: true).pop(false),
+                child: const Text('Vazgeç'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext, rootNavigator: true).pop(true),
+                child: const Text('Giriş Yap'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Vazgeç'),
+        );
+
+        if (shouldLogin != true || !mounted) return;
+
+        await AppRouter.openBrandLogin(context);
+        if (!mounted) return;
+
+        if (auth.currentUser == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Bildirim formunu açmak için giriş işlemini tamamlayın.',
+              ),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Giriş Yap'),
-            ),
-          ],
+          );
+          return;
+        }
+      }
+
+      final reportId = await showCounterfeitTwinReportDialog(context: context);
+      if (!mounted || reportId == null) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bildiriminiz incelemeye alındı. Başvuru: $reportId'),
         ),
       );
-
-      if (shouldLogin != true || !mounted) return;
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const BrandLoginPage()));
-      if (!mounted || FirebaseAuth.instance.currentUser == null) return;
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? 'Bildirim formu şu anda açılamıyor.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Bildirim formu şu anda açılamıyor. Lütfen yeniden deneyin.',
+          ),
+        ),
+      );
+    } finally {
+      _isOpeningReport = false;
     }
-
-    final reportId = await showCounterfeitTwinReportDialog(context: context);
-    if (!mounted || reportId == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Bildiriminiz incelemeye alındı. Başvuru: $reportId'),
-      ),
-    );
   }
 
   void _selectCategory(String value) {
