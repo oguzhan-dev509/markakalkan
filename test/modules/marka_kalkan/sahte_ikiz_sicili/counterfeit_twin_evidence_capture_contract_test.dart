@@ -73,4 +73,10 @@ void main() {
     );
     expect(storage, contains('allow update: if false;'));
   });
+  test('image evidence is optional', () {
+    expect(editor, contains('Görseller isteğe bağlıdır.'));
+    expect(editor, contains('if (images.isEmpty) return const <String>[];'));
+    expect(dialog, contains('originalImageUrls: evidence.originalImageUrls'));
+    expect(dialog, contains('suspectedImageUrls: evidence.suspectedImageUrls'));
+  });
 }

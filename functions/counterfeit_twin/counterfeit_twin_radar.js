@@ -389,18 +389,6 @@ function normalizePublicTaxonomy(data, targetType, robotType) {
 }
 
 
-const CRITICAL_RISK_SUBCATEGORIES = new Set([
-  "food_beverage",
-  "pharma_medical_health",
-  "cosmetics_personal_care",
-  "electronics_electrical",
-  "automotive_machinery",
-  "home_furniture_construction",
-  "production_tool_mold_component",
-  "toy_child_sports",
-  "agriculture_chemical_industrial",
-]);
-
 function slugifyPublicValue(value) {
   const replacements = Object.freeze({
     "ç": "c",
@@ -738,18 +726,13 @@ function cleanReportPayload(data) {
     publicSubcategory: taxonomy.subcategory,
     originalEntityName,
     suspectedEntityName,
-    usagePurpose: text(data.usagePurpose, "usagePurpose", 300, true),
+    usagePurpose: text(data.usagePurpose, "usagePurpose", 300),
     technicalIdentity: text(
         data.technicalIdentity,
         "technicalIdentity",
         500,
     ),
-    counterfeitRisk: text(
-        data.counterfeitRisk,
-        "counterfeitRisk",
-        500,
-        CRITICAL_RISK_SUBCATEGORIES.has(taxonomy.subcategory),
-    ),
+    counterfeitRisk: text(data.counterfeitRisk, "counterfeitRisk", 500),
     originalBrandName: text(
         data.originalBrandName,
         "originalBrandName",

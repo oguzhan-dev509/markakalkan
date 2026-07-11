@@ -51,18 +51,6 @@ class _CounterfeitTwinReportDialogState
   final _disputeReference = TextEditingController();
   final _refundAmount = TextEditingController();
 
-  static const Set<String> _criticalRiskSubcategoryValues = <String>{
-    'food_beverage',
-    'pharma_medical_health',
-    'cosmetics_personal_care',
-    'electronics_electrical',
-    'automotive_machinery',
-    'home_furniture_construction',
-    'production_tool_mold_component',
-    'toy_child_sports',
-    'agriculture_chemical_industrial',
-  };
-
   CounterfeitTwinPublicSection _publicCategory =
       CounterfeitTwinPublicSection.physical;
   CounterfeitTwinPublicSubcategory _publicSubcategory =
@@ -89,9 +77,6 @@ class _CounterfeitTwinReportDialogState
 
   List<CounterfeitTwinPublicSubcategory> get _availableSubcategories =>
       CounterfeitTwinPublicSubcategory.forSection(_publicCategory);
-
-  bool get _counterfeitRiskRequired =>
-      _criticalRiskSubcategoryValues.contains(_publicSubcategory.value);
 
   bool get _showFinancialSection => _hasMonetaryLoss || _disputeSubmitted;
 
@@ -621,13 +606,13 @@ class _CounterfeitTwinReportDialogState
                   maxLines: 5,
                   maxLength: 300,
                   decoration: const InputDecoration(
-                    labelText: 'Ne için kullanılır? *',
+                    labelText: 'Ne için kullanılır?',
                     hintText:
                         'Ürünün, hizmetin, platformun veya sistemin temel kullanım amacını açıklayın.',
                     alignLabelWithHint: true,
                   ),
                   validator: (value) =>
-                      _required(value, 'Ne için kullanılır?', 300),
+                      _optional(value, 'Ne için kullanılır?', 300),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -655,28 +640,15 @@ class _CounterfeitTwinReportDialogState
                   minLines: 2,
                   maxLines: 6,
                   maxLength: 500,
-                  decoration: InputDecoration(
-                    labelText: _counterfeitRiskRequired
-                        ? 'Sahte olduğunda doğabilecek risk *'
-                        : 'Sahte olduğunda doğabilecek risk',
+                  decoration: const InputDecoration(
+                    labelText: 'Sahte olduğunda doğabilecek risk',
                     hintText:
                         'Sağlık, güvenlik, veri, mali kayıp, hizmet kesintisi veya itibar riskini açıklayın.',
-                    helperText: _counterfeitRiskRequired
-                        ? 'Seçilen sağlık veya güvenlik açısından kritik kategoride zorunludur.'
-                        : 'Bu kategoride isteğe bağlıdır.',
+                    helperText: 'İsteğe bağlıdır.',
                     alignLabelWithHint: true,
                   ),
-                  validator: (value) => _counterfeitRiskRequired
-                      ? _required(
-                          value,
-                          'Sahte olduğunda doğabilecek risk',
-                          500,
-                        )
-                      : _optional(
-                          value,
-                          'Sahte olduğunda doğabilecek risk',
-                          500,
-                        ),
+                  validator: (value) =>
+                      _optional(value, 'Sahte olduğunda doğabilecek risk', 500),
                 ),
                 const SizedBox(height: 18),
                 const _SectionTitle('2. Kaynak ve bağlantılar'),

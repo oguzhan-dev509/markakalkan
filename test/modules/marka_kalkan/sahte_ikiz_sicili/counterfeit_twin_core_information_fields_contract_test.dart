@@ -41,44 +41,46 @@ void main() {
     }
   });
 
-  test('form displays counters and category-aware validation', () {
-    expect(dialog, contains("'Ne için kullanılır? *'"));
+  test('all three form fields are optional and keep character limits', () {
+    expect(dialog, contains("'Ne için kullanılır?'"));
     expect(dialog, contains("'Ayırt edici teknik bilgi / ürün kimliği'"));
-    expect(dialog, contains("'Sahte olduğunda doğabilecek risk *'"));
+    expect(dialog, contains("'Sahte olduğunda doğabilecek risk'"));
+    expect(dialog, isNot(contains('Ne için kullanılır? *')));
+    expect(dialog, isNot(contains('Sahte olduğunda doğabilecek risk *')));
+    expect(dialog, isNot(contains('_counterfeitRiskRequired')));
+    expect(dialog, isNot(contains('_criticalRiskSubcategoryValues')));
+    expect(dialog, contains("_optional(value, 'Ne için kullanılır?', 300)"));
     expect(dialog, contains('maxLength: 300'));
     expect(dialog, contains('maxLength: 500'));
-    expect(dialog, contains('_counterfeitRiskRequired'));
-    expect(dialog, contains('_criticalRiskSubcategoryValues'));
   });
 
-  test('callable validates and publishes the safe fields', () {
-    expect(
-      backend,
-      contains(
-        'usagePurpose: text(data.usagePurpose, "usagePurpose", 300, true)',
-      ),
-    );
-    expect(backend, contains('data.technicalIdentity'));
-    expect(backend, contains('data.counterfeitRisk'));
-    expect(backend, contains('CRITICAL_RISK_SUBCATEGORIES.has'));
-    expect(backend, contains('usagePurpose: report.usagePurpose || ""'));
-    expect(
-      backend,
-      contains('technicalIdentity: report.technicalIdentity || ""'),
-    );
-    expect(backend, contains('counterfeitRisk: report.counterfeitRisk || ""'));
-    expect(backend, contains('"food_beverage"'));
-    expect(backend, contains('"pharma_medical_health"'));
-    expect(backend, contains('"cosmetics_personal_care"'));
-    expect(backend, contains('"electronics_electrical"'));
-    expect(backend, contains('"automotive_machinery"'));
-    expect(backend, contains('"home_furniture_construction"'));
-    expect(backend, contains('"production_tool_mold_component"'));
-    expect(backend, contains('"toy_child_sports"'));
-    expect(backend, contains('"agriculture_chemical_industrial"'));
-  });
+  test(
+    'callable accepts empty optional fields and publishes values safely',
+    () {
+      expect(
+        backend,
+        contains('usagePurpose: text(data.usagePurpose, "usagePurpose", 300)'),
+      );
+      expect(
+        backend,
+        contains(
+          'counterfeitRisk: text(data.counterfeitRisk, "counterfeitRisk", 500)',
+        ),
+      );
+      expect(backend, isNot(contains('CRITICAL_RISK_SUBCATEGORIES')));
+      expect(backend, contains('usagePurpose: report.usagePurpose || ""'));
+      expect(
+        backend,
+        contains('technicalIdentity: report.technicalIdentity || ""'),
+      );
+      expect(
+        backend,
+        contains('counterfeitRisk: report.counterfeitRisk || ""'),
+      );
+    },
+  );
 
-  test('admin review exposes all three fields', () {
+  test('admin review exposes all three optional fields', () {
     expect(adminModel, contains("text('usagePurpose')"));
     expect(adminModel, contains("text('technicalIdentity')"));
     expect(adminModel, contains("text('counterfeitRisk')"));

@@ -453,8 +453,9 @@ class CounterfeitTwinEvidenceEditorState
           icon: Icons.photo_library_outlined,
           title: 'Görsel deliller',
           subtitle:
-              'Gerçek ve şüpheli görselleri ayrı yükleyin. JPG, PNG veya '
-              'WEBP; görsel başına en fazla 8 MB.',
+              'Görseller isteğe bağlıdır. Gerçek ve şüpheli görselleri ayrı '
+              'yükleyebilirsiniz. JPG, PNG veya WEBP; görsel başına en fazla '
+              '8 MB.',
         ),
         const SizedBox(height: 12),
         _ImagePickerCard(
