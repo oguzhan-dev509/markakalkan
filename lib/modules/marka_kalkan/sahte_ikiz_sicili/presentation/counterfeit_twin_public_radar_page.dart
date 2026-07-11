@@ -638,18 +638,27 @@ class _CategoryCard extends StatelessWidget {
               ),
               const Spacer(),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Text(
-                    'Karşılaştırmaları incele',
-                    style: TextStyle(
-                      color: data.accent,
-                      fontWeight: FontWeight.w900,
-                    ),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: ValueKey<String>(
+                    'counterfeit-twin-category-action-${data.value}',
                   ),
-                  const SizedBox(width: 6),
-                  Icon(Icons.arrow_forward_rounded, color: data.accent),
-                ],
+                  onPressed: onTap,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  label: const Text('Karşılaştırmaları incele'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: data.accent,
+                    side: BorderSide(
+                      color: data.accent.withValues(alpha: 0.42),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 13,
+                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
               ),
             ],
           ),
