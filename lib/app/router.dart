@@ -43,6 +43,7 @@ import 'package:markakalkan/modules/marka_kalkan/fikri_mulkiyet_belgeler/present
 
 import 'package:markakalkan/modules/marka_kalkan/fason_uretim_tedarik_guvenligi/presentation/supply_security_hub_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_registry_page.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_public_radar_page.dart';
 
 abstract final class AppRouter {
   static Future<void> openManagementCenter(BuildContext context) {
@@ -63,6 +64,14 @@ abstract final class AppRouter {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const CounterfeitTwinRegistryPage(),
+      ),
+    );
+  }
+
+  static Future<void> openCounterfeitTwinPublicRadar(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const CounterfeitTwinPublicRadarPage(),
       ),
     );
   }

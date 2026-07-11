@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_report_dialog.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 class MarkaKalkanHomePage extends StatelessWidget {
@@ -13,6 +15,7 @@ class MarkaKalkanHomePage extends StatelessWidget {
           slivers: [
             SliverToBoxAdapter(child: _Header()),
             SliverToBoxAdapter(child: _HeroSection()),
+            SliverToBoxAdapter(child: _PublicRadarSection()),
             SliverToBoxAdapter(child: _FeatureSection()),
             SliverToBoxAdapter(child: _ProtectionSection()),
             SliverToBoxAdapter(child: _Footer()),
@@ -410,6 +413,204 @@ class _VerificationCardState extends State<_VerificationCard> {
             style: TextStyle(color: Color(0xFF8A959D), fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PublicRadarSection extends StatelessWidget {
+  Future<void> _openReport(BuildContext context) async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      final shouldLogin = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Bildirim için giriş gerekli'),
+          content: const Text(
+            'Sahte ikiz bildirimini güvenli biçimde göndermek ve '
+            'başvuru kimliği almak için önce MarkaKalkan hesabınızla '
+            'giriş yapmalısınız.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Giriş Yap'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldLogin != true || !context.mounted) return;
+      await AppRouter.openBrandLogin(context);
+      if (!context.mounted) return;
+
+      if (FirebaseAuth.instance.currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Bildirim formunu açmak için giriş işlemini tamamlayın.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    final reportId = await showCounterfeitTwinReportDialog(context: context);
+    if (!context.mounted || reportId == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Bildiriminiz incelemeye alındı. Başvuru: $reportId'),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF3F7F8),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 72),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFD8E5E9)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0D000000),
+                  blurRadius: 24,
+                  offset: Offset(0, 12),
+                ),
+              ],
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final content = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F6F4),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: const Text(
+                        'SAHTE İKİZ RADARI',
+                        style: TextStyle(
+                          color: MarkaKalkanTheme.teal,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.7,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Gerçek Ürün – Sahte İkiz Karşılaştırmaları',
+                      style: TextStyle(
+                        color: MarkaKalkanTheme.navy,
+                        fontSize: 30,
+                        height: 1.18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Ürün, platform, SaaS, turizm, finans, ödeme sayfası, '
+                      'mobil uygulama, robot ve otonom ajan taklitlerini '
+                      'inceleyin. Şüpheli bir ikizle karşılaştıysanız '
+                      'delilleriyle birlikte MarkaKalkan’a bildirin.',
+                      style: TextStyle(
+                        color: Color(0xFF5D6B75),
+                        fontSize: 16,
+                        height: 1.55,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () {
+                            AppRouter.openCounterfeitTwinPublicRadar(context);
+                          },
+                          icon: const Icon(Icons.compare_arrows_outlined),
+                          label: const Text('Karşılaştırmaları İncele'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _openReport(context),
+                          icon: const Icon(Icons.report_outlined),
+                          label: const Text('Sahte İkiz Bildir'),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+
+                final visual = Container(
+                  constraints: const BoxConstraints(minHeight: 250),
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [MarkaKalkanTheme.navy, Color(0xFF1E5261)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.radar_outlined,
+                        color: Color(0xFFBCE7E3),
+                        size: 76,
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        'Gerçek kimliği doğrula.\nSahte ikizi görünür kıl.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 21,
+                          height: 1.35,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (constraints.maxWidth < 820) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [content, const SizedBox(height: 28), visual],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(flex: 6, child: content),
+                    const SizedBox(width: 36),
+                    Expanded(flex: 4, child: visual),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }

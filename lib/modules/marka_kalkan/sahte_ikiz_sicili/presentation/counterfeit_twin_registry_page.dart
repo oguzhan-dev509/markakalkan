@@ -7,6 +7,7 @@ import '../models/counterfeit_twin_model.dart';
 import '../repositories/counterfeit_twin_repository.dart';
 import 'counterfeit_twin_create_dialog.dart';
 import 'counterfeit_twin_detail_edit_dialog.dart';
+import 'counterfeit_twin_report_dialog.dart';
 
 class CounterfeitTwinRegistryPage extends StatefulWidget {
   const CounterfeitTwinRegistryPage({super.key});
@@ -60,6 +61,29 @@ class _CounterfeitTwinRegistryPageState
             fontWeight: FontWeight.w800,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Sahte ikiz bildir',
+            onPressed: () async {
+              final reportId = await showCounterfeitTwinReportDialog(
+                context: context,
+              );
+              if (!context.mounted || reportId == null) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Bildiriminiz incelemeye alındı. Kayıt: $reportId',
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(
+              Icons.report_outlined,
+              color: MarkaKalkanTheme.teal,
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showCounterfeitTwinCreateDialog(

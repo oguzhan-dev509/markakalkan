@@ -95,6 +95,15 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
       status: _ModuleStatus.active,
     ),
     _CorporateModule(
+      id: 'counterfeit_twin_radar',
+      title: 'Sahte İkiz Radarı',
+      description:
+          'Gerçek varlıklarla sahte ikizleri karşılaştırın; ürün, platform, '
+          'finans, turizm, robot ve otonom ajan taklitlerini bildirin.',
+      icon: Icons.radar_outlined,
+      status: _ModuleStatus.active,
+    ),
+    _CorporateModule(
       id: 'supply_security',
       title: 'Fason Üretim ve Tedarik Güvenliği',
       description:
@@ -628,6 +637,9 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'digital_market':
         AppRouter.openDijitalPazarIzleme(context);
+        return;
+      case 'counterfeit_twin_radar':
+        AppRouter.openCounterfeitTwinPublicRadar(context);
         return;
       case 'supply_security':
         AppRouter.openSupplySecurityHub(context);
