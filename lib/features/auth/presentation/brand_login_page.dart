@@ -2,10 +2,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/features/auth/data/brand_auth_service.dart';
 
 class BrandLoginPage extends StatefulWidget {
-  const BrandLoginPage({super.key});
+  const BrandLoginPage({
+    super.key,
+    this.intent = MarkaKalkanAuthIntent.corporateManagement,
+  });
+
+  final MarkaKalkanAuthIntent intent;
 
   @override
   State<BrandLoginPage> createState() => _BrandLoginPageState();
@@ -52,7 +58,7 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$email hesabıyla giriş başarılı.')),
       );
-      AppRouter.openCorporateHub(context);
+      _completeAuthenticatedFlow();
     } on FirebaseAuthException catch (error) {
       if (!mounted) {
         return;
@@ -92,6 +98,28 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
         });
       }
     }
+  }
+
+  void _completeAuthenticatedFlow() {
+    if (widget.intent.requiresCorporateFlow) {
+      AppRouter.openCorporateHub(context);
+      return;
+    }
+
+    Navigator.of(context).pop(true);
+  }
+
+  Future<void> _openAccountCreation() async {
+    final created = await AppRouter.openBrandAccountCreation(
+      context,
+      intent: widget.intent,
+    );
+
+    if (!mounted || created != true) {
+      return;
+    }
+
+    _completeAuthenticatedFlow();
   }
 
   @override
@@ -245,19 +273,18 @@ class _BrandLoginPageState extends State<BrandLoginPage> {
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () {
-                        AppRouter.openBrandAccountCreation(context);
-                      },
+                      onPressed: _openAccountCreation,
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 17),
                       ),
                       icon: const Icon(Icons.person_add_alt_1_outlined),
-                      label: const Text('Hesap Oluştur ve Marka Başvurusu Yap'),
+                      label: const Text('MarkaKalkan Hesabı Oluştur'),
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Başvurular, marka sahipliği ve şirket yetkisi '
-                      'doğrulandıktan sonra onaylanır.',
+                      'Tek hesabınızla Sahte İkiz bildirimi, Yaratım Sicili '
+                      've abonelik işlemlerini kullanabilirsiniz. Marka ve '
+                      'şirket yönetimi ayrıca onaylanır.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF8A959D),

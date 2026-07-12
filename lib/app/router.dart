@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/features/admin/presentation/management_center_page.dart';
 import 'package:markakalkan/features/admin/presentation/counterfeit_twin_review_queue_page.dart';
+import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/features/auth/presentation/brand_application_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
+import 'package:markakalkan/features/auth/presentation/corporate_access_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/brand_dashboard_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/brand_portfolio_page.dart';
 import 'package:markakalkan/features/product_codes/presentation/product_codes_page.dart';
@@ -246,10 +248,13 @@ abstract final class AppRouter {
     );
   }
 
-  static Future<void> openBrandLogin(BuildContext context) {
-    return Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const BrandLoginPage()));
+  static Future<bool?> openBrandLogin(
+    BuildContext context, {
+    MarkaKalkanAuthIntent intent = MarkaKalkanAuthIntent.corporateManagement,
+  }) {
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => BrandLoginPage(intent: intent)),
+    );
   }
 
   static Future<void> openDigitalDetectiveTasks(BuildContext context) {
@@ -313,9 +318,14 @@ abstract final class AppRouter {
     );
   }
 
-  static Future<void> openBrandAccountCreation(BuildContext context) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const BrandAccountCreationPage()),
+  static Future<bool?> openBrandAccountCreation(
+    BuildContext context, {
+    MarkaKalkanAuthIntent intent = MarkaKalkanAuthIntent.corporateManagement,
+  }) {
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => BrandAccountCreationPage(intent: intent),
+      ),
     );
   }
 
@@ -343,6 +353,13 @@ abstract final class AppRouter {
   static Future<String?> openQrScanner(BuildContext context) {
     return Navigator.of(context).push<String>(
       MaterialPageRoute<String>(builder: (_) => const QrScannerPage()),
+    );
+  }
+
+  static void openCorporateAccess(BuildContext context) {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const CorporateAccessPage()),
+      (route) => route.isFirst,
     );
   }
 

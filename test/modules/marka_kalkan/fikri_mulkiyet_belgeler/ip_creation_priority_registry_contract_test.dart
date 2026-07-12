@@ -24,7 +24,7 @@ void main() {
     test('registry page exposes legal notice and four filters', () {
       expect(
         pageSource,
-        contains('Bu fikir benim. Bu eser benim. Bu buluş benim.'),
+        contains('Bu fikir benim, bu eser benim, bu buluş benim'),
       );
       expect(pageSource, contains('IpCreationType? _creationTypeFilter'));
       expect(pageSource, contains('IpCreationPriorityStatus? _statusFilter'));
@@ -38,6 +38,12 @@ void main() {
     test('router opens registry page', () {
       expect(routerSource, contains('openIpCreationPriorityRegistry'));
       expect(routerSource, contains('const IpCreationPriorityRegistryPage()'));
+    });
+
+    test('signed-out registry uses the common login gateway', () {
+      expect(pageSource, contains('AppRouter.openBrandLogin('));
+      expect(pageSource, contains('MarkaKalkanAuthIntent.creationRegistry'));
+      expect(pageSource, contains('Marka Girişi ile Devam Et'));
     });
 
     test('corporate hub exposes active registry card', () {

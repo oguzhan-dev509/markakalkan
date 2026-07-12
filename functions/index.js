@@ -41,6 +41,10 @@ const {
 } = require("./brand_portfolio/brand_applications");
 
 const {
+  buildGetMyCorporateAccess,
+} = require("./brand_portfolio/corporate_access");
+
+const {
   buildVerifyAdminEntryGate,
   buildGetMyPlatformAdminAccess,
   buildListBrandApplicationsForAdmin,
@@ -245,6 +249,9 @@ exports.listSupplyProductionAssets =
 
 exports.listMyBrandApplications =
     buildListMyBrandApplications({db});
+
+exports.getMyCorporateAccess =
+    buildGetMyCorporateAccess({db});
 
 exports.verifyAdminEntryGate =
     buildVerifyAdminEntryGate({db, admin});

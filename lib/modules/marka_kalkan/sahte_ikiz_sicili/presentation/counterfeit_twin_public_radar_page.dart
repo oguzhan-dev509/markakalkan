@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_public_contract.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_radar_contract.dart';
@@ -144,10 +145,13 @@ class _CounterfeitTwinPublicRadarPageState
 
         if (shouldLogin != true || !mounted) return;
 
-        await AppRouter.openBrandLogin(context);
+        final signedIn = await AppRouter.openBrandLogin(
+          context,
+          intent: MarkaKalkanAuthIntent.counterfeitTwinReport,
+        );
         if (!mounted) return;
 
-        if (auth.currentUser == null) {
+        if (signedIn != true || auth.currentUser == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -638,8 +642,7 @@ class _CategoryCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const Spacer(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(

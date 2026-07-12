@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_report_dialog.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/home/presentation/widgets/home_solution_families_section.dart';
+import 'package:markakalkan/features/home/presentation/widgets/home_partners_sponsor_section.dart';
 
 class MarkaKalkanHomePage extends StatelessWidget {
   const MarkaKalkanHomePage({super.key});
@@ -10,14 +12,20 @@ class MarkaKalkanHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF061722),
       body: SelectionArea(
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _Header()),
             SliverToBoxAdapter(child: _HeroSection()),
             SliverToBoxAdapter(child: _PublicRadarSection()),
+            SliverToBoxAdapter(child: _PublicServicesSection()),
+            SliverToBoxAdapter(child: _AiFieldDetectivesShowcase()),
+            SliverToBoxAdapter(child: _DefenseChainSection()),
+            SliverToBoxAdapter(child: HomeSolutionFamiliesSection()),
             SliverToBoxAdapter(child: _FeatureSection()),
             SliverToBoxAdapter(child: _ProtectionSection()),
+            SliverToBoxAdapter(child: HomePartnersSponsorSection()),
             SliverToBoxAdapter(child: _Footer()),
           ],
         ),
@@ -614,6 +622,723 @@ class _PublicRadarSection extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PublicServicesSection extends StatelessWidget {
+  const _PublicServicesSection();
+
+  @override
+  Widget build(BuildContext context) {
+    const services = <_PublicServiceData>[
+      _PublicServiceData(
+        icon: Icons.radar_outlined,
+        eyebrow: 'KAMUYA AÇIK',
+        title: 'Sahte İkiz Radarı',
+        description:
+            'Gerçek ürünleri, platformları ve dijital varlıkları sahte '
+            'ikizleriyle karşılaştırın; şüpheli vakaları delilleriyle bildirin.',
+        actionLabel: 'Radarı Aç',
+        accent: MarkaKalkanTheme.teal,
+        background: Color(0xFFE8F6F4),
+        action: _PublicServiceAction.counterfeitRadar,
+      ),
+      _PublicServiceData(
+        icon: Icons.history_edu_outlined,
+        eyebrow: 'YARATICILAR İÇİN',
+        title: 'Yaratım Öncelik Sicili',
+        description:
+            'Fikir, tasarım, yazılım, eser ve buluşlarınızın zaman çizelgesini, '
+            'sürümlerini ve delil paketini güvenli biçimde kayıt altına alın.',
+        actionLabel: 'Sicile Git',
+        accent: Color(0xFF9A6A16),
+        background: Color(0xFFFFF5DF),
+        action: _PublicServiceAction.creationRegistry,
+      ),
+      _PublicServiceData(
+        icon: Icons.verified_outlined,
+        eyebrow: 'ANINDA DOĞRULAMA',
+        title: 'Ürün ve Marka Doğrulama',
+        description:
+            'QR kodunu okutun veya tekil ürün kodunu girin; ürün kimliğini '
+            've doğrulama kaydını birkaç saniye içinde inceleyin.',
+        actionLabel: 'Ürünü Doğrula',
+        accent: MarkaKalkanTheme.blue,
+        background: Color(0xFFEAF4F6),
+        action: _PublicServiceAction.productVerification,
+      ),
+    ];
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 78),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SectionHeading(
+                eyebrow: 'HERKESE AÇIK MARKAKALKAN HİZMETLERİ',
+                title: 'Koruma, doğrulama ve kayıt tek kapıda',
+                description:
+                    'MarkaKalkan’ın kamu yararı taşıyan temel araçlarına '
+                    'hesap duvarına takılmadan ulaşın; gerektiğinde ortak '
+                    'MarkaKalkan hesabınızla işleme devam edin.',
+              ),
+              const SizedBox(height: 38),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columns = width < 720 ? 1 : (width < 1040 ? 2 : 3);
+                  final itemWidth = (width - ((columns - 1) * 20)) / columns;
+
+                  return Wrap(
+                    spacing: 20,
+                    runSpacing: 20,
+                    children: services
+                        .map(
+                          (service) => SizedBox(
+                            width: itemWidth,
+                            child: _PublicServiceCard(service: service),
+                          ),
+                        )
+                        .toList(growable: false),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicServiceCard extends StatelessWidget {
+  const _PublicServiceCard({required this.service});
+
+  final _PublicServiceData service;
+
+  void _open(BuildContext context) {
+    switch (service.action) {
+      case _PublicServiceAction.counterfeitRadar:
+        AppRouter.openCounterfeitTwinPublicRadar(context);
+      case _PublicServiceAction.creationRegistry:
+        AppRouter.openIpCreationPriorityRegistry(context);
+      case _PublicServiceAction.productVerification:
+        AppRouter.openProductVerification(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 330),
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFDDE6EA)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 22,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: service.background,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(service.icon, color: service.accent, size: 31),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            service.eyebrow,
+            style: TextStyle(
+              color: service.accent,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            service.title,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 22,
+              height: 1.2,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            service.description,
+            style: const TextStyle(
+              color: Color(0xFF687580),
+              fontSize: 15,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 22),
+          TextButton.icon(
+            onPressed: () => _open(context),
+            style: TextButton.styleFrom(
+              foregroundColor: service.accent,
+              padding: EdgeInsets.zero,
+            ),
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(Icons.arrow_forward_rounded, size: 19),
+            label: Text(
+              service.actionLabel,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiFieldDetectivesShowcase extends StatelessWidget {
+  const _AiFieldDetectivesShowcase();
+
+  @override
+  Widget build(BuildContext context) {
+    const agents = <_AiAgentPreviewData>[
+      _AiAgentPreviewData(
+        icon: Icons.travel_explore_outlined,
+        title: 'Dijital Saha Tarama',
+      ),
+      _AiAgentPreviewData(
+        icon: Icons.image_search_outlined,
+        title: 'Görsel Eşleştirme',
+      ),
+      _AiAgentPreviewData(
+        icon: Icons.account_tree_outlined,
+        title: 'Satıcı ve Varlık Ağı',
+      ),
+      _AiAgentPreviewData(
+        icon: Icons.change_circle_outlined,
+        title: 'Sayfa Değişim İzleme',
+      ),
+      _AiAgentPreviewData(
+        icon: Icons.fact_check_outlined,
+        title: 'Kanıt Dosyası',
+      ),
+      _AiAgentPreviewData(
+        icon: Icons.priority_high_rounded,
+        title: 'Risk Önceliklendirme',
+      ),
+    ];
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF071923), MarkaKalkanTheme.navy, Color(0xFF123E4B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 88),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final content = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _DarkSectionEyebrow(
+                    text: 'YAPAY ZEKÂ SAHA DEDEKTİFLERİ',
+                  ),
+                  const SizedBox(height: 22),
+                  const Text(
+                    '12 uzman yapay zekâ dedektifi,\nmarkanız için aynı operasyonda çalışır.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 38,
+                      height: 1.14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Dijital mağazaları tarar, görselleri eşleştirir, '
+                    'satıcı ağlarını çözümler, değişen sayfaları izler, '
+                    'risk sinyallerini birleştirir ve müdahale dosyası hazırlar.',
+                    style: TextStyle(
+                      color: Color(0xFFC9D8DE),
+                      fontSize: 16,
+                      height: 1.65,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () {
+                          AppRouter.openAiFieldDetectivesHub(context);
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: MarkaKalkanTheme.teal,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 22,
+                            vertical: 17,
+                          ),
+                        ),
+                        icon: const Icon(Icons.hub_outlined),
+                        label: const Text('Dedektifleri Keşfet'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          AppRouter.openBrandLogin(context);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF6C909E)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 22,
+                            vertical: 17,
+                          ),
+                        ),
+                        icon: const Icon(Icons.play_circle_outline),
+                        label: const Text('Markanız İçin Görev Başlat'),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+
+              final operationMap = Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: const Color(0x1AFFFFFF),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: const Color(0x336ECFC5)),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF123B49),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFF3B7B84)),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.psychology_alt_outlined,
+                            color: Color(0xFFBCE7E3),
+                          ),
+                          SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              'Görev Planlama Merkezi',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    LayoutBuilder(
+                      builder: (context, gridConstraints) {
+                        final itemWidth = (gridConstraints.maxWidth - 12) / 2;
+
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: agents
+                              .map(
+                                (agent) => SizedBox(
+                                  width: itemWidth,
+                                  child: _AiAgentPreview(agent: agent),
+                                ),
+                              )
+                              .toList(growable: false),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      '12 uzman ajan • ortak kanıt zinciri • tek operasyon',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFFAFC6CF),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (constraints.maxWidth < 880) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [content, const SizedBox(height: 42), operationMap],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(flex: 11, child: content),
+                  const SizedBox(width: 54),
+                  Expanded(flex: 9, child: operationMap),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiAgentPreview extends StatelessWidget {
+  const _AiAgentPreview({required this.agent});
+
+  final _AiAgentPreviewData agent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 106),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0x14000000),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: const Color(0x267FB8C1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(agent.icon, color: const Color(0xFF86DAD1), size: 24),
+          const SizedBox(height: 10),
+          Text(
+            agent.title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              height: 1.25,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DefenseChainSection extends StatelessWidget {
+  const _DefenseChainSection();
+
+  @override
+  Widget build(BuildContext context) {
+    const steps = <_DefenseStepData>[
+      _DefenseStepData(
+        number: '01',
+        icon: Icons.category_outlined,
+        title: 'Tanımla',
+        description: 'Markanızı, ürününüzü ve fikri varlıklarınızı belirleyin.',
+      ),
+      _DefenseStepData(
+        number: '02',
+        icon: Icons.edit_note_outlined,
+        title: 'Kaydet',
+        description: 'Hak, öncelik, belge ve delil zincirini oluşturun.',
+      ),
+      _DefenseStepData(
+        number: '03',
+        icon: Icons.factory_outlined,
+        title: 'Güvenceye Al',
+        description: 'Üretim, tedarik ve yetki sınırlarını koruyun.',
+      ),
+      _DefenseStepData(
+        number: '04',
+        icon: Icons.visibility_outlined,
+        title: 'İzle',
+        description:
+            'Dijital kaynakları, satıcıları ve değişimleri takip edin.',
+      ),
+      _DefenseStepData(
+        number: '05',
+        icon: Icons.radar_outlined,
+        title: 'Tespit Et',
+        description: 'Sahte ikizleri ve risk sinyallerini görünür kılın.',
+      ),
+      _DefenseStepData(
+        number: '06',
+        icon: Icons.fact_check_outlined,
+        title: 'Kanıtla',
+        description: 'Görsel, belge, kaynak ve zaman çizelgesini birleştirin.',
+      ),
+      _DefenseStepData(
+        number: '07',
+        icon: Icons.gavel_outlined,
+        title: 'Müdahale Et',
+        description: 'Vaka dosyasını yönetin ve doğru aksiyonu başlatın.',
+      ),
+    ];
+
+    return Container(
+      color: const Color(0xFFF4F7F8),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 80),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SectionHeading(
+                eyebrow: 'MARKAKALKAN SAVUNMA ZİNCİRİ',
+                title:
+                    'Birbirinden kopuk araçlar değil, yaşayan bir savunma sistemi',
+                description:
+                    'MarkaKalkan; ilk varlık kaydından dijital tehdidin '
+                    'tespitine, kanıt dosyasından müdahaleye kadar bütün '
+                    'savunma adımlarını aynı izlenebilir zincirde birleştirir.',
+              ),
+              const SizedBox(height: 38),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columns = width < 620 ? 1 : (width < 940 ? 2 : 4);
+                  final itemWidth = (width - ((columns - 1) * 16)) / columns;
+
+                  return Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: steps
+                        .map(
+                          (step) => SizedBox(
+                            width: itemWidth,
+                            child: _DefenseStepCard(step: step),
+                          ),
+                        )
+                        .toList(growable: false),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DefenseStepCard extends StatelessWidget {
+  const _DefenseStepCard({required this.step});
+
+  final _DefenseStepData step;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 212),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(21),
+        border: Border.all(color: const Color(0xFFDCE6EA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F6F4),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(step.icon, color: MarkaKalkanTheme.teal, size: 25),
+              ),
+              const Spacer(),
+              Text(
+                step.number,
+                style: const TextStyle(
+                  color: Color(0xFFB4C1C7),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            step.title,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            step.description,
+            style: const TextStyle(
+              color: Color(0xFF687580),
+              height: 1.5,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({
+    required this.eyebrow,
+    required this.title,
+    required this.description,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 830),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            eyebrow,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.teal,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 34,
+              height: 1.17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            description,
+            style: const TextStyle(
+              color: Color(0xFF687580),
+              fontSize: 16,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DarkSectionEyebrow extends StatelessWidget {
+  const _DarkSectionEyebrow({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0x1A6ECFC5),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: const Color(0x556ECFC5)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFFBCE7E3),
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+enum _PublicServiceAction {
+  counterfeitRadar,
+  creationRegistry,
+  productVerification,
+}
+
+class _PublicServiceData {
+  const _PublicServiceData({
+    required this.icon,
+    required this.eyebrow,
+    required this.title,
+    required this.description,
+    required this.actionLabel,
+    required this.accent,
+    required this.background,
+    required this.action,
+  });
+
+  final IconData icon;
+  final String eyebrow;
+  final String title;
+  final String description;
+  final String actionLabel;
+  final Color accent;
+  final Color background;
+  final _PublicServiceAction action;
+}
+
+class _AiAgentPreviewData {
+  const _AiAgentPreviewData({required this.icon, required this.title});
+
+  final IconData icon;
+  final String title;
+}
+
+class _DefenseStepData {
+  const _DefenseStepData({
+    required this.number,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final String number;
+  final IconData icon;
+  final String title;
+  final String description;
 }
 
 class _FeatureSection extends StatelessWidget {

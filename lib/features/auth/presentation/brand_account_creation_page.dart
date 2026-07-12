@@ -2,10 +2,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/features/auth/data/brand_auth_service.dart';
 
 class BrandAccountCreationPage extends StatefulWidget {
-  const BrandAccountCreationPage({super.key});
+  const BrandAccountCreationPage({
+    super.key,
+    this.intent = MarkaKalkanAuthIntent.corporateManagement,
+  });
+
+  final MarkaKalkanAuthIntent intent;
 
   @override
   State<BrandAccountCreationPage> createState() =>
@@ -67,11 +73,16 @@ class _BrandAccountCreationPageState extends State<BrandAccountCreationPage> {
               'MarkaKalkan’a hoş geldiniz',
               textAlign: TextAlign.center,
             ),
-            content: const Text(
-              'Hesabınız başarıyla oluşturuldu. E-posta adresinize '
-              'doğrulama bağlantısı gönderdik.\n\n'
-              'Şimdi marka sahipliği ve şirket yetkisi incelemesi için '
-              'başvurunuzu tamamlayın.',
+            content: Text(
+              widget.intent.requiresCorporateFlow
+                  ? 'Hesabınız başarıyla oluşturuldu. E-posta adresinize '
+                        'doğrulama bağlantısı gönderdik.\n\n'
+                        'Marka ve şirket yönetimi için yetki başvurunuzu '
+                        'ayrıca tamamlayabilirsiniz.'
+                  : 'Hesabınız başarıyla oluşturuldu. E-posta adresinize '
+                        'doğrulama bağlantısı gönderdik.\n\n'
+                        'Başlattığınız MarkaKalkan işlemine devam '
+                        'edebilirsiniz.',
               textAlign: TextAlign.center,
               style: TextStyle(height: 1.5),
             ),
@@ -82,7 +93,11 @@ class _BrandAccountCreationPageState extends State<BrandAccountCreationPage> {
                   Navigator.of(dialogContext).pop();
                 },
                 icon: const Icon(Icons.arrow_forward),
-                label: const Text('Başvuruya Devam Et'),
+                label: Text(
+                  widget.intent.requiresCorporateFlow
+                      ? 'Yetki Başvurusuna Devam Et'
+                      : 'İşleme Devam Et',
+                ),
               ),
             ],
           );
@@ -93,7 +108,15 @@ class _BrandAccountCreationPageState extends State<BrandAccountCreationPage> {
         return;
       }
 
-      await AppRouter.openBrandApplication(context);
+      if (widget.intent.requiresCorporateFlow) {
+        await AppRouter.openBrandApplication(context);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop(true);
     } on FirebaseAuthException catch (error) {
       if (!mounted) {
         return;
@@ -191,8 +214,9 @@ class _BrandAccountCreationPageState extends State<BrandAccountCreationPage> {
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Hesabınızı oluşturduktan sonra marka sahipliği ve '
-                      'şirket yetkisi başvurunuzu tamamlayacaksınız.',
+                      'Tek hesabınızla Sahte İkiz bildirimi, Yaratım Öncelik '
+                      'Sicili, abonelik ve profil işlemlerini kullanın. '
+                      'Marka veya şirket yönetimi ayrıca onay gerektirir.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Color(0xFF687580), height: 1.5),
                     ),
@@ -306,9 +330,9 @@ class _BrandAccountCreationPageState extends State<BrandAccountCreationPage> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'Hesap oluşturmak marka yönetim yetkisi vermez. '
-                      'Başvurunuz MarkaKalkan yönetimi tarafından '
-                      'incelendikten sonra onaylanır.',
+                      'Hesap oluşturmak marka veya şirket yönetim yetkisi '
+                      'vermez. Kurumsal panel erişimi ayrıca başvuru ve '
+                      'onay gerektirir.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF7C8992),

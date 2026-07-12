@@ -18,7 +18,8 @@ void main() {
   });
 
   test('canonical login route is used', () {
-    expect(radar, contains('AppRouter.openBrandLogin(context)'));
+    expect(radar, contains('AppRouter.openBrandLogin('));
+    expect(radar, contains('MarkaKalkanAuthIntent.counterfeitTwinReport'));
     expect(radar, isNot(contains('BrandLoginPage()')));
   });
 

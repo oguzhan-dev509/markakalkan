@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 import '../constants/ip_creation_priority_enums.dart';
@@ -1162,16 +1164,64 @@ class _RegistryMessage extends StatelessWidget {
 class _SignedOutPage extends StatelessWidget {
   const _SignedOutPage();
 
+  Future<void> _openLogin(BuildContext context) async {
+    final signedIn = await AppRouter.openBrandLogin(
+      context,
+      intent: MarkaKalkanAuthIntent.creationRegistry,
+    );
+
+    if (signedIn != true || !context.mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => const IpCreationPriorityRegistryPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: MarkaKalkanTheme.background,
-      body: _RegistryMessage(
-        icon: Icons.lock_outline,
-        title: 'Oturum gerekli',
-        description:
-            'Yaratım Öncelik Sicili kayıtlarını görüntülemek için marka '
-            'hesabınızla oturum açın.',
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        title: const Text(
+          'Yaratım Öncelik Sicili',
+          style: TextStyle(
+            color: MarkaKalkanTheme.navy,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _RegistryMessage(
+                  icon: Icons.lock_outline,
+                  title: 'Oturum gerekli',
+                  description:
+                      'Yaratım Öncelik Sicili kayıtlarını görüntülemek veya '
+                      'yeni kayıt oluşturmak için ortak MarkaKalkan '
+                      'hesabınızla giriş yapın.',
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: () => _openLogin(context),
+                  icon: const Icon(Icons.login),
+                  label: const Text('Marka Girişi ile Devam Et'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
