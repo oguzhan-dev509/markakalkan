@@ -65,172 +65,27 @@ setGlobalOptions({
   maxInstances: 3,
 });
 
-function normalizeCode(value) {
-  if (typeof value !== "string") {
-    return "";
-  }
+const {
+  buildTraceabilityCallables,
+} = require("./traceability/traceability");
 
-  return value.trim().toUpperCase();
-}
+const traceabilityCallables = buildTraceabilityCallables({
+  db,
+  admin,
+  onCall,
+  HttpsError,
+  logger,
+});
 
-function normalizePlatform(value) {
-  const allowedPlatforms = [
-    "web",
-    "android",
-    "ios",
-    "windows",
-    "macos",
-    "linux",
-    "other",
-  ];
-
-  if (typeof value !== "string") {
-    return "other";
-  }
-
-  const normalized = value.trim().toLowerCase();
-
-  return allowedPlatforms.includes(normalized) ? normalized : "other";
-}
-
-function normalizeSource(value) {
-  return value === "qr" ? "qr" : "manual";
-}
-
-exports.verifyProductCode = onCall(
-    {
-      // App Check kurulmadan true yapılmamalıdır.
-      enforceAppCheck: false,
-      maxInstances: 3,
-    },
-    async (request) => {
-      const publicCode = normalizeCode(request.data?.publicCode);
-      const platform = normalizePlatform(request.data?.platform);
-      const source = normalizeSource(request.data?.source);
-
-      if (
-        publicCode.length < 10 ||
-        publicCode.length > 80 ||
-        !/^MK-[A-Z0-9-]+$/.test(publicCode)
-      ) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Geçerli bir MarkaKalkan ürün kodu girilmelidir.",
-        );
-      }
-
-      const publicCodeRef = db
-          .collection("publicProductCodes")
-          .doc(publicCode);
-
-      const privateCodeRef = db
-          .collection("productCodes")
-          .doc(publicCode);
-
-      const scanRef = db.collection("verificationScans").doc();
-
-      try {
-        const result = await db.runTransaction(async (transaction) => {
-          const publicSnapshot = await transaction.get(publicCodeRef);
-          const privateSnapshot = await transaction.get(privateCodeRef);
-
-          const verifiedAt = admin.firestore.Timestamp.now();
-
-          if (!publicSnapshot.exists || !privateSnapshot.exists) {
-            transaction.set(scanRef, {
-              publicCode,
-              found: false,
-              result: "not_found",
-              platform,
-              source,
-              repeatScan: false,
-              suspicious: false,
-              createdAt: verifiedAt,
-            });
-
-            return {
-              found: false,
-              publicCode,
-              result: "not_found",
-            };
-          }
-
-          const publicData = publicSnapshot.data();
-          const privateData = privateSnapshot.data();
-
-          const previousScanCount =
-            Number.isInteger(privateData.scanCount) ?
-              privateData.scanCount :
-              0;
-
-          const nextScanCount = previousScanCount + 1;
-          const repeatScan = nextScanCount > 1;
-
-          transaction.update(privateCodeRef, {
-            scanCount: nextScanCount,
-            firstVerifiedAt:
-              privateData.firstVerifiedAt ?? verifiedAt,
-            lastVerifiedAt: verifiedAt,
-            updatedAt: verifiedAt,
-          });
-
-          transaction.set(scanRef, {
-            publicCode,
-            ownerUid: privateData.ownerUid,
-            productId: privateData.productId,
-            batchId: privateData.batchId,
-            brandName: publicData.brandName,
-            productName: publicData.productName,
-            batchNumber: publicData.batchNumber,
-            status: privateData.status,
-            found: true,
-            result: privateData.status,
-            platform,
-            source,
-            scanNumber: nextScanCount,
-            repeatScan,
-            suspicious: false,
-            createdAt: verifiedAt,
-          });
-
-          return {
-            found: true,
-            publicCode,
-            brandName: publicData.brandName,
-            productName: publicData.productName,
-            batchNumber: publicData.batchNumber,
-            status: privateData.status,
-            scanCount: nextScanCount,
-            repeatScan,
-          };
-        });
-
-        logger.info("Product code verified", {
-          publicCode,
-          found: result.found,
-          result: result.result ?? result.status,
-          platform,
-          source,
-        });
-
-        return result;
-      } catch (error) {
-        logger.error("Product verification failed", {
-          publicCode,
-          error,
-        });
-
-        if (error instanceof HttpsError) {
-          throw error;
-        }
-
-        throw new HttpsError(
-            "internal",
-            "Ürün kodu doğrulanırken sunucu hatası oluştu.",
-        );
-      }
-    },
-);
+exports.verifyProductCode = traceabilityCallables.verifyProductCode;
+exports.listSuspiciousVerificationScans =
+  traceabilityCallables.listSuspiciousVerificationScans;
+exports.reviewSuspiciousVerificationScan =
+  traceabilityCallables.reviewSuspiciousVerificationScan;
+exports.createTraceabilityCaseFromScan =
+  traceabilityCallables.createTraceabilityCaseFromScan;
+exports.listTraceabilityCases =
+  traceabilityCallables.listTraceabilityCases;
 
 exports.createSupplyProtectionControl =
     buildCreateSupplyProtectionControl({db, admin});

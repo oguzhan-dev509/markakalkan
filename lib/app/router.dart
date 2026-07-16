@@ -12,6 +12,8 @@ import 'package:markakalkan/features/production_batches/presentation/production_
 import 'package:markakalkan/features/products/presentation/products_page.dart';
 import 'package:markakalkan/features/verification/presentation/product_verification_page.dart';
 import 'package:markakalkan/features/verification/presentation/qr_scanner_page.dart';
+import 'package:markakalkan/features/traceability/presentation/suspicious_verification_scans_page.dart';
+import 'package:markakalkan/features/traceability/presentation/traceability_cases_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -384,6 +386,20 @@ abstract final class AppRouter {
 
   static Future<void> openBrandOperations(BuildContext context) {
     return openTraceabilityHub(context);
+  }
+
+  static Future<void> openSuspiciousVerificationScans(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const SuspiciousVerificationScansPage(),
+      ),
+    );
+  }
+
+  static Future<void> openTraceabilityCases(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const TraceabilityCasesPage()),
+    );
   }
 
   static void openProducts(BuildContext context) {

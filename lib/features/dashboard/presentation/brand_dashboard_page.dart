@@ -251,6 +251,16 @@ class _DashboardModuleCard extends StatelessWidget {
           return;
         }
 
+        if (module.title == 'Şüpheli Taramalar') {
+          AppRouter.openSuspiciousVerificationScans(context);
+          return;
+        }
+
+        if (module.title == 'Vaka Dosyaları') {
+          AppRouter.openTraceabilityCases(context);
+          return;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
