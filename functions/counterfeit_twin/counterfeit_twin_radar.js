@@ -719,6 +719,60 @@ function cleanReportPayload(data) {
       500,
       true,
   );
+  const originalImageUrls = stringList(
+      data.originalImageUrls,
+      "originalImageUrls",
+  );
+  const originalUrls = stringList(
+      data.originalUrls,
+      "originalUrls",
+      20,
+      1200,
+  );
+  const suspectedImageUrls = stringList(
+      data.suspectedImageUrls,
+      "suspectedImageUrls",
+  );
+  const suspectedUrls = stringList(
+      data.suspectedUrls,
+      "suspectedUrls",
+      20,
+      1200,
+  );
+  const evidenceNotes = text(
+      data.evidenceNotes,
+      "evidenceNotes",
+      1500,
+      true,
+  );
+  if (evidenceNotes.length < 30) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Olay ve kanit aciklamasi en az 30 karakter olmalidir.",
+    );
+  }
+  const evidenceValues = [
+    ...originalImageUrls,
+    ...originalUrls,
+    ...suspectedImageUrls,
+    ...suspectedUrls,
+  ];
+  const hasVerifiableEvidence = evidenceValues.some((value) => {
+    try {
+      const parsed = new URL(value);
+      return ["http:", "https:"].includes(parsed.protocol) &&
+          Boolean(parsed.hostname);
+    } catch (_) {
+      return false;
+    }
+  });
+  if (!hasVerifiableEvidence) {
+    throw new HttpsError(
+        "invalid-argument",
+        "En az bir dogrulanabilir kanit gorseli veya kaynak " +
+        "baglantisi zorunludur.",
+    );
+  }
 
   return {
     targetType,
@@ -732,7 +786,7 @@ function cleanReportPayload(data) {
         "technicalIdentity",
         500,
     ),
-    counterfeitRisk: text(data.counterfeitRisk, "counterfeitRisk", 500),
+    counterfeitRisk: text(data.counterfeitRisk, "counterfeitRisk", 750),
     originalBrandName: text(
         data.originalBrandName,
         "originalBrandName",
@@ -741,11 +795,8 @@ function cleanReportPayload(data) {
     ),
     originalProductName: legacyOriginal || originalEntityName,
     originalCountry: text(data.originalCountry, "originalCountry", 120),
-    originalImageUrls: stringList(
-        data.originalImageUrls,
-        "originalImageUrls",
-    ),
-    originalUrls: stringList(data.originalUrls, "originalUrls", 20, 1200),
+    originalImageUrls,
+    originalUrls,
     suspectedBrandName: text(
         data.suspectedBrandName,
         "suspectedBrandName",
@@ -762,16 +813,8 @@ function cleanReportPayload(data) {
         "allegedSupplyCountry",
         120,
     ),
-    suspectedImageUrls: stringList(
-        data.suspectedImageUrls,
-        "suspectedImageUrls",
-    ),
-    suspectedUrls: stringList(
-        data.suspectedUrls,
-        "suspectedUrls",
-        20,
-        1200,
-    ),
+    suspectedImageUrls,
+    suspectedUrls,
     incidentTypes: enumList(
         data.incidentTypes,
         "incidentTypes",
@@ -801,7 +844,7 @@ function cleanReportPayload(data) {
         20,
         500,
     ),
-    evidenceNotes: text(data.evidenceNotes, "evidenceNotes", 5000, true),
+    evidenceNotes,
     financialImpact: cleanFinancialImpact(data.financialImpact),
   };
 }
@@ -809,6 +852,14 @@ function cleanReportPayload(data) {
 function buildSubmitCounterfeitTwinReport({db, admin}) {
   return onCall(async (request) => {
     const actor = requireAuthenticatedUser(request);
+    const signInProvider =
+      request.auth?.token?.firebase?.sign_in_provider || "";
+    if (!actor.email || signInProvider === "anonymous") {
+      throw new HttpsError(
+          "unauthenticated",
+          "Bildirim icin kayitli MarkaKalkan hesabi gerekir.",
+      );
+    }
     const payload = cleanReportPayload(request.data || {});
     const now = admin.firestore.Timestamp.now();
     const reportRef = db.collection(REPORTS).doc();

@@ -1,14 +1,42 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 import '../models/counterfeit_twin_radar_contract.dart';
-import 'counterfeit_twin_comparison_codec.dart';
-import 'counterfeit_twin_evidence_editor.dart';
+import 'counterfeit_twin_simple_evidence_editor.dart';
 
 Future<String?> showCounterfeitTwinReportDialog({
   required BuildContext context,
-}) {
+}) async {
+  final user = FirebaseAuth.instance.currentUser;
+  final email = user?.email?.trim() ?? '';
+  final hasRegisteredSession =
+      user != null && !user.isAnonymous && email.isNotEmpty;
+
+  if (!hasRegisteredSession) {
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Bildirim için giriş gerekli'),
+        content: const Text(
+          'Sahte ikiz bildirimi göndermek için kayıtlı MarkaKalkan '
+          'hesabınızla giriş yapmalısınız. Sahte İkiz Radarı giriş '
+          'yapmadan okunabilir.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
+    );
+    return null;
+  }
+
   return showDialog<String>(
     context: context,
     barrierDismissible: false,
@@ -28,7 +56,8 @@ class _CounterfeitTwinReportDialogState
     extends State<_CounterfeitTwinReportDialog> {
   final _formKey = GlobalKey<FormState>();
   final _service = CounterfeitTwinRadarService();
-  final _evidenceEditorKey = GlobalKey<CounterfeitTwinEvidenceEditorState>();
+  final _evidenceEditorKey =
+      GlobalKey<CounterfeitTwinSimpleEvidenceEditorState>();
 
   final _originalEntityName = TextEditingController();
   final _suspectedEntityName = TextEditingController();
@@ -38,18 +67,10 @@ class _CounterfeitTwinReportDialogState
   final _storeDisplayName = TextEditingController();
   final _originalUrls = TextEditingController();
   final _suspectedUrls = TextEditingController();
-  final _differenceNotes = TextEditingController();
   final _evidenceNotes = TextEditingController();
   final _usagePurpose = TextEditingController();
   final _technicalIdentity = TextEditingController();
   final _counterfeitRisk = TextEditingController();
-
-  final _lossAmount = TextEditingController();
-  final _paymentMethod = TextEditingController();
-  final _bankOrPaymentProvider = TextEditingController();
-  final _merchantDescriptor = TextEditingController();
-  final _disputeReference = TextEditingController();
-  final _refundAmount = TextEditingController();
 
   CounterfeitTwinPublicSection _publicCategory =
       CounterfeitTwinPublicSection.physical;
@@ -60,12 +81,6 @@ class _CounterfeitTwinReportDialogState
   CounterfeitTwinRobotType? _robotType;
   final Set<CounterfeitTwinIncidentType> _incidentTypes =
       <CounterfeitTwinIncidentType>{};
-
-  bool _hasMonetaryLoss = false;
-  bool _disputeSubmitted = false;
-  String _currency = 'TRY';
-  String _disputeStatus = 'submitted';
-  String _recoveryStatus = 'unknown';
 
   bool _isSubmitting = false;
   String? _error;
@@ -78,8 +93,6 @@ class _CounterfeitTwinReportDialogState
   List<CounterfeitTwinPublicSubcategory> get _availableSubcategories =>
       CounterfeitTwinPublicSubcategory.forSection(_publicCategory);
 
-  bool get _showFinancialSection => _hasMonetaryLoss || _disputeSubmitted;
-
   @override
   void dispose() {
     for (final controller in <TextEditingController>[
@@ -91,17 +104,10 @@ class _CounterfeitTwinReportDialogState
       _storeDisplayName,
       _originalUrls,
       _suspectedUrls,
-      _differenceNotes,
       _evidenceNotes,
       _usagePurpose,
       _technicalIdentity,
       _counterfeitRisk,
-      _lossAmount,
-      _paymentMethod,
-      _bankOrPaymentProvider,
-      _merchantDescriptor,
-      _disputeReference,
-      _refundAmount,
     ]) {
       controller.dispose();
     }
@@ -249,6 +255,23 @@ class _CounterfeitTwinReportDialogState
     return null;
   }
 
+  String? _requiredRange(
+    String? value,
+    String label,
+    int minLength,
+    int maxLength,
+  ) {
+    final cleaned = value?.trim() ?? '';
+    if (cleaned.isEmpty) return '$label zorunludur.';
+    if (cleaned.length < minLength) {
+      return '$label en az $minLength karakter olmalıdır.';
+    }
+    if (cleaned.length > maxLength) {
+      return '$label en fazla $maxLength karakter olabilir.';
+    }
+    return null;
+  }
+
   String? _optional(String? value, String label, int maxLength) {
     final cleaned = value?.trim() ?? '';
     if (cleaned.length > maxLength) {
@@ -275,26 +298,6 @@ class _CounterfeitTwinReportDialogState
     return null;
   }
 
-  String? _validateLossAmount(String? value) {
-    if (!_hasMonetaryLoss) return null;
-    final amount = _amount(value ?? '');
-    if (amount == null || amount <= 0) {
-      return 'Maddi kayıp tutarı sıfırdan büyük olmalıdır.';
-    }
-    return null;
-  }
-
-  String? _validateDifferenceNotes(String? value) {
-    final notes = _lines(value ?? '');
-    if (notes.length > 20) {
-      return 'En fazla 20 fark notu eklenebilir.';
-    }
-    if (notes.any((item) => item.length > 500)) {
-      return 'Her fark notu en fazla 500 karakter olabilir.';
-    }
-    return null;
-  }
-
   List<String> _lines(String value) {
     return value
         .split(RegExp(r'[\r\n]+'))
@@ -304,15 +307,19 @@ class _CounterfeitTwinReportDialogState
         .toList(growable: false);
   }
 
-  double? _amount(String value) {
-    final cleaned = value.trim().replaceAll(' ', '').replaceAll(',', '.');
-    if (cleaned.isEmpty) return null;
-    return double.tryParse(cleaned);
-  }
-
   String? _nullable(String value) {
     final cleaned = value.trim();
     return cleaned.isEmpty ? null : cleaned;
+  }
+
+  bool _hasVerifiableEvidence({
+    required List<String> originalUrls,
+    required List<String> suspectedUrls,
+    required List<String> imageUrls,
+  }) {
+    return originalUrls.isNotEmpty ||
+        suspectedUrls.isNotEmpty ||
+        imageUrls.isNotEmpty;
   }
 
   Future<void> _submit() async {
@@ -341,21 +348,22 @@ class _CounterfeitTwinReportDialogState
     try {
       final evidence = await _evidenceEditorKey.currentState!
           .prepareForSubmit();
-      final encodedDifferenceNotes = CounterfeitTwinComparisonCodec.encode(
-        rows: evidence.rows,
-        legacyNotes: _lines(_differenceNotes.text),
-        priceObservedAt: evidence.priceObservedAt,
-        originalImageSource: evidence.originalImageSource,
-        suspectedImageSource: evidence.suspectedImageSource,
-      );
-      final mergedOriginalUrls = <String>{
-        ...originalUrls,
-        ...evidence.originalSourceUrls,
-      }.toList(growable: false);
-      final mergedSuspectedUrls = <String>{
-        ...suspectedUrls,
-        ...evidence.suspectedSourceUrls,
-      }.toList(growable: false);
+      final mergedOriginalUrls = originalUrls;
+      final mergedSuspectedUrls = suspectedUrls;
+
+      if (!_hasVerifiableEvidence(
+        originalUrls: mergedOriginalUrls,
+        suspectedUrls: mergedSuspectedUrls,
+        imageUrls: evidence.imageUrls,
+      )) {
+        if (mounted) {
+          setState(
+            () => _error =
+                'En az bir doğrulanabilir kanıt görseli veya kaynak bağlantısı ekleyin.',
+          );
+        }
+        return;
+      }
 
       final report = CounterfeitTwinRadarReport(
         targetType: _targetType,
@@ -374,36 +382,19 @@ class _CounterfeitTwinReportDialogState
             : null,
         platformName: _platformName.text.trim(),
         storeDisplayName: _nullable(_storeDisplayName.text),
-        originalImageUrls: evidence.originalImageUrls,
+        originalImageUrls: const <String>[],
         originalUrls: mergedOriginalUrls,
-        suspectedImageUrls: evidence.suspectedImageUrls,
+        suspectedImageUrls: evidence.imageUrls,
         suspectedUrls: mergedSuspectedUrls,
         listingUrl: mergedSuspectedUrls.isEmpty
             ? null
             : mergedSuspectedUrls.first,
         incidentTypes: _incidentTypes.toList(growable: false),
-        authorizedPriceMin: evidence.originalPrice,
-        authorizedPriceMax: evidence.originalPrice,
-        suspectedPrice: evidence.suspectedPrice,
-        differenceNotes: encodedDifferenceNotes,
+        differenceNotes: const <String>[],
         evidenceNotes: _evidenceNotes.text.trim(),
         usagePurpose: _usagePurpose.text.trim(),
         technicalIdentity: _technicalIdentity.text.trim(),
         counterfeitRisk: _counterfeitRisk.text.trim(),
-        currency: evidence.currency,
-        financialImpact: CounterfeitTwinFinancialImpact(
-          hasMonetaryLoss: _hasMonetaryLoss,
-          lossAmount: _hasMonetaryLoss ? _amount(_lossAmount.text) : null,
-          currency: _currency,
-          paymentMethod: _nullable(_paymentMethod.text),
-          bankOrPaymentProvider: _nullable(_bankOrPaymentProvider.text),
-          merchantDescriptor: _nullable(_merchantDescriptor.text),
-          disputeSubmitted: _disputeSubmitted,
-          disputeReference: _nullable(_disputeReference.text),
-          disputeStatus: _disputeSubmitted ? _disputeStatus : 'not_submitted',
-          refundAmount: _amount(_refundAmount.text),
-          recoveryStatus: _recoveryStatus,
-        ),
       );
 
       final reportId = await _service.submit(report);
@@ -476,9 +467,11 @@ class _CounterfeitTwinReportDialogState
                 const _InfoCard(
                   icon: Icons.shield_outlined,
                   text:
-                      'Ürün, platform, turizm, finans, ödeme sayfası, robot '
-                      've otonom ajan sahteciliğini bildirebilirsiniz. Tam '
-                      'kart numarası, açık IBAN veya parolaları yazmayın.',
+                      'Fiziksel ürün, dijital varlık, yapay zekâ, robot ve '
+                      'otonom ajan sahteciliğini bildirebilirsiniz. Bildirimin '
+                      'gönderilebilmesi için en az bir kanıt görseli veya kaynak '
+                      'bağlantısı eklenmelidir. Tam kart numarası, açık IBAN veya '
+                      'parola yazmayın.',
                 ),
                 const SizedBox(height: 18),
                 const _SectionTitle('1. Taklit edilen varlık'),
@@ -633,23 +626,6 @@ class _CounterfeitTwinReportDialogState
                     500,
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _counterfeitRisk,
-                  enabled: !_isSubmitting,
-                  minLines: 2,
-                  maxLines: 6,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    labelText: 'Sahte olduğunda doğabilecek risk',
-                    hintText:
-                        'Sağlık, güvenlik, veri, mali kayıp, hizmet kesintisi veya itibar riskini açıklayın.',
-                    helperText: 'İsteğe bağlıdır.',
-                    alignLabelWithHint: true,
-                  ),
-                  validator: (value) =>
-                      _optional(value, 'Sahte olduğunda doğabilecek risk', 500),
-                ),
                 const SizedBox(height: 18),
                 const _SectionTitle('2. Kaynak ve bağlantılar'),
                 _ResponsivePair(
@@ -734,204 +710,62 @@ class _CounterfeitTwinReportDialogState
                       .toList(growable: false),
                 ),
                 const SizedBox(height: 18),
-                const _SectionTitle('4. Farklar ve delil özeti'),
-                TextFormField(
-                  controller: _differenceNotes,
-                  enabled: !_isSubmitting,
-                  minLines: 2,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Gerçek ile sahte arasındaki farklar',
-                    hintText: 'Her satıra bir fark yazın',
-                  ),
-                  validator: _validateDifferenceNotes,
-                ),
-                const SizedBox(height: 18),
-                CounterfeitTwinEvidenceEditor(
-                  key: _evidenceEditorKey,
-                  enabled: !_isSubmitting,
-                ),
-                const SizedBox(height: 18),
+                const _SectionTitle('4. Olay ve kanıt açıklaması'),
                 TextFormField(
                   controller: _evidenceNotes,
                   enabled: !_isSubmitting,
                   minLines: 4,
                   maxLines: 8,
+                  maxLength: 1500,
                   decoration: const InputDecoration(
-                    labelText: 'Delil ve olay açıklaması *',
+                    labelText:
+                        'Ne gördünüz, neden şüphelendiniz ve ne yaşandı? *',
                     hintText:
-                        'Nasıl karşılaştığınızı, neden sahte olduğunu ve '
-                        'varsa ödeme sürecini açıklayın.',
+                        'Olayı kısa ve anlaşılır biçimde anlatın. Belirgin farkı, '
+                        'karşılaştığınız riski veya talep edilen işlemi yazın.',
+                    helperText: 'En az 30, en fazla 1.500 karakter.',
+                    alignLabelWithHint: true,
                   ),
-                  validator: (value) =>
-                      _required(value, 'Delil ve olay açıklaması', 5000),
+                  validator: (value) => _requiredRange(
+                    value,
+                    'Olay ve kanıt açıklaması',
+                    30,
+                    1500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const _InfoCard(
+                  icon: Icons.verified_outlined,
+                  text:
+                      'Yalnız iddia içeren bildirimler gönderilemez. En az bir '
+                      'kanıt görseli veya 2. bölümde geçerli bir kaynak bağlantısı '
+                      'eklemelisiniz.',
+                ),
+                const SizedBox(height: 12),
+                CounterfeitTwinSimpleEvidenceEditor(
+                  key: _evidenceEditorKey,
+                  enabled: !_isSubmitting,
                 ),
                 const SizedBox(height: 18),
-                const _SectionTitle('5. Maddi kayıp ve banka itirazı'),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Maddi kayıp oluştu'),
-                  subtitle: const Text(
-                    'Ödenen veya kaybedilen tutarı kayda alın.',
+                const _SectionTitle('5. Zarar veya ek bilgi'),
+                TextFormField(
+                  controller: _counterfeitRisk,
+                  enabled: !_isSubmitting,
+                  minLines: 3,
+                  maxLines: 6,
+                  maxLength: 750,
+                  decoration: const InputDecoration(
+                    labelText: 'Zarar veya ek bilgi',
+                    hintText:
+                        'Varsa maddi kaybı, sağlık veya güvenlik riskini ya da '
+                        'eklemek istediğiniz başka bir bilgiyi kısaca yazın.',
+                    helperText: 'İsteğe bağlıdır. En fazla 750 karakter.',
+                    alignLabelWithHint: true,
                   ),
-                  value: _hasMonetaryLoss,
-                  onChanged: _isSubmitting
-                      ? null
-                      : (value) => setState(() => _hasMonetaryLoss = value),
+                  validator: (value) =>
+                      _optional(value, 'Zarar veya ek bilgi', 750),
                 ),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Bankaya veya ödeme kuruluşuna itiraz edildi',
-                  ),
-                  value: _disputeSubmitted,
-                  onChanged: _isSubmitting
-                      ? null
-                      : (value) => setState(() {
-                          _disputeSubmitted = value;
-                          if (!value) _disputeStatus = 'submitted';
-                        }),
-                ),
-                if (_showFinancialSection) ...[
-                  const _InfoCard(
-                    icon: Icons.lock_outline,
-                    text:
-                        'Tam kart numarası, CVV, açık IBAN veya parola '
-                        'girmeyin. Yalnız maskelenmiş ve gerekli bilgileri '
-                        'kullanın.',
-                  ),
-                  const SizedBox(height: 12),
-                  if (_hasMonetaryLoss)
-                    _ResponsivePair(
-                      left: TextFormField(
-                        controller: _lossAmount,
-                        enabled: !_isSubmitting,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Maddi kayıp tutarı *',
-                        ),
-                        validator: _validateLossAmount,
-                      ),
-                      right: DropdownButtonFormField<String>(
-                        initialValue: _currency,
-                        decoration: const InputDecoration(
-                          labelText: 'Para birimi',
-                        ),
-                        items: const <String>['TRY', 'USD', 'EUR', 'GBP']
-                            .map(
-                              (item) => DropdownMenuItem(
-                                value: item,
-                                child: Text(item),
-                              ),
-                            )
-                            .toList(growable: false),
-                        onChanged: _isSubmitting
-                            ? null
-                            : (value) => setState(
-                                () => _currency = value ?? _currency,
-                              ),
-                      ),
-                    ),
-                  if (_hasMonetaryLoss) const SizedBox(height: 12),
-                  _ResponsivePair(
-                    left: TextFormField(
-                      controller: _paymentMethod,
-                      enabled: !_isSubmitting,
-                      decoration: const InputDecoration(
-                        labelText: 'Ödeme yöntemi',
-                        hintText: 'Kredi kartı, havale, sanal POS',
-                      ),
-                      validator: (value) =>
-                          _optional(value, 'Ödeme yöntemi', 120),
-                    ),
-                    right: TextFormField(
-                      controller: _bankOrPaymentProvider,
-                      enabled: !_isSubmitting,
-                      decoration: const InputDecoration(
-                        labelText: 'Banka / ödeme kuruluşu',
-                      ),
-                      validator: (value) =>
-                          _optional(value, 'Banka / ödeme kuruluşu', 240),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _merchantDescriptor,
-                    enabled: !_isSubmitting,
-                    decoration: const InputDecoration(
-                      labelText: 'Ekstrede görünen işyeri açıklaması',
-                    ),
-                    validator: (value) =>
-                        _optional(value, 'İşyeri açıklaması', 300),
-                  ),
-                  if (_disputeSubmitted) ...[
-                    const SizedBox(height: 12),
-                    _ResponsivePair(
-                      left: DropdownButtonFormField<String>(
-                        initialValue: _disputeStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'İtiraz durumu',
-                        ),
-                        items: _disputeStatuses.entries
-                            .map(
-                              (entry) => DropdownMenuItem(
-                                value: entry.key,
-                                child: Text(entry.value),
-                              ),
-                            )
-                            .toList(growable: false),
-                        onChanged: _isSubmitting
-                            ? null
-                            : (value) => setState(
-                                () => _disputeStatus = value ?? _disputeStatus,
-                              ),
-                      ),
-                      right: TextFormField(
-                        controller: _disputeReference,
-                        enabled: !_isSubmitting,
-                        decoration: const InputDecoration(
-                          labelText: 'İtiraz / dilekçe referansı',
-                        ),
-                        validator: (value) =>
-                            _optional(value, 'İtiraz referansı', 240),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  _ResponsivePair(
-                    left: TextFormField(
-                      controller: _refundAmount,
-                      enabled: !_isSubmitting,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Geri alınan tutar',
-                      ),
-                    ),
-                    right: DropdownButtonFormField<String>(
-                      initialValue: _recoveryStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Geri alım durumu',
-                      ),
-                      items: _recoveryStatuses.entries
-                          .map(
-                            (entry) => DropdownMenuItem(
-                              value: entry.key,
-                              child: Text(entry.value),
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: _isSubmitting
-                          ? null
-                          : (value) => setState(
-                              () => _recoveryStatus = value ?? _recoveryStatus,
-                            ),
-                    ),
-                  ),
-                ],
+                const SizedBox(height: 18),
                 if (_error != null) ...[
                   const SizedBox(height: 14),
                   Text(
@@ -970,23 +804,6 @@ class _CounterfeitTwinReportDialogState
     );
   }
 }
-
-const Map<String, String> _disputeStatuses = <String, String>{
-  'submitted': 'Başvuru yapıldı',
-  'under_review': 'İncelemede',
-  'accepted': 'Kabul edildi',
-  'rejected': 'Reddedildi',
-  'partially_resolved': 'Kısmen sonuçlandı',
-  'resolved': 'Sonuçlandı',
-};
-
-const Map<String, String> _recoveryStatuses = <String, String>{
-  'unknown': 'Bilinmiyor',
-  'no_recovery': 'Geri alım yok',
-  'pending': 'Beklemede',
-  'partial': 'Kısmi geri alım',
-  'full': 'Tam geri alım',
-};
 
 String _incidentLabel(CounterfeitTwinIncidentType item) {
   const labels = <CounterfeitTwinIncidentType, String>{

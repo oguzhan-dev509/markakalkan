@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final appSource = File('lib/app/app.dart').readAsStringSync();
+  final resolverSource = File(
+    'lib/app/initial_route_resolver.dart',
+  ).readAsStringSync();
   final routerSource = File('lib/app/router.dart').readAsStringSync();
   final radarSource = File(
     'lib/modules/marka_kalkan/sahte_ikiz_sicili/presentation/'
@@ -31,7 +34,8 @@ void main() {
   });
 
   test('clean public slug path opens detail page', () {
-    expect(appSource, contains("segments.first == 'sahte-ikiz'"));
+    expect(resolverSource, contains("segments.first != 'sahte-ikiz'"));
+    expect(appSource, contains('resolveInitialCounterfeitTwinSlug(Uri.base)'));
     expect(appSource, contains('CounterfeitTwinPublicDetailPage'));
     expect(routerSource, contains('openCounterfeitTwinPublicDetail'));
     expect(

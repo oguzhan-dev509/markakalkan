@@ -47,18 +47,29 @@ void main() {
     expect(dialog, contains('En az bir olay türü seçilmelidir.'));
   });
 
-  test('financial loss and dispute workflow is available', () {
-    expect(dialog, contains('_hasMonetaryLoss'));
-    expect(dialog, contains('_disputeSubmitted'));
-    expect(dialog, contains('CounterfeitTwinFinancialImpact'));
-    expect(dialog, contains("'Banka / ödeme kuruluşu'"));
-    expect(dialog, contains("'İtiraz / dilekçe referansı'"));
+  test('sections four and five are simple and clear', () {
+    expect(dialog, contains("'4. Olay ve kanıt açıklaması'"));
+    expect(dialog, contains("'5. Zarar veya ek bilgi'"));
+    expect(dialog, contains('CounterfeitTwinSimpleEvidenceEditor'));
+    expect(dialog, contains('maxLength: 1500'));
+    expect(dialog, contains('maxLength: 750'));
   });
 
-  test('sensitive payment data warning is visible', () {
+  test('financial and comparison workflows are removed from public form', () {
+    expect(dialog, isNot(contains('_hasMonetaryLoss')));
+    expect(dialog, isNot(contains('_disputeSubmitted')));
+    expect(dialog, isNot(contains("'Banka / ödeme kuruluşu'")));
+    expect(dialog, isNot(contains("'İtiraz / dilekçe referansı'")));
+    expect(dialog, isNot(contains('CounterfeitTwinComparisonCodec.encode')));
+    expect(dialog, isNot(contains('CounterfeitTwinEvidenceEditor(')));
+  });
+
+  test('evidence and sensitive data warnings are visible', () {
+    expect(dialog, contains('en az bir kanıt görseli'));
+    expect(dialog, contains('kaynak bağlantısı'));
     expect(dialog, contains('Tam kart numarası'));
     expect(dialog, contains('açık IBAN'));
-    expect(dialog, contains('CVV'));
+    expect(dialog, contains('parola'));
   });
 
   test('report is submitted through the radar callable service', () {

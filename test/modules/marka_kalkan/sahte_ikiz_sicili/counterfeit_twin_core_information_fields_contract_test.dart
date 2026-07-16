@@ -41,44 +41,37 @@ void main() {
     }
   });
 
-  test('all three form fields are optional and keep character limits', () {
+  test('public form keeps core context short and optional', () {
     expect(dialog, contains("'Ne için kullanılır?'"));
     expect(dialog, contains("'Ayırt edici teknik bilgi / ürün kimliği'"));
-    expect(dialog, contains("'Sahte olduğunda doğabilecek risk'"));
-    expect(dialog, isNot(contains('Ne için kullanılır? *')));
-    expect(dialog, isNot(contains('Sahte olduğunda doğabilecek risk *')));
-    expect(dialog, isNot(contains('_counterfeitRiskRequired')));
-    expect(dialog, isNot(contains('_criticalRiskSubcategoryValues')));
+    expect(dialog, contains("'5. Zarar veya ek bilgi'"));
+    expect(dialog, contains("'Zarar veya ek bilgi'"));
     expect(dialog, contains("_optional(value, 'Ne için kullanılır?', 300)"));
+    expect(dialog, contains("_optional(value, 'Zarar veya ek bilgi', 750)"));
     expect(dialog, contains('maxLength: 300'));
     expect(dialog, contains('maxLength: 500'));
+    expect(dialog, contains('maxLength: 750'));
   });
 
-  test(
-    'callable accepts empty optional fields and publishes values safely',
-    () {
-      expect(
-        backend,
-        contains('usagePurpose: text(data.usagePurpose, "usagePurpose", 300)'),
-      );
-      expect(
-        backend,
-        contains(
-          'counterfeitRisk: text(data.counterfeitRisk, "counterfeitRisk", 500)',
-        ),
-      );
-      expect(backend, isNot(contains('CRITICAL_RISK_SUBCATEGORIES')));
-      expect(backend, contains('usagePurpose: report.usagePurpose || ""'));
-      expect(
-        backend,
-        contains('technicalIdentity: report.technicalIdentity || ""'),
-      );
-      expect(
-        backend,
-        contains('counterfeitRisk: report.counterfeitRisk || ""'),
-      );
-    },
-  );
+  test('callable accepts optional fields with bounded lengths', () {
+    expect(
+      backend,
+      contains('usagePurpose: text(data.usagePurpose, "usagePurpose", 300)'),
+    );
+    expect(
+      backend,
+      contains(
+        'counterfeitRisk: text(data.counterfeitRisk, "counterfeitRisk", 750)',
+      ),
+    );
+    expect(backend, isNot(contains('CRITICAL_RISK_SUBCATEGORIES')));
+    expect(backend, contains('usagePurpose: report.usagePurpose || ""'));
+    expect(
+      backend,
+      contains('technicalIdentity: report.technicalIdentity || ""'),
+    );
+    expect(backend, contains('counterfeitRisk: report.counterfeitRisk || ""'));
+  });
 
   test('admin review exposes all three optional fields', () {
     expect(adminModel, contains("text('usagePurpose')"));
