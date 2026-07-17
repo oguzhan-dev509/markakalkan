@@ -1,5 +1,6 @@
 const {setGlobalOptions} = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
@@ -59,6 +60,12 @@ const {
   buildListPublicCounterfeitTwinComparisons,
   buildGetPublicCounterfeitTwinComparison,
 } = require("./counterfeit_twin/counterfeit_twin_radar");
+
+const {
+  buildDispatchDigitalDetectiveTask,
+} = require(
+    "./digital_detective/digital_detective_dispatch",
+);
 
 setGlobalOptions({
   region: "europe-west3",
@@ -159,3 +166,10 @@ exports.sealIpCreationPriorityRecord =
 
 exports.createIpCreationPriorityVersion =
     buildCreateIpCreationPriorityVersion({db, admin});
+exports.dispatchDigitalDetectiveTask =
+    buildDispatchDigitalDetectiveTask({
+      db,
+      admin,
+      onDocumentCreated,
+      logger,
+    });
