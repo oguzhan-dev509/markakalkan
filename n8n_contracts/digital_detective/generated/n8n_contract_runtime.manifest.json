@@ -1,0 +1,48 @@
+{
+  "artifactVersion": "ddt-n8n-runtime-v1",
+  "generatedBy": "generate_n8n_runtime.js",
+  "sourceContractCommit": "6362b6e0558d25e04da7cf5b366464f0538827fe",
+  "sourceContractCommitPolicy": "Contract source baseline used to generate this runtime; not the future artifact-containing commit.",
+  "schemaHashes": {
+    "schemas/acquisition_result.schema.json": "3eb88867e90bae928f111362cc9700052b3ac2cf1cb550bcb5a022e1143424ce",
+    "schemas/candidate_source.schema.json": "23dd6981d50a75dbf23295d988bfe26b9c66c27dbdc709cd292849350ea12fcc",
+    "schemas/digital_field_scanner_result.schema.json": "e5ad3cf9652a886c9f70cb7b36f77c028527a4f6b2a3adfa3941571cdc7af25c",
+    "schemas/structured_evidence.schema.json": "bb1bb082c02d071791593821ce7b2bfb1e6825e3a8d989e33ca2792f75e68752"
+  },
+  "validatorHashes": {
+    "validators/canonicalize_url.js": "d6ae5bbe7db372b24c26229935a37b0736219c66bc88de0dcca38d45890eacda",
+    "validators/context_validation.js": "7d9243c72550aa4f7ce223e22388788feebaf8b32dd011f0b3d4ecbdb416e0fc",
+    "validators/deterministic_ids.js": "a47a213753df5a4a1734ec4ab0d53a9660f077a47b26c9d560529a2cbcae5d74",
+    "validators/pipeline_guard.js": "424fe26ce8a88584871b05142a1ae7f1a537a8c0ec9d833736c6499ce4efcab1",
+    "validators/schema_engine.js": "7712c9dbb68626697baa8322696ca32a4559fed453eec15e2774974b86e4ff5f",
+    "validators/validate_acquisition_result.js": "a37a57f20786473d1243d535b43d53a2f2036937c419614b9ea77504c53822a8",
+    "validators/validate_candidate_source.js": "ab9650504c4a226dce07b82d77b2e3332448f4f0b232ec2b78f0b67cf48954b4",
+    "validators/validate_evidence_batch.js": "d49c4f18a55916330cd25ff4f6efb49b2701b85ae9e78f42c967c03f2ea8e0e8",
+    "validators/validate_scanner_result.js": "e9ac503abb71dab489b6f55b00d65e57013417ca2f073c94423af4599a50ff8d",
+    "validators/validate_structured_evidence.js": "9a1a9a55dfe37450c263db70fac5e7cf558b5e21c5f8c37753aa96bfb2657c5a",
+    "validators/validator_result.js": "bd5f88b47cb29c4f6f11f24bb727764758a4ec58183ffda5bcc6af6fe07a9d19"
+  },
+  "fixtureHashes": {
+    "fixtures/blocked/acquisition_result.json": "1c077f2929a233e91a7738e26919008a6048aa442d5b1725044b5efb6b447665",
+    "fixtures/blocked/candidate_sources.json": "df41e703aaae2a728bb14aa9e78f6b86ff7788eb6851eedc755142803357f883",
+    "fixtures/blocked/expected_validation.json": "d1c74a6fd163230ab3f6b50b0824f8c7d5876a30e2bc1baf9684549712744c49",
+    "fixtures/blocked/scanner_result.json": "7e64f7648945b2c51d46dadf82fc43e10029e39df0a2edf2b4c83c3923e8b442",
+    "fixtures/blocked/structured_evidence.json": "d3fcbced9e2724af613608f3e8f2340865d825949441e5634c5856b230a4bc73",
+    "fixtures/no_signal/acquisition_result.json": "f1698b822e99f64304552be0b1e7260c33602ec2783e9ba2d01ec233a2089607",
+    "fixtures/no_signal/candidate_sources.json": "b5844b428e25b7b9d6a1618c19df53a19d0fd56794bd10a6577d685dc01839a8",
+    "fixtures/no_signal/expected_validation.json": "d1c74a6fd163230ab3f6b50b0824f8c7d5876a30e2bc1baf9684549712744c49",
+    "fixtures/no_signal/scanner_result.json": "ec5818854a34352d78e9328d9cb37b1bf3c6119e04bc36ad41915bb7e9a039fc",
+    "fixtures/no_signal/structured_evidence.json": "e3602fa46668950a991993249034a7a43d916382f4a9a9f3a760ec116de3f3f9",
+    "fixtures/synthetic_signal/acquisition_result.json": "f3b7d0f7ed56f3b3688fc3e3e429bf4869acd9c06d29a241684b86b3e34f1da0",
+    "fixtures/synthetic_signal/candidate_sources.json": "01125286e8babd87a7b899e31c6f5a57773adc761abf8e20060943f989f0262c",
+    "fixtures/synthetic_signal/expected_validation.json": "715872ae0d82c1b0d47b1d377f2fd46b497a422adacbf4db392c21f632170485",
+    "fixtures/synthetic_signal/scanner_result.json": "ab2d0c242b61fe5e04557e3b15249dcf429695c836ef0513ebda65bbc50bab20",
+    "fixtures/synthetic_signal/structured_evidence.json": "c2ba92c72842f01c7444aa0ffaedf52d8c863c840e332fd7aab7f49792d4387a"
+  },
+  "bundleSha256": "9e4d9066b6d2b40ba0a21ede15546f7769cef2ec94335114db1bd85c0ad713ee",
+  "bundleBytes": 249436,
+  "generatedAtPolicy": "deterministic-no-wall-clock",
+  "externalRuntimeDependencies": [],
+  "containsCredentials": false,
+  "containsNetworkCalls": false
+}

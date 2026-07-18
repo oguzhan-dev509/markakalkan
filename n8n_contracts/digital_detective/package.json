@@ -3,7 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
-  "engines": {"node": ">=20"},
-  "scripts": {"test": "node --test tests/*.test.js"},
-  "devDependencies": {"ajv": "^8.17.1", "ajv-formats": "^3.0.1"}
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build:n8n-runtime": "node build/generate_n8n_runtime.js",
+    "verify:n8n-runtime": "node --test tests/n8n_runtime_bundle.test.js tests/n8n_fixture_workflow.test.js",
+    "test:n8n-regeneration": "node --test tests/n8n_generator_transaction.test.js"
+  },
+  "devDependencies": {
+    "@noble/hashes": "2.2.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "esbuild": "0.28.1"
+  }
 }
