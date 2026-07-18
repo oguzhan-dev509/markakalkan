@@ -67,6 +67,11 @@ const {
     "./digital_detective/digital_detective_dispatch",
 );
 const {
+  buildAiFieldOperationBridge,
+} = require(
+    "./digital_detective/ai_field_operation_bridge",
+);
+const {
   buildReceiveDigitalDetectiveResult,
 } = require(
     "./digital_detective/digital_detective_result",
@@ -173,6 +178,13 @@ exports.createIpCreationPriorityVersion =
     buildCreateIpCreationPriorityVersion({db, admin});
 exports.dispatchDigitalDetectiveTask =
     buildDispatchDigitalDetectiveTask({
+      db,
+      admin,
+      onDocumentCreated,
+      logger,
+    });
+exports.bridgeAiFieldOperation =
+    buildAiFieldOperationBridge({
       db,
       admin,
       onDocumentCreated,

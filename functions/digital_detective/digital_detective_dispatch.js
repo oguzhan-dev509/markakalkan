@@ -87,11 +87,23 @@ function formatPriceRange(data) {
 
 function buildTargetSummary(data) {
   const parts = [
+    cleanString(data.taskName) ?
+      `Operasyon başlığı: ${cleanString(data.taskName)}` :
+      "",
+    cleanString(data.objective) ?
+      `Operasyon amacı: ${cleanString(data.objective)}` :
+      "",
     cleanString(data.brandName) ?
       `Marka: ${cleanString(data.brandName)}` :
       "",
     cleanString(data.productName) ?
       `Ürün: ${cleanString(data.productName)}` :
+      "",
+    cleanString(data.targetSeller) ?
+      `Hedef satıcı/mağaza: ${cleanString(data.targetSeller)}` :
+      "",
+    cleanString(data.initialUrl) ?
+      `Başlangıç URL'si: ${cleanString(data.initialUrl)}` :
       "",
     cleanString(data.categoryId) ?
       `Kategori: ${cleanString(data.categoryId)}` :
@@ -140,7 +152,9 @@ function buildContext(data, fallbackIso) {
     frequency: cleanString(data.frequency),
     riskLevel: cleanString(data.riskLevel),
     startDate: timestampToIso(data.startDate, fallbackIso),
-    endDate: timestampToIso(data.endDate, fallbackIso),
+    endDate: data.endDate == null ?
+      null :
+      timestampToIso(data.endDate, fallbackIso),
   };
 }
 

@@ -36,8 +36,11 @@ async function testPureHelpers() {
 
   const taskData = {
     taskName: "Yedek parça araştırması",
+    objective: "Şüpheli Bosch fren balatası satışlarını incele.",
     brandName: "Örnek Marka",
     productName: "Fren balatası",
+    targetSeller: "Örnek Satıcı",
+    initialUrl: "https://example.test/fren-balatasi",
     categoryId: "automotive",
     subcategory: "spare_parts",
     violationIds: ["counterfeit_listing"],
@@ -58,8 +61,12 @@ async function testPureHelpers() {
 
   const target = buildTargetSummary(taskData);
 
+  assert.match(target, /Operasyon başlığı: Yedek parça araştırması/);
+  assert.match(target, /Operasyon amacı: Şüpheli Bosch/);
   assert.match(target, /Marka: Örnek Marka/);
   assert.match(target, /Ürün: Fren balatası/);
+  assert.match(target, /Hedef satıcı\/mağaza: Örnek Satıcı/);
+  assert.match(target, /Başlangıç URL'si: https:\/\/example\.test/);
   assert.match(target, /Arama terimleri: örnek fren balatası/);
   assert.match(target, /Fiyat aralığı: 100-500 TRY/);
 
@@ -77,6 +84,31 @@ async function testPureHelpers() {
   assert.equal(payload.priority, "high");
   assert.equal(payload.createdAt, "2026-07-16T18:29:13.000Z");
   assert.deepEqual(payload.context.countries, ["TR"]);
+
+  const serverTaskPayload = buildWebhookPayload({
+    brandUid: "brand-123",
+    taskId: "operation-123",
+    taskData: {
+      taskName: "Sunucu operasyonu",
+      objective: "Açık kaynak araştırması",
+      createdAt: makeTimestamp("2026-07-17T06:00:00.000Z"),
+      startDate: makeTimestamp("2026-07-17T06:00:00.000Z"),
+      endDate: null,
+    },
+    fallbackIso,
+  });
+
+  assert.equal(serverTaskPayload.context.endDate, null);
+
+  const legacyTarget = buildTargetSummary({
+    brandName: "Eski Marka",
+    productName: "Eski Ürün",
+  });
+
+  assert.match(legacyTarget, /Marka: Eski Marka/);
+  assert.doesNotMatch(legacyTarget, /Operasyon amacı:/);
+  assert.doesNotMatch(legacyTarget, /Hedef satıcı\/mağaza:/);
+  assert.doesNotMatch(legacyTarget, /Başlangıç URL'si:/);
 }
 
 async function testSuccessfulDispatch() {
