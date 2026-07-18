@@ -1,5 +1,5 @@
 const {setGlobalOptions} = require("firebase-functions");
-const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
@@ -65,6 +65,11 @@ const {
   buildDispatchDigitalDetectiveTask,
 } = require(
     "./digital_detective/digital_detective_dispatch",
+);
+const {
+  buildReceiveDigitalDetectiveResult,
+} = require(
+    "./digital_detective/digital_detective_result",
 );
 
 setGlobalOptions({
@@ -171,5 +176,12 @@ exports.dispatchDigitalDetectiveTask =
       db,
       admin,
       onDocumentCreated,
+      logger,
+    });
+exports.receiveDigitalDetectiveResult =
+    buildReceiveDigitalDetectiveResult({
+      db,
+      admin,
+      onRequest,
       logger,
     });
