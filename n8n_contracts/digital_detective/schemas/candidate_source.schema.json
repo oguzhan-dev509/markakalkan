@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "candidate_source.schema.json",
+  "title": "CandidateSource v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "taskId", "executionId", "sourceId", "sourceUrl", "canonicalUrl", "sourcePlatform", "pageTitle", "sellerName", "productTitle", "price", "currency", "country", "city", "searchQuery", "acquisitionMethod", "discoveredAt", "acquisitionStatus", "legalBasis", "robotsPolicy"],
+  "properties": {
+    "contractVersion": {"const": "candidate-source-v1"},
+    "taskId": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^/]+$"},
+    "executionId": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^/]+$"},
+    "sourceId": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "sourceUrl": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+    "canonicalUrl": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+    "sourcePlatform": {"type": "string", "minLength": 1, "maxLength": 100},
+    "pageTitle": {"type": ["string", "null"], "maxLength": 500},
+    "sellerName": {"type": ["string", "null"], "maxLength": 300},
+    "productTitle": {"type": ["string", "null"], "maxLength": 500},
+    "price": {"type": ["number", "null"], "minimum": 0},
+    "currency": {"type": ["string", "null"], "pattern": "^[A-Z]{3}$"},
+    "country": {"type": ["string", "null"], "maxLength": 100},
+    "city": {"type": ["string", "null"], "maxLength": 150},
+    "searchQuery": {"type": ["string", "null"], "maxLength": 500},
+    "acquisitionMethod": {"const": "manual_seed"},
+    "discoveredAt": {"type": "string", "format": "date-time"},
+    "acquisitionStatus": {"enum": ["pending", "acquired", "failed", "blocked"]},
+    "legalBasis": {"const": "public_source"},
+    "robotsPolicy": {"enum": ["allowed", "unknown", "blocked"]},
+    "errorCode": {"type": ["string", "null"], "enum": [null, "http_4xx", "http_5xx", "captcha", "login_required", "robots_blocked", "network_error"]},
+    "fixtureMetadata": {"$ref": "#/$defs/fixtureMetadata"}
+  },
+  "$defs": {
+    "fixtureMetadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["marker", "isTestFixture", "productionEligible", "scenario"],
+      "properties": {
+        "marker": {"const": "TEST_FIXTURE"}, "isTestFixture": {"const": true},
+        "productionEligible": {"const": false},
+        "scenario": {"enum": ["no_signal", "synthetic_signal", "blocked"]}
+      }
+    }
+  }
+}

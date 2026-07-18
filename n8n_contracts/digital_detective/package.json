@@ -1,0 +1,9 @@
+{
+  "name": "@markakalkan/digital-detective-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {"node": ">=20"},
+  "scripts": {"test": "node --test tests/*.test.js"},
+  "devDependencies": {"ajv": "^8.17.1", "ajv-formats": "^3.0.1"}
+}

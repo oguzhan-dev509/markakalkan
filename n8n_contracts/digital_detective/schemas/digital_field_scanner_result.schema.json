@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "digital_field_scanner_result.schema.json",
+  "title": "DigitalFieldScannerResult v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "agentCode", "status", "taskId", "executionId", "analyzedSourceIds", "findings", "rejectedCandidates", "notes"],
+  "properties": {
+    "contractVersion": {"const": "digital-field-scanner-result-v1"},
+    "agentCode": {"const": "digital_field_scanner"},
+    "status": {"enum": ["completed", "partial", "failed"]},
+    "taskId": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^/]+$"},
+    "executionId": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^/]+$"},
+    "analyzedSourceIds": {"type": "array", "maxItems": 3, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "findings": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/finding"}},
+    "rejectedCandidates": {"type": "array", "maxItems": 3, "items": {"type": "object", "additionalProperties": false, "required": ["candidateId", "reason"], "properties": {"candidateId": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "reason": {"enum": ["no_signal", "insufficient_evidence", "inaccessible", "out_of_scope"]}}}},
+    "notes": {"type": ["string", "null"], "maxLength": 2000},
+    "fixtureMetadata": {"$ref": "candidate_source.schema.json#/$defs/fixtureMetadata"}
+  },
+  "$defs": {
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["findingKey", "candidateId", "sourceUrl", "signalType", "description", "severity", "confidence", "evidenceReferences", "requiresHumanReview", "automatedConclusion"],
+      "properties": {
+        "findingKey": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "candidateId": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "sourceUrl": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+        "signalType": {"enum": ["price_anomaly", "identity_mismatch", "copied_content", "external_payment", "seller_recurrence", "other"]},
+        "description": {"type": "string", "minLength": 10, "maxLength": 2000},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidenceReferences": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+        "requiresHumanReview": {"const": true},
+        "automatedConclusion": {"const": "suspected_signal"}
+      }
+    }
+  },
+  "allOf": [{"if": {"required": ["status"], "properties": {"status": {"const": "failed"}}}, "then": {"properties": {"findings": {"type": "array", "maxItems": 0}}}}]
+}

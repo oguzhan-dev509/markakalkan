@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "structured_evidence.schema.json",
+  "title": "StructuredEvidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "taskId", "executionId", "sourceId", "snapshotId", "sourceUrl", "retrievedAt", "httpStatus", "contentType", "visibleText", "contentHash", "snapshotReference", "acquisitionStatus", "errorCode"],
+  "properties": {
+    "contractVersion": {"const": "structured-evidence-v1"},
+    "taskId": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^/]+$"},
+    "executionId": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^/]+$"},
+    "sourceId": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "snapshotId": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "sourceUrl": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+    "retrievedAt": {"type": ["string", "null"], "format": "date-time"},
+    "httpStatus": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+    "contentType": {"type": ["string", "null"], "maxLength": 100},
+    "visibleText": {"type": "string", "maxLength": 50000},
+    "contentHash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "snapshotReference": {"type": ["string", "null"], "maxLength": 2048, "pattern": "^(https://|gs://|evidence://)"},
+    "acquisitionStatus": {"enum": ["acquired", "failed", "blocked"]},
+    "errorCode": {"type": ["string", "null"], "enum": [null, "http_4xx", "http_5xx", "captcha", "login_required", "robots_blocked", "network_error", "unsupported_content", "content_too_large"]},
+    "fixtureMetadata": {"$ref": "candidate_source.schema.json#/$defs/fixtureMetadata"}
+  },
+  "allOf": [
+    {"if": {"required": ["acquisitionStatus"], "properties": {"acquisitionStatus": {"const": "acquired"}}}, "then": {"properties": {"httpStatus": {"const": 200}, "contentType": {"type": "string", "pattern": "^(?:text/html|text/plain)(?:;\\s*charset=[Uu][Tt][Ff]-8)?$"}, "visibleText": {"type": "string", "minLength": 1}, "contentHash": {"type": "string"}, "snapshotId": {"type": "string"}, "errorCode": {"const": null}}}},
+    {"if": {"required": ["acquisitionStatus"], "properties": {"acquisitionStatus": {"enum": ["failed", "blocked"]}}}, "then": {"properties": {"visibleText": {"const": ""}, "contentHash": {"const": null}, "snapshotId": {"const": null}, "errorCode": {"type": "string"}}}}
+  ]
+}

@@ -1,0 +1,10 @@
+"use strict";
+const test = require("node:test"); const assert = require("node:assert/strict");
+const {clone, fixture, validators} = require("./test_helpers");
+const {validateAcquisitionResult} = require("../validators/validate_acquisition_result");
+
+test("completed acquisition fixture is valid", () => { const {acquisition} = validators(); const value = fixture("no_signal", "acquisition_result"); assert.equal(acquisition(value), true, JSON.stringify(acquisition.errors)); assert.equal(validateAcquisitionResult(value).valid, true); });
+test("no_candidates requires empty candidates", () => { const {acquisition} = validators(); const value = clone(fixture("no_signal", "acquisition_result")); value.status = "no_candidates"; value.candidates = []; assert.equal(acquisition(value), true, JSON.stringify(acquisition.errors)); value.candidates = fixture("no_signal", "candidate_sources"); assert.equal(acquisition(value), false); });
+test("completed requires candidate", () => { const {acquisition} = validators(); const value = clone(fixture("no_signal", "acquisition_result")); value.candidates = []; assert.equal(acquisition(value), false); });
+test("duplicates and candidate limit are rejected", () => { const duplicate = clone(fixture("no_signal", "acquisition_result")); duplicate.candidates = [duplicate.candidates[0], clone(duplicate.candidates[0])]; const semantic = validateAcquisitionResult(duplicate); assert.equal(semantic.valid, false); assert(semantic.errors.some((e) => e.code === "DUPLICATE_CANONICAL_URL")); assert(semantic.errors.some((e) => e.code === "DUPLICATE_SOURCE_ID")); const overLimit = clone(fixture("no_signal", "acquisition_result")); overLimit.candidates = [overLimit.candidates[0], ...Array(3).fill(clone(overLimit.candidates[0]))]; const schema = validateAcquisitionResult(overLimit); assert(schema.errors.some((e) => e.code === "SCHEMA_MAXITEMS" && e.path === "candidates")); });
+test("fixture production callback is hard blocked", () => { assert.equal(validateAcquisitionResult(fixture("no_signal", "acquisition_result"), {productionCallback: true}).valid, false); });
