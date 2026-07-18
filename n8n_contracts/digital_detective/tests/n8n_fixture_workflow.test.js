@@ -4,8 +4,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
 const crypto = require("node:crypto");
+const {runCodeNodeInIsolatedContext} =
+  require("./helpers/isolated_n8n_vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const WORKFLOW_PATH = path.join(ROOT, "workflows",
@@ -20,16 +21,7 @@ const sha256 = (value) => crypto.createHash("sha256").update(value)
     .digest("hex").toUpperCase();
 
 function runCodeNode(node, inputItems) {
-  const original = clone(inputItems);
-  const supplied = clone(inputItems);
-  const context = vm.createContext({
-    URL, URLSearchParams, TextEncoder, Buffer,
-    $input: {all: () => clone(supplied)},
-  });
-  const script = new vm.Script(`(function(){${node.parameters.jsCode}\n})`);
-  const output = script.runInContext(context)();
-  assert.deepEqual(inputItems, original);
-  return clone(output);
+  return runCodeNodeInIsolatedContext(node.parameters.jsCode, inputItems);
 }
 
 function codeNode(name) {

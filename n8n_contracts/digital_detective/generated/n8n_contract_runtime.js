@@ -9,10 +9,189 @@ var MarkaKalkanDdtRuntime = (() => {
     }
   };
 
+  // runtime/portable_primitives.js
+  var require_portable_primitives = __commonJS({
+    "runtime/portable_primitives.js"(exports, module) {
+      "use strict";
+      function utf8Bytes(value) {
+        const bytes = [], text = String(value);
+        for (let index = 0; index < text.length; index++) {
+          let point = text.charCodeAt(index);
+          if (point >= 55296 && point <= 56319) {
+            const next = text.charCodeAt(index + 1);
+            if (next >= 56320 && next <= 57343) {
+              point = 65536 + (point - 55296 << 10) + next - 56320;
+              index++;
+            } else point = 65533;
+          } else if (point >= 56320 && point <= 57343) point = 65533;
+          if (point <= 127) bytes.push(point);
+          else if (point <= 2047) bytes.push(
+            192 | point >> 6,
+            128 | point & 63
+          );
+          else if (point <= 65535) bytes.push(
+            224 | point >> 12,
+            128 | point >> 6 & 63,
+            128 | point & 63
+          );
+          else bytes.push(
+            240 | point >> 18,
+            128 | point >> 12 & 63,
+            128 | point >> 6 & 63,
+            128 | point & 63
+          );
+        }
+        return new Uint8Array(bytes);
+      }
+      var utf8ByteLength = (value) => utf8Bytes(value).length;
+      var BASE = 36;
+      var TMIN = 1;
+      var TMAX = 26;
+      var SKEW = 38;
+      var DAMP = 700;
+      function adapt(delta, points, first) {
+        delta = first ? Math.floor(delta / DAMP) : delta >> 1;
+        delta += Math.floor(delta / points);
+        let k = 0;
+        while (delta > Math.floor((BASE - TMIN) * TMAX / 2)) {
+          delta = Math.floor(delta / (BASE - TMIN));
+          k += BASE;
+        }
+        return k + Math.floor((BASE - TMIN + 1) * delta / (delta + SKEW));
+      }
+      var digit = (value) => String.fromCharCode(value + 22 + 75 * (value < 26));
+      function codePoints(value) {
+        const output = [];
+        for (let index = 0; index < value.length; index++) {
+          const first = value.charCodeAt(index), second = value.charCodeAt(index + 1);
+          if (first >= 55296 && first <= 56319 && second >= 56320 && second <= 57343) {
+            output.push(65536 + (first - 55296 << 10) + second - 56320);
+            index++;
+          } else output.push(first >= 55296 && first <= 57343 ? 65533 : first);
+        }
+        return output;
+      }
+      function punycodeLabel(label) {
+        const input = codePoints(label.toLowerCase().normalize("NFC"));
+        let output = input.filter((point) => point < 128).map((point) => String.fromCharCode(point)).join("");
+        let handled = output.length;
+        if (handled === input.length) return output.toLowerCase();
+        if (handled) output += "-";
+        let n = 128, delta = 0, bias = 72;
+        while (handled < input.length) {
+          let next = Infinity;
+          for (const point of input) if (point >= n && point < next) next = point;
+          delta += (next - n) * (handled + 1);
+          n = next;
+          for (const point of input) {
+            if (point < n) delta++;
+            if (point !== n) continue;
+            let q = delta;
+            for (let k = BASE; ; k += BASE) {
+              const threshold = k <= bias ? TMIN : k >= bias + TMAX ? TMAX : k - bias;
+              if (q < threshold) break;
+              output += digit(threshold + (q - threshold) % (BASE - threshold));
+              q = Math.floor((q - threshold) / (BASE - threshold));
+            }
+            output += digit(q);
+            bias = adapt(delta, handled + 1, handled === 0);
+            delta = 0;
+            handled++;
+          }
+          delta++;
+          n++;
+        }
+        return `xn--${output.toLowerCase()}`;
+      }
+      function hostnameToAscii(hostname) {
+        return hostname.split(".").map((label) => !label || /^[\x00-\x7F]+$/.test(label) ? label.toLowerCase() : punycodeLabel(label)).join(".");
+      }
+      function decodeForm(value) {
+        try {
+          return decodeURIComponent(value.replace(/\+/g, " "));
+        } catch (_) {
+          throw new TypeError("Invalid percent encoding");
+        }
+      }
+      function encodeForm(value) {
+        return encodeURIComponent(value).replace(/[!'()~]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`).replace(/%20/g, "+");
+      }
+      function normalizePath(path) {
+        const source = path || "/", output = [];
+        for (const segment of source.split("/")) {
+          if (segment === ".") continue;
+          if (segment === "..") {
+            if (output.length > 1) output.pop();
+            continue;
+          }
+          output.push(segment);
+        }
+        let normalized = output.join("/");
+        if (!normalized.startsWith("/")) normalized = `/${normalized}`;
+        if ((source.endsWith("/.") || source.endsWith("/..")) && !normalized.endsWith("/")) normalized += "/";
+        return encodeURI(decodeURI(normalized)).replace(/[?#]/g, (character) => character === "?" ? "%3F" : "%23");
+      }
+      function parseAbsoluteUrl(value) {
+        const match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(?:\?([^#]*))?(?:#.*)?$/.exec(value);
+        if (!match || !match[2]) throw new TypeError("Invalid absolute URL");
+        const scheme = match[1].toLowerCase();
+        let authority = match[2], credentials = false;
+        const at = authority.lastIndexOf("@");
+        if (at >= 0) {
+          credentials = true;
+          authority = authority.slice(at + 1);
+        }
+        let hostname = authority, port = "";
+        if (authority.startsWith("[")) {
+          const close = authority.indexOf("]");
+          if (close < 0) throw new TypeError("Invalid IPv6 host");
+          hostname = authority.slice(0, close + 1);
+          if (authority.length > close + 1) {
+            if (authority[close + 1] !== ":") throw new TypeError("Invalid port");
+            port = authority.slice(close + 2);
+          }
+        } else {
+          const colon = authority.lastIndexOf(":");
+          if (colon >= 0) {
+            hostname = authority.slice(0, colon);
+            port = authority.slice(colon + 1);
+          }
+          hostname = hostnameToAscii(decodeURIComponent(hostname));
+        }
+        if (!hostname || port && !/^\d+$/.test(port)) throw new TypeError("Invalid host");
+        const query = match[4] === void 0 || match[4] === "" ? [] : match[4].split("&").map((part) => {
+          const equals = part.indexOf("=");
+          return equals < 0 ? [decodeForm(part), ""] : [decodeForm(part.slice(0, equals)), decodeForm(part.slice(equals + 1))];
+        });
+        return {
+          scheme,
+          credentials,
+          hostname: hostname.toLowerCase(),
+          port,
+          path: normalizePath(match[3]),
+          query
+        };
+      }
+      function serializeUrl(parsed, query) {
+        const port = parsed.port && !(parsed.scheme === "https" && parsed.port === "443") ? `:${parsed.port}` : "";
+        const suffix = query.length ? `?${query.map(([key, value]) => `${encodeForm(key)}=${encodeForm(value)}`).join("&")}` : "";
+        return `${parsed.scheme}://${parsed.hostname}${port}${parsed.path}${suffix}`;
+      }
+      module["exports"] = {
+        hostnameToAscii,
+        parseAbsoluteUrl,
+        serializeUrl,
+        utf8ByteLength,
+        utf8Bytes
+      };
+    }
+  });
+
   // validators/canonicalize_url.js
   var require_canonicalize_url = __commonJS({
     "validators/canonicalize_url.js"(exports, module) {
       "use strict";
+      var { parseAbsoluteUrl, serializeUrl } = require_portable_primitives();
       var SENSITIVE = /* @__PURE__ */ new Set([
         "token",
         "access_token",
@@ -30,13 +209,13 @@ var MarkaKalkanDdtRuntime = (() => {
         }
         let url;
         try {
-          url = new URL(value);
+          url = parseAbsoluteUrl(value);
         } catch (_) {
           return { valid: false, canonicalUrl: null, errors: ["URL_INVALID"] };
         }
-        if (url.protocol !== "https:") errors.push("HTTPS_REQUIRED");
-        if (url.username || url.password) errors.push("URL_CREDENTIALS_FORBIDDEN");
-        for (const key of url.searchParams.keys()) {
+        if (url.scheme !== "https") errors.push("HTTPS_REQUIRED");
+        if (url.credentials) errors.push("URL_CREDENTIALS_FORBIDDEN");
+        for (const [key] of url.query) {
           if (SENSITIVE.has(key.toLowerCase())) errors.push("SENSITIVE_QUERY_FORBIDDEN");
         }
         if (errors.length) return {
@@ -44,21 +223,15 @@ var MarkaKalkanDdtRuntime = (() => {
           canonicalUrl: null,
           errors: [...new Set(errors)]
         };
-        url.protocol = url.protocol.toLowerCase();
-        url.hostname = url.hostname.toLowerCase();
-        url.hash = "";
-        if (url.port === "443") url.port = "";
         const kept = [];
-        for (const [key, val] of url.searchParams.entries()) {
+        for (const [key, val] of url.query) {
           const lower = key.toLowerCase();
           if (lower.startsWith("utm_") || lower === "gclid" || lower === "fbclid") continue;
           kept.push([key, val]);
         }
         const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
         kept.sort((a, b) => compare(a[0], b[0]) || compare(a[1], b[1]));
-        url.search = "";
-        for (const [key, val] of kept) url.searchParams.append(key, val);
-        const canonicalUrl = url.toString();
+        const canonicalUrl = serializeUrl(url, kept);
         if (canonicalUrl.length > 2048) return {
           valid: false,
           canonicalUrl: null,
@@ -74,6 +247,7 @@ var MarkaKalkanDdtRuntime = (() => {
   var require_crypto_shim = __commonJS({
     "build/crypto_shim.js"(exports, module) {
       "use strict";
+      var { utf8Bytes } = require_portable_primitives();
       var INITIAL = [
         1779033703,
         3144134277,
@@ -154,7 +328,7 @@ var MarkaKalkanDdtRuntime = (() => {
         return value >>> shift | value << 32 - shift;
       }
       function sha256Hex(text) {
-        const input = new TextEncoder().encode(text);
+        const input = utf8Bytes(text);
         const bitLength = input.length * 8;
         const paddedLength = Math.ceil((input.length + 9) / 64) * 64;
         const bytes = new Uint8Array(paddedLength);
@@ -4168,16 +4342,37 @@ var MarkaKalkanDdtRuntime = (() => {
       var { validateCandidateSource } = require_validate_candidate_source();
       var { issue, result } = require_validator_result();
       var { validateSchema } = require_schema_engine();
-      function validateAcquisitionResultInternal(envelope, { productionCallback = false } = {}) {
+      function validateAcquisitionResultInternal(envelope, context = {}) {
         const schema = validateSchema("acquisition_result", envelope);
         if (!schema.valid) return schema;
+        const taskId = context.taskId ?? envelope.taskId;
+        const executionId = context.executionId ?? envelope.executionId;
+        const productionCallback = context.productionCallback === true;
         const errors = [], seenUrls = /* @__PURE__ */ new Set(), seenIds = /* @__PURE__ */ new Set();
+        if (typeof taskId !== "string" || !taskId || typeof executionId !== "string" || !executionId) {
+          return result({ errors: [issue(
+            "CONTEXT_REQUIRED",
+            "$",
+            "Task ve execution context zorunludur."
+          )] });
+        }
+        if (envelope.taskId !== taskId) {
+          errors.push(issue("TASK_ID_MISMATCH", "taskId", "Task ID mismatch."));
+        }
+        if (envelope.executionId !== executionId) {
+          errors.push(issue(
+            "EXECUTION_ID_MISMATCH",
+            "executionId",
+            "Execution ID mismatch."
+          ));
+        }
         if (envelope.candidates.length > 3) errors.push(issue("CANDIDATE_LIMIT_EXCEEDED", "candidates", "Maximum three candidates."));
         for (let i = 0; i < envelope.candidates.length; i++) {
           const candidate = envelope.candidates[i];
           const child = validateCandidateSource(candidate, {
-            taskId: envelope.taskId,
-            executionId: envelope.executionId
+            taskId,
+            executionId,
+            productionCallback
           });
           errors.push(...child.errors.map((e) => ({ ...e, path: `candidates[${i}].${e.path}` })));
           if (seenUrls.has(candidate.canonicalUrl)) errors.push(issue("DUPLICATE_CANONICAL_URL", `candidates[${i}].canonicalUrl`, "Duplicate canonical URL."));
@@ -4251,6 +4446,7 @@ var MarkaKalkanDdtRuntime = (() => {
       var { isPlainRecord, issue, result } = require_validator_result();
       var { validateSchema } = require_schema_engine();
       var { invalidCandidateIssue } = require_context_validation();
+      var { utf8ByteLength } = require_portable_primitives();
       function validateStructuredEvidenceInternal(evidence, context) {
         const schema = validateSchema("structured_evidence", evidence);
         if (!schema.valid) return schema;
@@ -4271,7 +4467,7 @@ var MarkaKalkanDdtRuntime = (() => {
           errors.push(issue("EVIDENCE_SCOPE_MISMATCH", "executionId", "Evidence scope mismatch."));
         }
         if (candidate && candidate.canonicalUrl !== evidence.sourceUrl) errors.push(issue("EVIDENCE_URL_MISMATCH", "sourceUrl", "Evidence URL mismatch."));
-        const bytes = Buffer.byteLength(evidence.visibleText || "", "utf8");
+        const bytes = utf8ByteLength(evidence.visibleText || "");
         if ((evidence.visibleText || "").length > 5e4) errors.push(issue("VISIBLE_TEXT_CHAR_LIMIT", "visibleText", "Visible text exceeds character limit."));
         if (bytes > 131072) errors.push(issue("VISIBLE_TEXT_BYTE_LIMIT", "visibleText", "Visible text exceeds byte limit."));
         if (evidence.acquisitionStatus === "acquired") {
@@ -4310,6 +4506,7 @@ var MarkaKalkanDdtRuntime = (() => {
       var { validateStructuredEvidence } = require_validate_structured_evidence();
       var { invalidCandidateIssue } = require_context_validation();
       var { validateSchema } = require_schema_engine();
+      var { utf8ByteLength } = require_portable_primitives();
       var MAX_TOTAL_VISIBLE_TEXT_BYTES = 393216;
       function batchResult(errors, warnings, rejected, total, length) {
         return {
@@ -4378,7 +4575,7 @@ var MarkaKalkanDdtRuntime = (() => {
           if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return;
           if (typeof evidence.sourceId === "string") sourceIds.add(evidence.sourceId);
           if (schema.valid && evidence.acquisitionStatus === "acquired" && typeof evidence.visibleText === "string") {
-            totalVisibleTextBytes += Buffer.byteLength(evidence.visibleText, "utf8");
+            totalVisibleTextBytes += utf8ByteLength(evidence.visibleText);
           }
           if (typeof evidence.snapshotId === "string") {
             if (snapshots.has(evidence.snapshotId)) {
@@ -4597,22 +4794,23 @@ var MarkaKalkanDdtRuntime = (() => {
             return safeFailure("PIPELINE_INPUT_INVALID");
           }
           const { acquisitionResult, candidates, evidences, scannerResult } = input;
+          const taskId = acquisitionResult?.taskId;
+          const executionId = acquisitionResult?.executionId;
           const productionCallback = input.productionCallback === true;
-          const context = acquisitionResult && typeof acquisitionResult === "object" ? {
-            taskId: acquisitionResult.taskId,
-            executionId: acquisitionResult.executionId,
-            candidates
-          } : {};
+          const rootContext = { taskId, executionId, productionCallback };
           const acquisitionValidation = validateAcquisitionResult(
             acquisitionResult,
-            { productionCallback }
+            rootContext
           );
-          const candidateValidations = Array.isArray(candidates) ? candidates.map((candidate) => validateCandidateSource(candidate, context)) : [];
-          const evidenceBatchValidation = validateEvidenceBatch(evidences, context);
+          const candidateValidations = Array.isArray(candidates) ? candidates.map((candidate) => validateCandidateSource(candidate, rootContext)) : [];
+          const evidenceBatchValidation = validateEvidenceBatch(evidences, {
+            ...rootContext,
+            candidates
+          });
           const scannerValidation = validateScannerResult(scannerResult, {
-            ...context,
-            evidences,
-            productionCallback
+            ...rootContext,
+            candidates,
+            evidences
           });
           const scannerInvocation = evaluateScannerInvocation({
             acquisitionResult,

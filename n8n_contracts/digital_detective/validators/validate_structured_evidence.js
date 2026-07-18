@@ -3,6 +3,7 @@ const {buildContentHash, buildSnapshotId} = require("./deterministic_ids");
 const {isPlainRecord, issue, result} = require("./validator_result");
 const {validateSchema} = require("./schema_engine");
 const {invalidCandidateIssue} = require("./context_validation");
+const {utf8ByteLength} = require("../runtime/portable_primitives");
 
 function validateStructuredEvidenceInternal(evidence, context) {
   const schema = validateSchema("structured_evidence", evidence);
@@ -26,7 +27,7 @@ function validateStructuredEvidenceInternal(evidence, context) {
     errors.push(issue("EVIDENCE_SCOPE_MISMATCH", "executionId", "Evidence scope mismatch."));
   }
   if (candidate && candidate.canonicalUrl !== evidence.sourceUrl) errors.push(issue("EVIDENCE_URL_MISMATCH", "sourceUrl", "Evidence URL mismatch."));
-  const bytes = Buffer.byteLength(evidence.visibleText || "", "utf8");
+  const bytes = utf8ByteLength(evidence.visibleText || "");
   if ((evidence.visibleText || "").length > 50000) errors.push(issue("VISIBLE_TEXT_CHAR_LIMIT", "visibleText", "Visible text exceeds character limit."));
   if (bytes > 131072) errors.push(issue("VISIBLE_TEXT_BYTE_LIMIT", "visibleText", "Visible text exceeds byte limit."));
   if (evidence.acquisitionStatus === "acquired") {

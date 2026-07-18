@@ -4,9 +4,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
 const crypto = require("node:crypto");
 const {createHash} = require("../build/crypto_shim");
+const {runRuntimeExpressionInIsolatedContext} =
+  require("./helpers/isolated_n8n_vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const BUNDLE_PATH = path.join(ROOT, "generated", "n8n_contract_runtime.js");
@@ -15,9 +16,12 @@ const bundle = () => fs.readFileSync(BUNDLE_PATH, "utf8");
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
 function runtime() {
-  const context = vm.createContext({URL, URLSearchParams, TextEncoder, Buffer});
-  new vm.Script(bundle(), {filename:"n8n_contract_runtime.js"}).runInContext(context);
-  return context.MarkaKalkanDdtRuntime;
+  return {
+    runFixtureScenario: (name) => runRuntimeExpressionInIsolatedContext(bundle(),
+        `MarkaKalkanDdtRuntime.runFixtureScenario(${JSON.stringify(name)})`),
+    runContractPipeline: (input) => runRuntimeExpressionInIsolatedContext(bundle(),
+        `MarkaKalkanDdtRuntime.runContractPipeline(${JSON.stringify(input)})`),
+  };
 }
 
 function fixtureInput(name) {
@@ -89,7 +93,8 @@ test("manifest bundle hash and byte count match artifact", () => {
 test("manifest source hashes match every schema validator and fixture", () => {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
   for (const group of [manifest.schemaHashes, manifest.validatorHashes,
-    manifest.fixtureHashes]) {
+    manifest.fixtureHashes, manifest.runtimeSourceHashes,
+    manifest.buildSourceHashes, manifest.testProvenanceHashes]) {
     for (const [relative, expected] of Object.entries(group)) {
       assert.equal(sha256(fs.readFileSync(path.join(ROOT, relative))), expected);
     }
@@ -97,6 +102,12 @@ test("manifest source hashes match every schema validator and fixture", () => {
   assert.equal(Object.keys(manifest.schemaHashes).length, 4);
   assert.equal(Object.keys(manifest.validatorHashes).length, 11);
   assert.equal(Object.keys(manifest.fixtureHashes).length, 15);
+  assert.deepEqual(Object.keys(manifest.runtimeSourceHashes),
+      ["runtime/n8n_contract_runtime_entry.js", "runtime/portable_primitives.js"]);
+  assert.deepEqual(Object.keys(manifest.buildSourceHashes),
+      ["build/crypto_shim.js", "build/generate_n8n_runtime.js"]);
+  assert.deepEqual(Object.keys(manifest.testProvenanceHashes),
+      ["tests/helpers/isolated_n8n_vm.js"]);
 });
 test("manifest declares deterministic offline runtime", () => {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));

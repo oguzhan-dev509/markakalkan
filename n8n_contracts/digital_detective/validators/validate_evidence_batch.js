@@ -4,6 +4,7 @@ const {isPlainRecord, issue} = require("./validator_result");
 const {validateStructuredEvidence} = require("./validate_structured_evidence");
 const {invalidCandidateIssue} = require("./context_validation");
 const {validateSchema} = require("./schema_engine");
+const {utf8ByteLength} = require("../runtime/portable_primitives");
 
 const MAX_TOTAL_VISIBLE_TEXT_BYTES = 393216;
 
@@ -64,7 +65,7 @@ function validateEvidenceBatchInternal(evidences, context) {
     if (typeof evidence.sourceId === "string") sourceIds.add(evidence.sourceId);
     if (schema.valid && evidence.acquisitionStatus === "acquired" &&
         typeof evidence.visibleText === "string") {
-      totalVisibleTextBytes += Buffer.byteLength(evidence.visibleText, "utf8");
+      totalVisibleTextBytes += utf8ByteLength(evidence.visibleText);
     }
     if (typeof evidence.snapshotId === "string") {
       if (snapshots.has(evidence.snapshotId)) {

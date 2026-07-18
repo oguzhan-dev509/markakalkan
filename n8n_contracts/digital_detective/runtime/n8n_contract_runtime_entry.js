@@ -29,19 +29,19 @@ function runContractPipeline(input) {
       return safeFailure("PIPELINE_INPUT_INVALID");
     }
     const {acquisitionResult, candidates, evidences, scannerResult} = input;
+    const taskId = acquisitionResult?.taskId;
+    const executionId = acquisitionResult?.executionId;
     const productionCallback = input.productionCallback === true;
-    const context = acquisitionResult && typeof acquisitionResult === "object" ? {
-      taskId: acquisitionResult.taskId,
-      executionId: acquisitionResult.executionId,
-      candidates,
-    } : {};
+    const rootContext = {taskId, executionId, productionCallback};
     const acquisitionValidation = validateAcquisitionResult(acquisitionResult,
-        {productionCallback});
+        rootContext);
     const candidateValidations = Array.isArray(candidates) ? candidates.map((candidate) =>
-      validateCandidateSource(candidate, context)) : [];
-    const evidenceBatchValidation = validateEvidenceBatch(evidences, context);
+      validateCandidateSource(candidate, rootContext)) : [];
+    const evidenceBatchValidation = validateEvidenceBatch(evidences, {
+      ...rootContext, candidates,
+    });
     const scannerValidation = validateScannerResult(scannerResult, {
-      ...context, evidences, productionCallback,
+      ...rootContext, candidates, evidences,
     });
     const scannerInvocation = evaluateScannerInvocation({
       acquisitionResult, evidenceBatchValidation, productionCallback,

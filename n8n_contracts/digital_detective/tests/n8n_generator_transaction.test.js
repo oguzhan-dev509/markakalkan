@@ -92,6 +92,23 @@ test("temp manifest uses sourceContractCommit only", async () =>
         "6362b6e0558d25e04da7cf5b366464f0538827fe");
     assert.equal("sourceCommit" in manifest, false);
   }));
+test("temp manifest covers runtime and build provenance", async () =>
+  withTemp(async (outputRoot) => {
+    await generateArtifacts({outputRoot});
+    const manifest = JSON.parse(fs.readFileSync(outputPaths(outputRoot)[1], "utf8"));
+    assert.deepEqual(Object.keys(manifest.runtimeSourceHashes),
+        ["runtime/n8n_contract_runtime_entry.js", "runtime/portable_primitives.js"]);
+    assert.deepEqual(Object.keys(manifest.buildSourceHashes),
+        ["build/crypto_shim.js", "build/generate_n8n_runtime.js"]);
+    assert.deepEqual(Object.keys(manifest.testProvenanceHashes),
+        ["tests/helpers/isolated_n8n_vm.js"]);
+    for (const group of [manifest.runtimeSourceHashes, manifest.buildSourceHashes,
+      manifest.testProvenanceHashes]) {
+      for (const [relative, expected] of Object.entries(group)) {
+        assert.equal(hash(path.join(ROOT, relative)), expected);
+      }
+    }
+  }));
 test("temp workflow has import-safe root", async () =>
   withTemp(async (outputRoot) => {
     await generateArtifacts({outputRoot});

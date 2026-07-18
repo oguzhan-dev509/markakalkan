@@ -10,16 +10,16 @@
     "schemas/structured_evidence.schema.json": "bb1bb082c02d071791593821ce7b2bfb1e6825e3a8d989e33ca2792f75e68752"
   },
   "validatorHashes": {
-    "validators/canonicalize_url.js": "d6ae5bbe7db372b24c26229935a37b0736219c66bc88de0dcca38d45890eacda",
+    "validators/canonicalize_url.js": "c782a255a9018bd340c7c38aed288df62b94c4f8fe19038db1f713e00b800c0a",
     "validators/context_validation.js": "7d9243c72550aa4f7ce223e22388788feebaf8b32dd011f0b3d4ecbdb416e0fc",
     "validators/deterministic_ids.js": "a47a213753df5a4a1734ec4ab0d53a9660f077a47b26c9d560529a2cbcae5d74",
     "validators/pipeline_guard.js": "424fe26ce8a88584871b05142a1ae7f1a537a8c0ec9d833736c6499ce4efcab1",
     "validators/schema_engine.js": "7712c9dbb68626697baa8322696ca32a4559fed453eec15e2774974b86e4ff5f",
-    "validators/validate_acquisition_result.js": "a37a57f20786473d1243d535b43d53a2f2036937c419614b9ea77504c53822a8",
+    "validators/validate_acquisition_result.js": "35efa234853ae7e0289da30653a83bf137230c0d06788a18824275b9f5752d4f",
     "validators/validate_candidate_source.js": "ab9650504c4a226dce07b82d77b2e3332448f4f0b232ec2b78f0b67cf48954b4",
-    "validators/validate_evidence_batch.js": "d49c4f18a55916330cd25ff4f6efb49b2701b85ae9e78f42c967c03f2ea8e0e8",
+    "validators/validate_evidence_batch.js": "1d068f9a01b5fbc304eb88e530684c32f156f108ddeffcb26d745c7abf376442",
     "validators/validate_scanner_result.js": "e9ac503abb71dab489b6f55b00d65e57013417ca2f073c94423af4599a50ff8d",
-    "validators/validate_structured_evidence.js": "9a1a9a55dfe37450c263db70fac5e7cf558b5e21c5f8c37753aa96bfb2657c5a",
+    "validators/validate_structured_evidence.js": "f30bd1cdcc7dc77eb4a71b6a65a005e90d8af7def1563666025a215cb9756a00",
     "validators/validator_result.js": "bd5f88b47cb29c4f6f11f24bb727764758a4ec58183ffda5bcc6af6fe07a9d19"
   },
   "fixtureHashes": {
@@ -39,8 +39,19 @@
     "fixtures/synthetic_signal/scanner_result.json": "ab2d0c242b61fe5e04557e3b15249dcf429695c836ef0513ebda65bbc50bab20",
     "fixtures/synthetic_signal/structured_evidence.json": "c2ba92c72842f01c7444aa0ffaedf52d8c863c840e332fd7aab7f49792d4387a"
   },
-  "bundleSha256": "9e4d9066b6d2b40ba0a21ede15546f7769cef2ec94335114db1bd85c0ad713ee",
-  "bundleBytes": 249436,
+  "runtimeSourceHashes": {
+    "runtime/n8n_contract_runtime_entry.js": "5fb790f334fac2398c22b42326e38c27f85b4f5848aac9bf53ec0be349d9737b",
+    "runtime/portable_primitives.js": "f4dd30eb951e0927f5e844d3866a0098bff6efb62cab56eae7919c99bcfddb92"
+  },
+  "buildSourceHashes": {
+    "build/crypto_shim.js": "f124fb52f708d1ccfa0a4754c5bc091a463fbba836c07d8dc1f00c5443bb8184",
+    "build/generate_n8n_runtime.js": "4c1fcb71f69e6bf434320ea41afc05594285b2c65a49e7eb169dc9ff00b81764"
+  },
+  "testProvenanceHashes": {
+    "tests/helpers/isolated_n8n_vm.js": "16499ef98ed905edf29d280f5700b710cc718c8f89017ada062e7684b8d2b166"
+  },
+  "bundleSha256": "b1ed7fb1e17aa05d919286e5fa014ba493ff17d80e69e24a331eaba7e24f753a",
+  "bundleBytes": 257541,
   "generatedAtPolicy": "deterministic-no-wall-clock",
   "externalRuntimeDependencies": [],
   "containsCredentials": false,
