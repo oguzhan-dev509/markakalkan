@@ -20,7 +20,11 @@ function canonicalize(value, key) {
     const values = value.map((item) => canonicalize(item));
     if (["evidenceRefs", "relatedEntityRefs", "sourceSignalRefs",
       "sourceRiskRefs"].includes(key)) {
-      values.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+      values.sort((a, b) => {
+        const left = JSON.stringify(a);
+        const right = JSON.stringify(b);
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
     }
     return values;
   }

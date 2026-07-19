@@ -46,7 +46,8 @@ function executeAtomicCreateDocumentsV1(transaction, references, documents) {
 }
 
 async function executePersistenceTransactionV1({store, facts,
-  sourceVersionStillCurrent, sourceRecordStillExists, plannedAt, executedAt}) {
+  sourceVersionStillCurrent, sourceRecordStillExists, plannedAt, executedAt,
+  sourceRevalidation = null}) {
   const port = assertPersistenceStorePortV1(store);
   const creationAuditEventId = buildCreationAuditEventIdV1({
     receiptId: facts.receiptId,
@@ -61,12 +62,36 @@ async function executePersistenceTransactionV1({store, facts,
   }
   const references = port.referencesFor({facts, creationAuditEventId});
   const transactionResult = await port.runTransaction(async (transaction) => {
-    const snapshots = await transaction.getAll(
-        references.receipt, references.subject, references.audit,
-    );
+    const readReferences = [references.receipt, references.subject,
+      references.audit];
+    if (sourceRevalidation) readReferences.push(sourceRevalidation.reference);
+    const snapshots = await transaction.getAll(...readReferences);
     const receipt = receiptSnapshotV1(snapshots[0]);
     const subject = subjectSnapshotV1(snapshots[1]);
     const audit = creationAuditSnapshotV1(snapshots[2]);
+    if (sourceRevalidation) {
+      const source = snapshots[3];
+      if (!source.exists) {
+        return {plan: nonWritePlan(facts, plannedAt, OUTCOMES.deny,
+            ["source.record_missing"]), committed: false};
+      }
+      const data = source.data() || {};
+      if (data.tenantId !== sourceRevalidation.tenantId) {
+        return {plan: nonWritePlan(facts, plannedAt, OUTCOMES.conflict,
+            ["source.tenant_changed"]), committed: false};
+      }
+      if ((data.brandId || null) !== (sourceRevalidation.brandId || null)) {
+        return {plan: nonWritePlan(facts, plannedAt,
+            OUTCOMES.recomputeRequired, ["source.brand_changed"]),
+        committed: false};
+      }
+      const updateTime = source.updateTime.toDate().toISOString();
+      if (updateTime !== sourceRevalidation.updateTime) {
+        return {plan: nonWritePlan(facts, plannedAt,
+            OUTCOMES.recomputeRequired, ["source.version_changed"]),
+        committed: false};
+      }
+    }
     const integrity = validateStorageIntegrityV1({
       facts, receipt, subject, audit, creationAuditEventId,
     });

@@ -1,9 +1,12 @@
 const EMULATOR_PROJECT_ID = "demo-markakalkan-rst-0h";
+const MONITORING_EMULATOR_PROJECT_ID = "demo-markakalkan-rst-0i";
 
 function assertFirestoreEmulatorV1({projectId = EMULATOR_PROJECT_ID,
   emulatorHost = process.env.FIRESTORE_EMULATOR_HOST} = {}) {
-  if (projectId !== EMULATOR_PROJECT_ID) {
-    throw new Error("Only the dedicated MK-RST-0H emulator project is allowed");
+  if (![EMULATOR_PROJECT_ID, MONITORING_EMULATOR_PROJECT_ID]
+      .includes(projectId)) {
+    throw new Error(
+        "Only dedicated MK-RST-0H/0I emulator projects are allowed");
   }
   if (typeof emulatorHost !== "string" || emulatorHost.length === 0) {
     throw new Error("FIRESTORE_EMULATOR_HOST is required");
@@ -18,4 +21,5 @@ function assertFirestoreEmulatorV1({projectId = EMULATOR_PROJECT_ID,
   return Object.freeze({projectId, emulatorHost});
 }
 
-module.exports = {EMULATOR_PROJECT_ID, assertFirestoreEmulatorV1};
+module.exports = {EMULATOR_PROJECT_ID, MONITORING_EMULATOR_PROJECT_ID,
+  assertFirestoreEmulatorV1};

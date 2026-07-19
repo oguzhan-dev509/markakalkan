@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/constants/monitoring_enums.dart';
 import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/models/monitoring_event_model.dart';
 import 'package:markakalkan/modules/marka_kalkan/dijital_pazar_izleme/models/monitoring_signal_model.dart';
 import 'package:markakalkan/shared/risk_contracts/v1/adapters/monitoring_risk_adapter_v1.dart';
+import 'package:markakalkan/shared/risk_contracts/v1/commands/commands_v1.dart';
+import 'package:markakalkan/shared/risk_contracts/v1/idempotency/idempotency_v1.dart';
 import 'package:markakalkan/shared/risk_contracts/v1/shared_risk_contracts_v1.dart';
 
 void main() {
@@ -118,6 +121,49 @@ void main() {
       event: event(),
     );
     expect(jsonEncode(first.toJson()), jsonEncode(second.toJson()));
+  });
+
+  test('shared Node/Dart conformance fixtures match canonical JSON', () {
+    final fixture = jsonDecode(
+      File(
+        'test_fixtures/shared_risk/v1/monitoring/'
+        'monitoring_conformance_v1.json',
+      ).readAsStringSync(),
+    ) as Map<String, dynamic>;
+    for (final raw in fixture['validCases'] as List<dynamic>) {
+      final item = raw as Map<String, dynamic>;
+      final signal = MonitoringSignalModel.fromMap(
+        id: item['signalId'] as String,
+        data: item['signal'] as Map<String, dynamic>,
+      );
+      final eventJson = item['event'] as Map<String, dynamic>?;
+      final event = eventJson == null
+          ? null
+          : MonitoringEventModel.fromMap(
+              id: eventJson['id'] as String,
+              data: eventJson,
+            );
+      final output = adapter.toSignal(
+        signal,
+        adaptedAt: DateTime.parse(item['adaptedAt'] as String),
+        event: event,
+      );
+      expect(
+        jsonEncode(output.toJson()),
+        jsonEncode(item['expectedCanonical']),
+        reason: item['name'] as String,
+      );
+      expect(
+        const SourceIngestionKeyBuilderV1()
+            .monitoringSignal(signalId: signal.id)
+            .canonicalKey,
+        item['expectedExactIdempotencyKey'],
+      );
+      expect(
+        const SubjectFingerprintBuilderV1().riskSignal(output).value,
+        item['expectedFingerprint'],
+      );
+    }
   });
 }
 

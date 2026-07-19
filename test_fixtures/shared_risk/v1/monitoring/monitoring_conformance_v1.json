@@ -1,0 +1,85 @@
+{
+  "contractVersion": "monitoring-conformance-v1",
+  "severityValues": ["info", "low", "medium", "high", "critical"],
+  "lifecycleValues": ["new", "under_review", "confirmed", "dismissed", "escalated", "resolved", "archived"],
+  "errorCases": [
+    {"name": "unknown_severity", "field": "signalLevel", "value": "urgent", "expectedError": "monitoring.severity_unsupported"},
+    {"name": "unknown_lifecycle", "field": "status", "value": "forwarded", "expectedError": "monitoring.lifecycle_unsupported"}
+  ],
+  "validCases": [
+    {
+      "name": "minimum_valid_monitoring_signal",
+      "adaptedAt": "2026-07-19T12:00:00.000Z",
+      "signalId": "signal-min",
+      "signal": {
+        "tenantId": "tenant-1", "brandId": "brand-1", "sourceId": "source-1", "pageId": "page-1",
+        "eventId": "event-min", "ruleId": "rule-1", "signalLevel": "info", "status": "new",
+        "forwardingStatus": "not_forwarded", "title": "Minimum signal", "summary": "Minimum monitoring signal.",
+        "detectedAt": "2026-07-19T10:00:00.000Z", "createdAt": "2026-07-19T10:01:00.000Z"
+      },
+      "event": null,
+      "expectedExactIdempotencyKey": "23:source-ingestion-key-v1|25:digital_market_monitoring|17:monitoring_signal|15:exactOccurrence|10:signal-min",
+      "expectedFingerprint": "cad3972b469a0053b737e36148c8c9442e7087199b42be2032bb52f1180479c7",
+      "expectedCanonical": {
+        "signalId": "signal-min", "contractVersion": "risk-signal-v1",
+        "identityScope": {"tenantId": "tenant-1", "brandId": "brand-1", "resolutionStatus": "resolved", "resolutionSource": "monitoring.signal", "unresolvedReasons": []},
+        "canonicalAssetRef": {"assetType": "monitored_page", "assetId": "page-1", "module": "digital_market_monitoring", "brandId": "brand-1"},
+        "signalSource": {"module": "digital_market_monitoring", "sourceType": "monitoring_signal", "sourceId": "source-1"},
+        "signalType": {"namespace": "digital_market_monitoring.event_type", "value": "rule_match"},
+        "canonicalSeverity": "info", "originalSeverity": "info", "summary": "Minimum monitoring signal.", "evidenceRefs": [],
+        "relatedEntityRefs": [
+          {"module": "digital_market_monitoring", "entityType": "monitoring_signal", "entityId": "signal-min"},
+          {"module": "digital_market_monitoring", "entityType": "monitoring_event", "entityId": "event-min"},
+          {"module": "digital_market_monitoring", "entityType": "monitoring_source", "entityId": "source-1"},
+          {"module": "digital_market_monitoring", "entityType": "monitored_page", "entityId": "page-1"},
+          {"module": "digital_market_monitoring", "entityType": "signal_rule", "entityId": "rule-1"}
+        ],
+        "reviewStatus": "new", "detectedAt": "2026-07-19T10:00:00.000Z", "createdAt": "2026-07-19T10:01:00.000Z",
+        "provenance": {"producerModule": "digital_market_monitoring", "producerVersion": "monitoring-risk-adapter-v1", "sourceRecordId": "signal-min", "sourceId": "source-1", "sourceCreatedAt": "2026-07-19T10:01:00.000Z", "adaptedAt": "2026-07-19T12:00:00.000Z"}
+      }
+    },
+    {
+      "name": "signal_with_event_and_related_refs",
+      "adaptedAt": "2026-07-19T12:00:00.000Z",
+      "signalId": "signal-full",
+      "signal": {
+        "tenantId": "tenant-1", "brandId": "brand-1", "sourceId": "source-1", "pageId": "page-1", "listingId": "listing-1", "sellerId": "seller-1", "storeId": "store-1",
+        "eventId": "event-1", "ruleId": "rule-1", "ruleName": "Price drop", "eventType": "price_decreased", "eventCategory": "price",
+        "signalLevel": "critical", "status": "escalated", "forwardingStatus": "not_forwarded", "title": "Critical signal", "summary": "Critical monitoring signal.",
+        "detectedAt": "2026-07-19T10:00:00.000Z", "createdAt": "2026-07-19T10:01:00.000Z"
+      },
+      "event": {
+        "id": "event-1", "tenantId": "tenant-1", "brandId": "brand-1", "sourceId": "source-1", "pageId": "page-1",
+        "listingId": "listing-1", "sellerId": "seller-1", "storeId": "store-1", "eventType": "price_decreased", "eventCategory": "price",
+        "previousSnapshotId": "snapshot-before", "currentSnapshotId": "snapshot-after", "severity": "critical", "status": "new",
+        "detectedAt": "2026-07-19T09:59:00.000Z", "createdBySystem": true, "createdAt": "2026-07-19T10:00:30.000Z"
+      },
+      "expectedExactIdempotencyKey": "23:source-ingestion-key-v1|25:digital_market_monitoring|17:monitoring_signal|15:exactOccurrence|11:signal-full",
+      "expectedFingerprint": "e3b4ed45e227da999e5c8ed5b97208d0398c3e8890972227b4014c2299c11eb7",
+      "expectedCanonical": {
+        "signalId": "signal-full", "contractVersion": "risk-signal-v1",
+        "identityScope": {"tenantId": "tenant-1", "brandId": "brand-1", "resolutionStatus": "resolved", "resolutionSource": "monitoring.signal", "unresolvedReasons": []},
+        "canonicalAssetRef": {"assetType": "monitored_page", "assetId": "page-1", "module": "digital_market_monitoring", "brandId": "brand-1"},
+        "signalSource": {"module": "digital_market_monitoring", "sourceType": "monitoring_signal", "sourceId": "source-1"},
+        "signalType": {"namespace": "digital_market_monitoring.event_type", "value": "price_decreased"},
+        "canonicalSeverity": "critical", "originalSeverity": "critical", "summary": "Critical monitoring signal.", "evidenceRefs": [],
+        "relatedEntityRefs": [
+          {"module": "digital_market_monitoring", "entityType": "monitoring_signal", "entityId": "signal-full"},
+          {"module": "digital_market_monitoring", "entityType": "monitoring_event", "entityId": "event-1"},
+          {"module": "digital_market_monitoring", "entityType": "monitoring_source", "entityId": "source-1"},
+          {"module": "digital_market_monitoring", "entityType": "monitored_page", "entityId": "page-1"},
+          {"module": "digital_market_monitoring", "entityType": "signal_rule", "entityId": "rule-1", "displayCode": "Price drop"},
+          {"module": "digital_market_monitoring", "entityType": "product_listing", "entityId": "listing-1"},
+          {"module": "digital_market_monitoring", "entityType": "seller", "entityId": "seller-1"},
+          {"module": "digital_market_monitoring", "entityType": "seller_store", "entityId": "store-1"},
+          {"module": "digital_market_monitoring", "entityType": "page_snapshot", "entityId": "snapshot-before"},
+          {"module": "digital_market_monitoring", "entityType": "page_snapshot", "entityId": "snapshot-after"},
+          {"module": "digital_market_monitoring", "entityType": "event_type", "entityId": "price_decreased"},
+          {"module": "digital_market_monitoring", "entityType": "event_category", "entityId": "price"}
+        ],
+        "reviewStatus": "escalated", "detectedAt": "2026-07-19T10:00:00.000Z", "createdAt": "2026-07-19T10:01:00.000Z",
+        "provenance": {"producerModule": "digital_market_monitoring", "producerVersion": "monitoring-risk-adapter-v1", "sourceRecordId": "signal-full", "sourceId": "source-1", "snapshotId": "snapshot-after", "sourceCreatedAt": "2026-07-19T10:01:00.000Z", "adaptedAt": "2026-07-19T12:00:00.000Z"}
+      }
+    }
+  ]
+}
