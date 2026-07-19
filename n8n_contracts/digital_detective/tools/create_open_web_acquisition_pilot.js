@@ -57,6 +57,7 @@ async function pilotBundle() {
     standaloneAdapter(tempDirectory);
     const schemaSource = path.resolve(ROOT, "validators", "schema_engine.js");
     const result = await esbuild.build({
+      absWorkingDir: path.resolve(ROOT, "../.."),
       entryPoints: [path.join(ROOT, "open_web", "pilot_runtime_entry.js")],
       bundle: true, write: false, format: "iife",
       globalName: "MarkaKalkanOpenWebPilot", platform: "neutral",
@@ -82,6 +83,7 @@ async function pilotBundle() {
         .split(tempDirectory.replace(/\\/g, "/")).join(".pilot-build-tmp")
         .split(tempDirectory).join(".pilot-build-tmp")
         .split(relativeTemp).join(".pilot-build-tmp")
+        .replace(/ddt-open-web-pilot-[A-Za-z0-9]+/g, ".pilot-build-tmp")
         .replace(/module\.exports/g, 'module["exports"]')
         .replace(/__require/g, "__loadBundledModule")
         .replace(/require\(/g, "bundledModule(");
@@ -121,10 +123,8 @@ return $input.all().flatMap((item) => {
   const responseCode = `${bundle}
 return $input.all().map((item) => {
   const json = item?.json && typeof item.json === "object" ? item.json : {};
-  const response = {statusCode: json.statusCode, headers: json.headers,
-    body: json.body, finalUrl: json.normalizedUrl};
   const artifacts = MarkaKalkanOpenWebPilot.buildOpenWebArtifacts({
-    task: json.task, executionId: json.executionId, response,
+    task: json.task, executionId: json.executionId, response: json,
     capturedAt: new Date().toISOString()});
   if (artifacts.valid !== true) return {json: {
     task: json.task, executionId: json.executionId,

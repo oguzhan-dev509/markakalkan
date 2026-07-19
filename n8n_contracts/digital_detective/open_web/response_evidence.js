@@ -27,6 +27,49 @@ function ownData(value, key) {
   }
 }
 
+function inspectBodyProperty(value, key) {
+  try {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return {kind: "invalid"};
+    }
+    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+      return key in value ? {kind: "invalid"} : {kind: "absent"};
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor,
+        "value")) return {kind: "invalid"};
+    return {kind: "data", value: descriptor.value};
+  } catch (_) {
+    return {kind: "invalid"};
+  }
+}
+
+function canonicalBody(response) {
+  const data = inspectBodyProperty(response, "data");
+  const body = inspectBodyProperty(response, "body");
+  if (data.kind === "invalid") return {valid: false,
+    errorCode: "HTTP_BODY_INVALID", errorPath: "$.data"};
+  if (body.kind === "invalid") return {valid: false,
+    errorCode: "HTTP_BODY_INVALID", errorPath: "$.body"};
+  if (data.kind === "absent" && body.kind === "absent") {
+    return {valid: false, errorCode: "HTTP_BODY_MISSING",
+      errorPath: "$.data|$.body"};
+  }
+  if (data.kind === "data" && typeof data.value !== "string") {
+    return {valid: false, errorCode: "HTTP_BODY_INVALID",
+      errorPath: "$.data"};
+  }
+  if (body.kind === "data" && typeof body.value !== "string") {
+    return {valid: false, errorCode: "HTTP_BODY_INVALID",
+      errorPath: "$.body"};
+  }
+  if (data.kind === "data" && body.kind === "data" &&
+      data.value !== body.value) return {valid: false,
+    errorCode: "HTTP_BODY_AMBIGUOUS", errorPath: "$.data|$.body"};
+  return {valid: true, value: data.kind === "data" ? data.value : body.value,
+    errorPath: data.kind === "data" ? "$.data" : "$.body"};
+}
+
 function headerValue(headers, wanted) {
   try {
     if (headers === null || typeof headers !== "object" ||
@@ -44,6 +87,7 @@ function headerValue(headers, wanted) {
 }
 
 function headerScalar(value) {
+  if (value === undefined) return undefined;
   if (typeof value === "string" || typeof value === "number") return value;
   if (Array.isArray(value) && value.length === 1 &&
       (typeof value[0] === "string" || typeof value[0] === "number")) {
@@ -92,20 +136,18 @@ function guardOpenWebResponse(response) {
   try {
     const status = ownData(response, "statusCode");
     const headers = ownData(response, "headers");
-    const body = ownData(response, "body");
-    const finalUrl = ownData(response, "finalUrl");
+    const body = canonicalBody(response);
+    const finalUrl = ownData(response, "finalUrl") ||
+      ownData(response, "normalizedUrl");
     if (!status || status.value === undefined) return invalid(
         "HTTP_STATUS_MISSING", "$.statusCode");
     if (!headers || headers.value === undefined) return invalid(
         "HTTP_HEADERS_MISSING", "$.headers");
-    if (!body || body.value === undefined) return invalid(
-        "HTTP_BODY_MISSING", "$.body");
+    if (!body.valid) return invalid(body.errorCode, body.errorPath);
     if (!finalUrl || finalUrl.value === undefined) return invalid(
         "FINAL_URL_MISSING", "$.finalUrl");
     if (!Number.isInteger(status.value)) return invalid(
         "HTTP_STATUS_INVALID", "$.statusCode");
-    if (typeof body.value !== "string") return invalid(
-        "HTTP_BODY_INVALID", "$.body");
     if (typeof finalUrl.value !== "string") return invalid(
         "FINAL_URL_INVALID", "$.finalUrl");
     if (status.value < 200 || status.value > 299) return invalid(
@@ -121,9 +163,10 @@ function guardOpenWebResponse(response) {
         contentType)) return invalid("CONTENT_TYPE_INVALID",
         "$.headers.content-type");
     const rawBodyBytes = utf8ByteLength(body.value);
-    if (!body.value || rawBodyBytes === 0) return invalid("EMPTY_BODY", "$.body");
+    if (!body.value || rawBodyBytes === 0) return invalid("EMPTY_BODY",
+        body.errorPath);
     if (rawBodyBytes > MAX_RAW_BODY_BYTES) return invalid("BODY_TOO_LARGE",
-        "$.body");
+        body.errorPath);
     const declared = headerScalar(headerValue(headers.value, "content-length"));
     if (declared !== undefined) {
       if ((typeof declared !== "string" && typeof declared !== "number") ||
@@ -134,10 +177,10 @@ function guardOpenWebResponse(response) {
     const visibleText = /^text\/html/i.test(contentType) ?
       visibleTextFromHtml(body.value) : body.value.replace(/\s+/g, " ")
           .trim().normalize("NFC");
-    if (!visibleText) return invalid("VISIBLE_TEXT_EMPTY", "$.body");
+    if (!visibleText) return invalid("VISIBLE_TEXT_EMPTY", body.errorPath);
     const visibleTextBytes = utf8ByteLength(visibleText);
     if (visibleText.length > 50000 || visibleTextBytes > 131072) {
-      return invalid("VISIBLE_TEXT_TOO_LARGE", "$.body");
+      return invalid("VISIBLE_TEXT_TOO_LARGE", body.errorPath);
     }
     return {valid: true, reason: "HTTP_RESPONSE_READY",
       normalizedUrl: finalPolicy.normalizedUrl, statusCode: status.value,

@@ -21,6 +21,7 @@ const HTML = "<!doctype html><html><head><title>Example Domain</title>" +
   "<style>hidden style</style><script>hidden script</script></head>" +
   "<body><h1>Example&nbsp;Domain</h1><p>Safe &amp; public.</p>" +
   "<noscript>hidden noscript</noscript></body></html>";
+const REAL_N8N_HTML = "<!doctype html><html lang=\"en\"><head><title>Example Domain</title><style>body{background:#eee}</style></head><body><div><h1>Example Domain</h1><p>This domain is for use in documentation examples without needing permission. Avoid use in operations.</p><p><a href=\"https://iana.org/domains/example\">Learn more</a></p></div></body></html>\n";
 const TASK = {taskId: "open-web-acquisition-pilot-v1",
   tenantId: "tenant-open-web-pilot", brandId: "brand-open-web-pilot",
   taskType: "open_web_acquisition_pilot", target: "https://example.com/",
@@ -29,6 +30,11 @@ const response = (overrides = {}) => ({statusCode: 200,
   headers: {"content-type": "text/html; charset=UTF-8",
     "content-length": String(Buffer.byteLength(HTML, "utf8"))},
   body: HTML, finalUrl: "https://example.com/", ...overrides});
+const dataResponse = (overrides = {}) => ({statusCode: 200,
+  statusMessage: "OK", headers: {"content-type": "text/html",
+    "transfer-encoding": "chunked", connection: "close",
+    server: "cloudflare"},
+  data: REAL_N8N_HTML, finalUrl: "https://example.com/", ...overrides});
 const workflow = () => JSON.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
 const node = (name) => workflow().nodes.find((entry) => entry.name === name);
 
@@ -82,12 +88,54 @@ test("URL policy accepts a foreign-realm own data property", () => {
 });
 
 test("response guard accepts a complete real-shaped response", () => {
-  const output = guardOpenWebResponse(response());
+  const output = guardOpenWebResponse(dataResponse());
   assert.equal(output.valid, true);
   assert.equal(output.statusCode, 200);
   assert.equal(output.pageTitle, "Example Domain");
-  assert.equal(output.rawBodyBytes, Buffer.byteLength(HTML));
-  assert.equal(output.contentSha256, sha256(HTML));
+  assert.equal(output.rawBodyBytes, Buffer.byteLength(REAL_N8N_HTML));
+  assert.equal(output.contentSha256, sha256(REAL_N8N_HTML));
+});
+
+test("response guard accepts body compatibility and identical data/body", () => {
+  assert.equal(guardOpenWebResponse(response()).valid, true);
+  assert.equal(guardOpenWebResponse(dataResponse({body: REAL_N8N_HTML})).valid,
+      true);
+});
+
+test("response guard rejects ambiguous data/body deterministically", () => {
+  const output = guardOpenWebResponse(dataResponse({body: "different"}));
+  assert.deepEqual({valid: output.valid, reason: output.reason,
+    errorCode: output.errorCode, errorPath: output.errorPath},
+  {valid: false, reason: "HTTP_RESPONSE_INVALID",
+    errorCode: "HTTP_BODY_AMBIGUOUS", errorPath: "$.data|$.body"});
+});
+
+test("response guard rejects absent, non-string and empty canonical data", () => {
+  const missing = {statusCode: 200, headers: {"content-type": "text/html"},
+    finalUrl: TASK.target};
+  assert.equal(guardOpenWebResponse(missing).errorCode, "HTTP_BODY_MISSING");
+  assert.equal(guardOpenWebResponse(dataResponse({data: 7})).errorCode,
+      "HTTP_BODY_INVALID");
+  assert.equal(guardOpenWebResponse(dataResponse({data: ""})).errorCode,
+      "EMPTY_BODY");
+});
+
+test("canonical data rejects accessor, inherited and descriptor traps", () => {
+  let calls = 0;
+  const accessor = dataResponse();
+  delete accessor.data;
+  Object.defineProperty(accessor, "data", {get() { calls++; return REAL_N8N_HTML; }});
+  assert.equal(guardOpenWebResponse(accessor).valid, false);
+  assert.equal(calls, 0);
+  const inherited = Object.assign(Object.create({data: REAL_N8N_HTML}),
+      dataResponse());
+  delete inherited.data;
+  assert.equal(guardOpenWebResponse(inherited).valid, false);
+  const proxy = new Proxy(dataResponse(), {getOwnPropertyDescriptor() {
+    throw new Error("PRIVATE_DESCRIPTOR");
+  }});
+  assert.doesNotThrow(() => guardOpenWebResponse(proxy));
+  assert.equal(guardOpenWebResponse(proxy).valid, false);
 });
 
 for (const [name, value, reason] of [
@@ -246,7 +294,8 @@ function mergedItem(overrides = {}) {
     taskEnvelopeValid: true, normalizedUrl: TASK.target, urlPolicyValid: true,
     productionAllowed: false, callbackAttempted: false,
     statusCode: 200, headers: {"content-type": ["text/html; charset=UTF-8"],
-      "content-length": [Buffer.byteLength(HTML)]}, body: HTML, ...overrides}};
+      "content-length": [Buffer.byteLength(REAL_N8N_HTML)]},
+    data: REAL_N8N_HTML, ...overrides}};
 }
 
 test("real n8n flat full-response shape produces exactly one capture item", () => {
@@ -256,15 +305,23 @@ test("real n8n flat full-response shape produces exactly one capture item", () =
   assert.equal(output.length, 1);
   assert.equal(output[0].json.captureValid, true);
   assert.equal(output[0].json.artifacts.capture.visibleText.length > 0, true);
+  assert.equal(output[0].json.artifacts.capture.rawBodyBytes > 0, true);
+  assert.equal(output[0].json.artifacts.capture.visibleTextBytes > 0, true);
   assert.match(output[0].json.artifacts.capture.contentSha256, /^[a-f0-9]{64}$/);
+  assert.match(output[0].json.artifacts.capture.visibleTextSha256,
+      /^[a-f0-9]{64}$/);
   assert.equal(output[0].json.artifacts.candidate.sourceUrl, TASK.target);
+  assert.ok(output[0].json.artifacts.candidate.sourceId);
+  assert.ok(output[0].json.artifacts.acquisitionResult);
+  assert.equal(output[0].json.artifacts.evidences.length, 1);
+  assert.ok(output[0].json.artifacts.evidences[0].snapshotId);
   assert.equal(output[0].json.productionAllowed, false);
   assert.equal(output[0].json.callbackAttempted, false);
 });
 
 test("old nested response assumption is not silently accepted", () => {
   const nested = mergedItem({statusCode: undefined, headers: undefined,
-    body: undefined, response: response()});
+    data: undefined, response: response()});
   const output = runCodeNodeInIsolatedContext(
       node("Response Guard and Evidence Capture").parameters.jsCode, [nested]);
   assert.equal(output.length, 1);
@@ -276,14 +333,14 @@ test("old nested response assumption is not silently accepted", () => {
 test("flat HTTP fields win despite an unrelated nested collision", () => {
   const output = runCodeNodeInIsolatedContext(
       node("Response Guard and Evidence Capture").parameters.jsCode,
-      [mergedItem({response: {statusCode: 500, body: "private"}})]);
+      [mergedItem({response: {statusCode: 500, data: "private"}})]);
   assert.equal(output.length, 1);
   assert.equal(output[0].json.captureValid, true);
 });
 
 for (const [name, patch, errorCode] of [
   ["missing statusCode", {statusCode: undefined}, "HTTP_STATUS_MISSING"],
-  ["missing body", {body: undefined}, "HTTP_BODY_MISSING"],
+  ["missing body", {data: undefined}, "HTTP_BODY_MISSING"],
 ]) {
   test(`${name} emits one body-free diagnostic item`, () => {
     const output = runCodeNodeInIsolatedContext(
@@ -301,7 +358,7 @@ for (const [name, patch, errorCode] of [
 test("diagnostic bypasses contract validation and reaches safe summary", () => {
   let items = runCodeNodeInIsolatedContext(
       node("Response Guard and Evidence Capture").parameters.jsCode,
-      [mergedItem({body: undefined})]);
+      [mergedItem({data: undefined})]);
   items = runCodeNodeInIsolatedContext(
       node("Acquisition Candidate Evidence Contract Gate").parameters.jsCode,
       items);
@@ -319,8 +376,14 @@ test("diagnostic bypasses contract validation and reaches safe summary", () => {
 test("generator is OS-independent byte-for-byte deterministic", async () => {
   const first = await serializeWorkflow();
   const second = await serializeWorkflow();
-  assert.equal(first, second);
-  assert.equal(first, fs.readFileSync(WORKFLOW_PATH, "utf8"));
+  const firstHash = crypto.createHash("sha256").update(first).digest("hex");
+  const secondHash = crypto.createHash("sha256").update(second).digest("hex");
+  assert.equal(first, second, `generator hash mismatch ${firstHash}/${secondHash}`);
+  const committed = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  const committedHash = crypto.createHash("sha256").update(committed)
+      .digest("hex");
+  assert.equal(first, committed,
+      `committed workflow hash mismatch ${firstHash}/${committedHash}`);
 });
 
 test("four verified workflows remain byte-for-byte unchanged", () => {
