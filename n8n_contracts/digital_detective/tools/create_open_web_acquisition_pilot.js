@@ -119,31 +119,73 @@ return $input.all().flatMap((item) => {
     urlPolicyValid: true}}];
 });`;
   const responseCode = `${bundle}
-return $input.all().flatMap((item) => {
+return $input.all().map((item) => {
   const json = item?.json && typeof item.json === "object" ? item.json : {};
   const response = {statusCode: json.statusCode, headers: json.headers,
     body: json.body, finalUrl: json.normalizedUrl};
   const artifacts = MarkaKalkanOpenWebPilot.buildOpenWebArtifacts({
     task: json.task, executionId: json.executionId, response,
     capturedAt: new Date().toISOString()});
-  if (artifacts.valid !== true) return [];
-  return [{json: {...json, artifacts, networkFetchPerformed: true,
-    productionAllowed: false, callbackAttempted: false}}];
+  if (artifacts.valid !== true) return {json: {
+    task: json.task, executionId: json.executionId,
+    normalizedUrl: json.normalizedUrl,
+    taskEnvelopeValid: json.taskEnvelopeValid === true,
+    urlPolicyValid: json.urlPolicyValid === true,
+    captureValid: false, reason: "HTTP_RESPONSE_INVALID",
+    errorCode: typeof artifacts.errorCode === "string"
+      ? artifacts.errorCode : "HTTP_RESPONSE_INVALID",
+    errorPath: typeof artifacts.errorPath === "string"
+      ? artifacts.errorPath : "$.response",
+    networkFetchPerformed: true, productionAllowed: false,
+    callbackAttempted: false}};
+  return {json: {task: json.task, executionId: json.executionId,
+    normalizedUrl: json.normalizedUrl,
+    taskEnvelopeValid: json.taskEnvelopeValid === true,
+    urlPolicyValid: json.urlPolicyValid === true,
+    captureValid: true, artifacts, networkFetchPerformed: true,
+    productionAllowed: false, callbackAttempted: false}};
 });`;
   const contractCode = `${bundle}
-return $input.all().flatMap((item) => {
+return $input.all().map((item) => {
+  if (item?.json?.captureValid !== true) return {json: {...item.json,
+    contractGateRun: false}};
   const validations = MarkaKalkanOpenWebPilot.validateOpenWebArtifacts(
     item?.json?.artifacts);
-  if (validations.valid !== true) return [];
-  return [{json: {...item.json, validations}}];
+  if (validations.valid !== true) return {json: {
+    task: item.json.task, executionId: item.json.executionId,
+    normalizedUrl: item.json.normalizedUrl,
+    taskEnvelopeValid: item.json.taskEnvelopeValid === true,
+    urlPolicyValid: item.json.urlPolicyValid === true,
+    captureValid: true, contractValid: false,
+    reason: "CONTRACT_VALIDATION_INVALID",
+    errorCode: "CONTRACT_VALIDATION_INVALID", errorPath: "$.artifacts",
+    networkFetchPerformed: true, productionAllowed: false,
+    callbackAttempted: false, contractGateRun: true}};
+  return {json: {...item.json, validations, contractValid: true,
+    contractGateRun: true}};
 });`;
   const summaryCode = `return $input.all().map((item) => {
   const json = item.json;
+  if (json.captureValid !== true || json.contractValid !== true) {
+    return {json: {taskId: typeof json.task?.taskId === "string"
+      ? json.task.taskId : "", executionId: typeof json.executionId === "string"
+      ? json.executionId : "", normalizedUrl: typeof json.normalizedUrl === "string"
+      ? json.normalizedUrl : "", taskEnvelopeValid: json.taskEnvelopeValid === true,
+      urlPolicyValid: json.urlPolicyValid === true,
+      captureValid: json.captureValid === true, reason: typeof json.reason === "string"
+      ? json.reason : "HTTP_RESPONSE_INVALID",
+      errorCode: typeof json.errorCode === "string" ? json.errorCode
+        : "HTTP_RESPONSE_INVALID", errorPath: typeof json.errorPath === "string"
+        ? json.errorPath : "$.response", scannerStage: "NOT_RUN", findingCount: 0,
+      networkFetchPerformed: json.networkFetchPerformed === true,
+      productionAllowed: false, callbackAttempted: false}};
+  }
   const capture = json.artifacts.capture;
   return {json: {taskId: json.task.taskId,
     executionId: json.executionId, normalizedUrl: capture.normalizedUrl,
     taskEnvelopeValid: json.taskEnvelopeValid === true,
     urlPolicyValid: json.urlPolicyValid === true,
+    captureValid: true,
     httpStatus: capture.statusCode, contentType: capture.contentType,
     rawBodyBytes: capture.rawBodyBytes,
     visibleTextBytes: capture.visibleTextBytes,

@@ -105,7 +105,9 @@ for (const [name, value, reason] of [
     "content-length": "1"}}), "CONTENT_LENGTH_MISMATCH"],
 ]) {
   test(`response guard rejects ${name}`, () => {
-    assert.equal(guardOpenWebResponse(value).reason, reason);
+    const output = guardOpenWebResponse(value);
+    assert.equal(output.reason, "HTTP_RESPONSE_INVALID");
+    assert.equal(output.errorCode, reason);
   });
 }
 
@@ -237,6 +239,81 @@ test("URL policy code runs through the n8n membrane", () => {
   assert.equal(output.length, 1);
   assert.equal(output[0].json.normalizedUrl, TASK.target);
   assert.equal(output[0].json.urlPolicyValid, true);
+});
+
+function mergedItem(overrides = {}) {
+  return {json: {task: TASK, executionId: "execution-001",
+    taskEnvelopeValid: true, normalizedUrl: TASK.target, urlPolicyValid: true,
+    productionAllowed: false, callbackAttempted: false,
+    statusCode: 200, headers: {"content-type": ["text/html; charset=UTF-8"],
+      "content-length": [Buffer.byteLength(HTML)]}, body: HTML, ...overrides}};
+}
+
+test("real n8n flat full-response shape produces exactly one capture item", () => {
+  const output = runCodeNodeInIsolatedContext(
+      node("Response Guard and Evidence Capture").parameters.jsCode,
+      [mergedItem()], {n8nLikeNullPrototypeMembrane: true});
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.captureValid, true);
+  assert.equal(output[0].json.artifacts.capture.visibleText.length > 0, true);
+  assert.match(output[0].json.artifacts.capture.contentSha256, /^[a-f0-9]{64}$/);
+  assert.equal(output[0].json.artifacts.candidate.sourceUrl, TASK.target);
+  assert.equal(output[0].json.productionAllowed, false);
+  assert.equal(output[0].json.callbackAttempted, false);
+});
+
+test("old nested response assumption is not silently accepted", () => {
+  const nested = mergedItem({statusCode: undefined, headers: undefined,
+    body: undefined, response: response()});
+  const output = runCodeNodeInIsolatedContext(
+      node("Response Guard and Evidence Capture").parameters.jsCode, [nested]);
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.captureValid, false);
+  assert.equal(output[0].json.reason, "HTTP_RESPONSE_INVALID");
+  assert.equal(output[0].json.errorPath, "$.statusCode");
+});
+
+test("flat HTTP fields win despite an unrelated nested collision", () => {
+  const output = runCodeNodeInIsolatedContext(
+      node("Response Guard and Evidence Capture").parameters.jsCode,
+      [mergedItem({response: {statusCode: 500, body: "private"}})]);
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.captureValid, true);
+});
+
+for (const [name, patch, errorCode] of [
+  ["missing statusCode", {statusCode: undefined}, "HTTP_STATUS_MISSING"],
+  ["missing body", {body: undefined}, "HTTP_BODY_MISSING"],
+]) {
+  test(`${name} emits one body-free diagnostic item`, () => {
+    const output = runCodeNodeInIsolatedContext(
+        node("Response Guard and Evidence Capture").parameters.jsCode,
+        [mergedItem(patch)]);
+    assert.equal(output.length, 1);
+    assert.equal(output[0].json.captureValid, false);
+    assert.equal(output[0].json.reason, "HTTP_RESPONSE_INVALID");
+    assert.equal(output[0].json.errorCode, errorCode);
+    assert.equal("body" in output[0].json, false);
+    assert.equal("artifacts" in output[0].json, false);
+  });
+}
+
+test("diagnostic bypasses contract validation and reaches safe summary", () => {
+  let items = runCodeNodeInIsolatedContext(
+      node("Response Guard and Evidence Capture").parameters.jsCode,
+      [mergedItem({body: undefined})]);
+  items = runCodeNodeInIsolatedContext(
+      node("Acquisition Candidate Evidence Contract Gate").parameters.jsCode,
+      items);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].json.contractGateRun, false);
+  items = runCodeNodeInIsolatedContext(
+      node("Acquisition Pilot Summary").parameters.jsCode, items);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].json.scannerStage, "NOT_RUN");
+  assert.equal(items[0].json.productionAllowed, false);
+  assert.equal(items[0].json.callbackAttempted, false);
+  assert.doesNotMatch(JSON.stringify(items), /<!doctype|<html|Example Domain/);
 });
 
 test("generator is OS-independent byte-for-byte deterministic", async () => {

@@ -43,6 +43,15 @@ function headerValue(headers, wanted) {
   }
 }
 
+function headerScalar(value) {
+  if (typeof value === "string" || typeof value === "number") return value;
+  if (Array.isArray(value) && value.length === 1 &&
+      (typeof value[0] === "string" || typeof value[0] === "number")) {
+    return value[0];
+  }
+  return null;
+}
+
 function decodeEntities(text) {
   const named = {amp: "&", apos: "'", gt: ">", lt: "<", nbsp: " ",
     quot: "\""};
@@ -78,39 +87,57 @@ function sha256(value) {
 }
 
 function guardOpenWebResponse(response) {
-  const invalid = (reason = "HTTP_RESPONSE_INVALID") => ({valid: false,
-    reason});
+  const invalid = (errorCode = "HTTP_RESPONSE_INVALID", errorPath = "$.") =>
+    ({valid: false, reason: "HTTP_RESPONSE_INVALID", errorCode, errorPath});
   try {
     const status = ownData(response, "statusCode");
     const headers = ownData(response, "headers");
     const body = ownData(response, "body");
     const finalUrl = ownData(response, "finalUrl");
-    if (!status || !headers || !body || !finalUrl ||
-        !Number.isInteger(status.value) || typeof body.value !== "string" ||
-        typeof finalUrl.value !== "string") return invalid();
-    if (status.value < 200 || status.value > 299) return invalid("HTTP_STATUS_INVALID");
+    if (!status || status.value === undefined) return invalid(
+        "HTTP_STATUS_MISSING", "$.statusCode");
+    if (!headers || headers.value === undefined) return invalid(
+        "HTTP_HEADERS_MISSING", "$.headers");
+    if (!body || body.value === undefined) return invalid(
+        "HTTP_BODY_MISSING", "$.body");
+    if (!finalUrl || finalUrl.value === undefined) return invalid(
+        "FINAL_URL_MISSING", "$.finalUrl");
+    if (!Number.isInteger(status.value)) return invalid(
+        "HTTP_STATUS_INVALID", "$.statusCode");
+    if (typeof body.value !== "string") return invalid(
+        "HTTP_BODY_INVALID", "$.body");
+    if (typeof finalUrl.value !== "string") return invalid(
+        "FINAL_URL_INVALID", "$.finalUrl");
+    if (status.value < 200 || status.value > 299) return invalid(
+        "HTTP_STATUS_INVALID", "$.statusCode");
     const finalPolicy = validateOpenWebUrl({url: finalUrl.value});
-    if (!finalPolicy.valid) return invalid("FINAL_URL_INVALID");
-    const contentTypeValue = headerValue(headers.value, "content-type");
-    if (typeof contentTypeValue !== "string") return invalid("CONTENT_TYPE_INVALID");
+    if (!finalPolicy.valid) return invalid("FINAL_URL_INVALID", "$.finalUrl");
+    const contentTypeValue = headerScalar(headerValue(headers.value,
+        "content-type"));
+    if (typeof contentTypeValue !== "string") return invalid(
+        "CONTENT_TYPE_INVALID", "$.headers.content-type");
     const contentType = contentTypeValue.trim();
     if (!/^(?:text\/html|text\/plain)(?:;\s*charset=utf-8)?$/i.test(
-        contentType)) return invalid("CONTENT_TYPE_INVALID");
+        contentType)) return invalid("CONTENT_TYPE_INVALID",
+        "$.headers.content-type");
     const rawBodyBytes = utf8ByteLength(body.value);
-    if (!body.value || rawBodyBytes === 0) return invalid("EMPTY_BODY");
-    if (rawBodyBytes > MAX_RAW_BODY_BYTES) return invalid("BODY_TOO_LARGE");
-    const declared = headerValue(headers.value, "content-length");
+    if (!body.value || rawBodyBytes === 0) return invalid("EMPTY_BODY", "$.body");
+    if (rawBodyBytes > MAX_RAW_BODY_BYTES) return invalid("BODY_TOO_LARGE",
+        "$.body");
+    const declared = headerScalar(headerValue(headers.value, "content-length"));
     if (declared !== undefined) {
-      if (typeof declared !== "string" || !/^[0-9]+$/.test(declared) ||
-          Number(declared) !== rawBodyBytes) return invalid("CONTENT_LENGTH_MISMATCH");
+      if ((typeof declared !== "string" && typeof declared !== "number") ||
+          !/^[0-9]+$/.test(String(declared)) ||
+          Number(declared) !== rawBodyBytes) return invalid(
+          "CONTENT_LENGTH_MISMATCH", "$.headers.content-length");
     }
     const visibleText = /^text\/html/i.test(contentType) ?
       visibleTextFromHtml(body.value) : body.value.replace(/\s+/g, " ")
           .trim().normalize("NFC");
-    if (!visibleText) return invalid("VISIBLE_TEXT_EMPTY");
+    if (!visibleText) return invalid("VISIBLE_TEXT_EMPTY", "$.body");
     const visibleTextBytes = utf8ByteLength(visibleText);
     if (visibleText.length > 50000 || visibleTextBytes > 131072) {
-      return invalid("VISIBLE_TEXT_TOO_LARGE");
+      return invalid("VISIBLE_TEXT_TOO_LARGE", "$.body");
     }
     return {valid: true, reason: "HTTP_RESPONSE_READY",
       normalizedUrl: finalPolicy.normalizedUrl, statusCode: status.value,
@@ -118,7 +145,7 @@ function guardOpenWebResponse(response) {
       pageTitle: /^text\/html/i.test(contentType) ? titleFromHtml(body.value) : null,
       contentSha256: sha256(body.value), visibleTextSha256: sha256(visibleText)};
   } catch (_) {
-    return invalid();
+    return invalid("HTTP_RESPONSE_EXCEPTION", "$.response");
   }
 }
 
@@ -126,7 +153,9 @@ function buildOpenWebArtifacts({task, executionId, response, capturedAt}) {
   const guarded = guardOpenWebResponse(response);
   if (!guarded.valid || !task || typeof executionId !== "string" ||
       !executionId || typeof capturedAt !== "string" || !capturedAt) {
-    return {valid: false, reason: "OPEN_WEB_ADAPTER_INVALID"};
+    return {valid: false, reason: "HTTP_RESPONSE_INVALID",
+      errorCode: guarded.errorCode || "OPEN_WEB_ADAPTER_INVALID",
+      errorPath: guarded.errorPath || "$.response"};
   }
   const sourceId = buildSourceId(task.taskId, executionId,
       guarded.normalizedUrl);
