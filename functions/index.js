@@ -76,6 +76,11 @@ const {
 } = require(
     "./digital_detective/digital_detective_result",
 );
+const {
+  buildPersistMonitoringRiskSignalPilot,
+} = require(
+    "./shared_risk/monitoring/v1/monitoring_callable",
+);
 
 setGlobalOptions({
   region: "europe-west3",
@@ -197,3 +202,5 @@ exports.receiveDigitalDetectiveResult =
       onRequest,
       logger,
     });
+exports.persistMonitoringRiskSignalPilot =
+    buildPersistMonitoringRiskSignalPilot({db});

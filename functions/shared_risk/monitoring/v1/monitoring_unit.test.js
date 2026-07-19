@@ -9,6 +9,7 @@ const {
   assembleMonitoringServerPersistenceFactsV1,
   evaluateMonitoringPersistencePermissionV1,
   exactKey,
+  evaluateMonitoringRolloutPolicyV1,
   monitoringRiskPersistenceRequestV1,
   verifiedServerInvocationContextV1,
 } = require("./index");
@@ -92,7 +93,22 @@ function main() {
   assert.equal(facts.subjectFingerprint, full.expectedFingerprint);
   assert.equal(facts.targetNamespace, "shared_risk_signals");
   assert.equal(facts.readinessDecision.allowed, true);
-  console.log("monitoring_unit.test.js: PASS (32 scenarios)");
+  const rolloutBase = {monitoringSignalId: "signal", dryRun: true,
+    projectId: "markakalkan-app", expectedProjectId: "markakalkan-app",
+    evaluatedAt: "2026-07-19T12:00:00.000Z", allowedSignalIds: []};
+  assert.equal(evaluateMonitoringRolloutPolicyV1({...rolloutBase,
+    mode: "dry_run_only"}).allowed, true);
+  assert.equal(evaluateMonitoringRolloutPolicyV1({...rolloutBase,
+    mode: "disabled"}).allowed, false);
+  assert.equal(evaluateMonitoringRolloutPolicyV1({...rolloutBase,
+    mode: "single_signal_write", dryRun: false,
+    allowedSignalIds: ["signal"]}).allowed, true);
+  assert.equal(evaluateMonitoringRolloutPolicyV1({...rolloutBase,
+    mode: "single_signal_write", dryRun: false,
+    allowedSignalIds: ["other"]}).allowed, false);
+  assert.equal(evaluateMonitoringRolloutPolicyV1({...rolloutBase,
+    mode: "dry_run_only", projectId: "wrong"}).allowed, false);
+  console.log("monitoring_unit.test.js: PASS (37 scenarios)");
 }
 
 main();
