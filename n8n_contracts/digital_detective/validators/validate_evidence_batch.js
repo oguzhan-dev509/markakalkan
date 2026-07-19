@@ -1,8 +1,9 @@
 "use strict";
 
-const {isPlainRecord, issue} = require("./validator_result");
+const {issue} = require("./validator_result");
 const {validateStructuredEvidence} = require("./validate_structured_evidence");
-const {invalidCandidateIssue} = require("./context_validation");
+const {invalidCandidateIssue, readValidationContext} =
+  require("./context_validation");
 const {validateSchema} = require("./schema_engine");
 const {utf8ByteLength} = require("../runtime/portable_primitives");
 
@@ -26,14 +27,13 @@ function validateEvidenceBatchInternal(evidences, context) {
       "Evidence batch dizi olmalıdır."));
     return batchResult(errors, warnings, rejected, 0, 0);
   }
-  if (!isPlainRecord(context) || typeof context.taskId !== "string" || !context.taskId ||
-      typeof context.executionId !== "string" || !context.executionId ||
-      !Array.isArray(context.candidates)) {
+  const validationContext = readValidationContext(context, {candidates: true});
+  if (!validationContext) {
     errors.push(issue("CONTEXT_REQUIRED", "$",
       "Task, execution ve candidates context zorunludur."));
     return batchResult(errors, warnings, rejected, 0, 0);
   }
-  const invalidCandidate = invalidCandidateIssue(context.candidates);
+  const invalidCandidate = invalidCandidateIssue(validationContext.candidates);
   if (invalidCandidate) {
     errors.push(invalidCandidate);
     return batchResult(errors, warnings, rejected, 0, 0);
@@ -42,7 +42,7 @@ function validateEvidenceBatchInternal(evidences, context) {
   const sourceIds = new Set();
   const snapshots = new Map();
   let totalVisibleTextBytes = 0;
-  if (context.candidates.length > 3) {
+  if (validationContext.candidates.length > 3) {
     errors.push(issue("EVIDENCE_CANDIDATE_LIMIT_EXCEEDED", "candidates",
       "En fazla üç candidate kullanılabilir."));
   }
@@ -50,7 +50,7 @@ function validateEvidenceBatchInternal(evidences, context) {
     const schema = validateSchema("structured_evidence", evidence);
     let validation;
     try {
-      validation = validateStructuredEvidence(evidence, context);
+      validation = validateStructuredEvidence(evidence, validationContext);
     } catch (_) {
       validation = {valid: false, warnings: [], errors: [issue(
         "EVIDENCE_VALIDATION_EXCEPTION", "$",

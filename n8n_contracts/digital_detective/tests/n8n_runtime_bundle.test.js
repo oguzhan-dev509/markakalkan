@@ -107,7 +107,8 @@ test("manifest source hashes match every schema validator and fixture", () => {
   assert.deepEqual(Object.keys(manifest.buildSourceHashes),
       ["build/crypto_shim.js", "build/generate_n8n_runtime.js"]);
   assert.deepEqual(Object.keys(manifest.testProvenanceHashes),
-      ["tests/helpers/isolated_n8n_vm.js"]);
+      ["tests/cross_realm_context.test.js",
+        "tests/helpers/isolated_n8n_vm.js"]);
 });
 test("manifest declares deterministic offline runtime", () => {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));

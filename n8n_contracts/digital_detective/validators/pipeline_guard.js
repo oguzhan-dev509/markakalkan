@@ -2,10 +2,14 @@
 
 const {validateAcquisitionResult} = require("./validate_acquisition_result");
 
-function evaluateScannerInvocation({acquisitionResult, evidenceBatchValidation,
-  productionCallback = false} = {}) {
-  const acquisition = validateAcquisitionResult(acquisitionResult,
-      {productionCallback});
+function evaluateScannerInvocation({acquisitionResult, acquisitionValidation,
+  evidenceBatchValidation, productionCallback = false} = {}) {
+  const acquisition = acquisitionValidation || validateAcquisitionResult(
+      acquisitionResult, Object.assign(Object.create(null), {
+        taskId: acquisitionResult?.taskId,
+        executionId: acquisitionResult?.executionId,
+        productionCallback,
+      }));
   if (!acquisition.valid) return {allowed: false,
     reason: acquisition.errors.some((e) =>
       e.code === "TEST_FIXTURE_PRODUCTION_CALLBACK") ?

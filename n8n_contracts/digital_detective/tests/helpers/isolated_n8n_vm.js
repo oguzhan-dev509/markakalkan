@@ -42,5 +42,21 @@ function runRuntimeExpressionInIsolatedContext(bundle, expression) {
   }
 }
 
+function runRuntimeWithForeignInput(bundle, input) {
+  const foreignRealm = vm.createContext({serialized: JSON.stringify(input)});
+  const foreignInput = new vm.Script("JSON.parse(serialized)")
+      .runInContext(foreignRealm, {timeout: 500});
+  const runtimeRealm = vm.createContext({foreignInput});
+  const source = `${bundle}\n;JSON.stringify(` +
+    "MarkaKalkanDdtRuntime.runContractPipeline(foreignInput))";
+  try {
+    return JSON.parse(new vm.Script(source, {filename: "n8n-cross-realm.js"})
+        .runInContext(runtimeRealm, {timeout: 2000}));
+  } catch (_) {
+    throw new Error("ISOLATED_CROSS_REALM_EXECUTION_FAILED");
+  }
+}
+
 module.exports = {FORBIDDEN_GLOBALS, isolatedGlobalTypes,
-  runCodeNodeInIsolatedContext, runRuntimeExpressionInIsolatedContext};
+  runCodeNodeInIsolatedContext, runRuntimeExpressionInIsolatedContext,
+  runRuntimeWithForeignInput};

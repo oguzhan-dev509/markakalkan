@@ -1,9 +1,9 @@
 "use strict";
 const {canonicalizeUrl} = require("./canonicalize_url");
 const {buildFindingKey} = require("./deterministic_ids");
-const {isPlainRecord, issue, result} = require("./validator_result");
+const {issue, result} = require("./validator_result");
 const {validateSchema} = require("./schema_engine");
-const {invalidCandidateIssue, invalidEvidenceIssue} =
+const {invalidCandidateIssue, invalidEvidenceIssue, readValidationContext} =
   require("./context_validation");
 
 const CONCLUSIVE = /(?:kesin|doğrulanmış)\s+(?:sahte|taklit)|confirmed[_ -]?counterfeit/i;
@@ -13,14 +13,15 @@ function validateScannerResultInternal(scanner, context) {
   const schema = validateSchema("digital_field_scanner_result", scanner);
   if (!schema.valid) return result({errors: schema.errors,
     acceptedFindingCount: 0, rejectedFindingCount: 0});
-  if (!isPlainRecord(context) || typeof context.taskId !== "string" || !context.taskId ||
-      typeof context.executionId !== "string" || !context.executionId ||
-      !Array.isArray(context.candidates) || !Array.isArray(context.evidences)) {
+  const validationContext = readValidationContext(context,
+      {candidates: true, evidences: true});
+  if (!validationContext) {
     return result({errors: [issue("CONTEXT_REQUIRED", "$",
       "Task, execution, candidates ve evidences context zorunludur.")],
     acceptedFindingCount: 0, rejectedFindingCount: 0});
   }
-  const {candidates, evidences: evidence, productionCallback = false} = context;
+  const {candidates, evidences: evidence,
+    productionCallback = false} = validationContext;
   const invalidCandidate = invalidCandidateIssue(candidates);
   if (invalidCandidate) return result({errors: [invalidCandidate],
     acceptedFindingCount: 0, rejectedFindingCount: 0});
@@ -28,7 +29,8 @@ function validateScannerResultInternal(scanner, context) {
   if (invalidEvidence) return result({errors: [invalidEvidence],
     acceptedFindingCount: 0, rejectedFindingCount: 0});
   const errors = [], warnings = [], seen = new Set(), rejected = new Set();
-  if (scanner.taskId !== context.taskId || scanner.executionId !== context.executionId) {
+  if (scanner.taskId !== validationContext.taskId ||
+      scanner.executionId !== validationContext.executionId) {
     errors.push(issue("SCANNER_SCOPE_MISMATCH", "executionId", "Scanner scope mismatch."));
   }
   const acquired = candidates.filter((c) => c.acquisitionStatus === "acquired");

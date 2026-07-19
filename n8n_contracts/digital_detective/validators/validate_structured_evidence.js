@@ -1,27 +1,27 @@
 "use strict";
 const {buildContentHash, buildSnapshotId} = require("./deterministic_ids");
-const {isPlainRecord, issue, result} = require("./validator_result");
+const {issue, result} = require("./validator_result");
 const {validateSchema} = require("./schema_engine");
-const {invalidCandidateIssue} = require("./context_validation");
+const {invalidCandidateIssue, readValidationContext} =
+  require("./context_validation");
 const {utf8ByteLength} = require("../runtime/portable_primitives");
 
 function validateStructuredEvidenceInternal(evidence, context) {
   const schema = validateSchema("structured_evidence", evidence);
   if (!schema.valid) return schema;
   const errors = [], warnings = [];
-  if (!isPlainRecord(context) || typeof context.taskId !== "string" || !context.taskId ||
-      typeof context.executionId !== "string" || !context.executionId ||
-      !Array.isArray(context.candidates)) {
+  const validationContext = readValidationContext(context, {candidates: true});
+  if (!validationContext) {
     return result({errors: [issue("CONTEXT_REQUIRED", "$",
       "Task, execution ve candidates context zorunludur.")]});
   }
-  const {candidates} = context;
+  const {candidates} = validationContext;
   const invalidCandidate = invalidCandidateIssue(candidates);
   if (invalidCandidate) return result({errors: [invalidCandidate]});
   const candidate = candidates.find((c) => c.sourceId === evidence.sourceId);
   if (!candidate) errors.push(issue("EVIDENCE_CANDIDATE_NOT_FOUND", "sourceId", "Candidate not found."));
-  if (evidence.taskId !== context.taskId ||
-      evidence.executionId !== context.executionId ||
+  if (evidence.taskId !== validationContext.taskId ||
+      evidence.executionId !== validationContext.executionId ||
       (candidate && (candidate.taskId !== evidence.taskId ||
        candidate.executionId !== evidence.executionId))) {
     errors.push(issue("EVIDENCE_SCOPE_MISMATCH", "executionId", "Evidence scope mismatch."));

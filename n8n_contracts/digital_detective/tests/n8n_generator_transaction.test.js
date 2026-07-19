@@ -101,7 +101,8 @@ test("temp manifest covers runtime and build provenance", async () =>
     assert.deepEqual(Object.keys(manifest.buildSourceHashes),
         ["build/crypto_shim.js", "build/generate_n8n_runtime.js"]);
     assert.deepEqual(Object.keys(manifest.testProvenanceHashes),
-        ["tests/helpers/isolated_n8n_vm.js"]);
+        ["tests/cross_realm_context.test.js",
+          "tests/helpers/isolated_n8n_vm.js"]);
     for (const group of [manifest.runtimeSourceHashes, manifest.buildSourceHashes,
       manifest.testProvenanceHashes]) {
       for (const [relative, expected] of Object.entries(group)) {

@@ -32,19 +32,20 @@ function runContractPipeline(input) {
     const taskId = acquisitionResult?.taskId;
     const executionId = acquisitionResult?.executionId;
     const productionCallback = input.productionCallback === true;
-    const rootContext = {taskId, executionId, productionCallback};
+    const rootContext = Object.assign(Object.create(null),
+        {taskId, executionId, productionCallback});
     const acquisitionValidation = validateAcquisitionResult(acquisitionResult,
         rootContext);
     const candidateValidations = Array.isArray(candidates) ? candidates.map((candidate) =>
       validateCandidateSource(candidate, rootContext)) : [];
-    const evidenceBatchValidation = validateEvidenceBatch(evidences, {
-      ...rootContext, candidates,
-    });
-    const scannerValidation = validateScannerResult(scannerResult, {
-      ...rootContext, candidates, evidences,
-    });
+    const evidenceBatchValidation = validateEvidenceBatch(evidences,
+        Object.assign(Object.create(null), rootContext, {candidates}));
+    const scannerValidation = validateScannerResult(scannerResult,
+        Object.assign(Object.create(null), rootContext,
+            {candidates, evidences}));
     const scannerInvocation = evaluateScannerInvocation({
-      acquisitionResult, evidenceBatchValidation, productionCallback,
+      acquisitionResult, acquisitionValidation, evidenceBatchValidation,
+      productionCallback,
     });
     const candidatesValid = Array.isArray(candidates) &&
       candidateValidations.every((validation) => validation.valid === true);

@@ -488,6 +488,76 @@ var MarkaKalkanDdtRuntime = (() => {
     }
   });
 
+  // validators/context_validation.js
+  var require_context_validation = __commonJS({
+    "validators/context_validation.js"(exports, module) {
+      "use strict";
+      var { issue } = require_validator_result();
+      function isValidationContext(value) {
+        if (value === null || typeof value !== "object" || Array.isArray(value)) {
+          return false;
+        }
+        const prototype = Object.getPrototypeOf(value);
+        return prototype === null || Object.getPrototypeOf(prototype) === null;
+      }
+      function readValidationContext(value, {
+        candidates = false,
+        evidences = false
+      } = {}) {
+        if (!isValidationContext(value)) return null;
+        const owns = (key) => Object.prototype.hasOwnProperty.call(value, key);
+        const taskId = value.taskId;
+        const executionId = value.executionId;
+        const candidateEntries = candidates ? value.candidates : void 0;
+        const evidenceEntries = evidences ? value.evidences : void 0;
+        const callback = value.productionCallback;
+        if (!owns("taskId") || typeof taskId !== "string" || !taskId || !owns("executionId") || typeof executionId !== "string" || !executionId || candidates && (!owns("candidates") || !Array.isArray(candidateEntries)) || evidences && (!owns("evidences") || !Array.isArray(evidenceEntries))) {
+          return null;
+        }
+        return Object.assign(/* @__PURE__ */ Object.create(null), {
+          taskId,
+          executionId,
+          candidates: candidateEntries,
+          evidences: evidenceEntries,
+          productionCallback: owns("productionCallback") && callback === true
+        });
+      }
+      function nonEmptyString(value) {
+        return typeof value === "string" && value.length > 0;
+      }
+      function candidateEntryValid(candidate) {
+        return isValidationContext(candidate) && nonEmptyString(candidate.sourceId) && nonEmptyString(candidate.taskId) && nonEmptyString(candidate.executionId) && nonEmptyString(candidate.acquisitionStatus) && (nonEmptyString(candidate.canonicalUrl) || nonEmptyString(candidate.sourceUrl));
+      }
+      function evidenceEntryValid(evidence) {
+        return isValidationContext(evidence) && nonEmptyString(evidence.sourceId) && nonEmptyString(evidence.taskId) && nonEmptyString(evidence.executionId) && nonEmptyString(evidence.acquisitionStatus) && (typeof evidence.snapshotId === "string" || evidence.snapshotId === null) && nonEmptyString(evidence.sourceUrl);
+      }
+      function invalidCandidateIssue(candidates) {
+        const index = candidates.findIndex((entry) => !candidateEntryValid(entry));
+        return index === -1 ? null : issue(
+          "CONTEXT_CANDIDATE_INVALID",
+          `candidates[${index}]`,
+          "Candidate context öğesi geçersiz."
+        );
+      }
+      function invalidEvidenceIssue(evidences) {
+        const index = evidences.findIndex((entry) => !evidenceEntryValid(entry));
+        return index === -1 ? null : issue(
+          "CONTEXT_EVIDENCE_INVALID",
+          `evidences[${index}]`,
+          "Evidence context öğesi geçersiz."
+        );
+      }
+      module["exports"] = {
+        candidateEntryValid,
+        evidenceEntryValid,
+        invalidCandidateIssue,
+        invalidEvidenceIssue,
+        isValidationContext,
+        readValidationContext
+      };
+    }
+  });
+
   // node_modules/ajv/dist/runtime/ucs2length.js
   var require_ucs2length = __commonJS({
     "node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
@@ -4297,13 +4367,15 @@ var MarkaKalkanDdtRuntime = (() => {
       "use strict";
       var { canonicalizeUrl } = require_canonicalize_url();
       var { buildSourceId } = require_deterministic_ids();
-      var { isPlainRecord, issue, result } = require_validator_result();
+      var { issue, result } = require_validator_result();
+      var { readValidationContext } = require_context_validation();
       var { validateSchema } = require_schema_engine();
       function validateCandidateSourceInternal(candidate, context) {
         const schema = validateSchema("candidate_source", candidate);
         if (!schema.valid) return schema;
         const errors = [];
-        if (!isPlainRecord(context) || typeof context.taskId !== "string" || !context.taskId || typeof context.executionId !== "string" || !context.executionId) {
+        const validationContext = readValidationContext(context);
+        if (!validationContext) {
           return result({ errors: [issue(
             "CONTEXT_REQUIRED",
             "$",
@@ -4314,8 +4386,8 @@ var MarkaKalkanDdtRuntime = (() => {
         if (!canonical.valid) errors.push(issue("CANDIDATE_URL_INVALID", "sourceUrl", canonical.errors.join(",")));
         if (canonical.valid && candidate.canonicalUrl !== canonical.canonicalUrl) errors.push(issue("CANONICAL_URL_MISMATCH", "canonicalUrl", "Canonical URL does not match."));
         if (canonical.valid && candidate.sourceId !== buildSourceId(candidate.taskId, candidate.executionId, canonical.canonicalUrl)) errors.push(issue("SOURCE_ID_MISMATCH", "sourceId", "Source ID does not match."));
-        if (candidate.taskId !== context.taskId) errors.push(issue("TASK_ID_MISMATCH", "taskId", "Task ID mismatch."));
-        if (candidate.executionId !== context.executionId) errors.push(issue("EXECUTION_ID_MISMATCH", "executionId", "Execution ID mismatch."));
+        if (candidate.taskId !== validationContext.taskId) errors.push(issue("TASK_ID_MISMATCH", "taskId", "Task ID mismatch."));
+        if (candidate.executionId !== validationContext.executionId) errors.push(issue("EXECUTION_ID_MISMATCH", "executionId", "Execution ID mismatch."));
         if (candidate.robotsPolicy === "blocked" && candidate.acquisitionStatus !== "blocked") errors.push(issue("ROBOTS_STATUS_MISMATCH", "acquisitionStatus", "Blocked robots policy requires blocked status."));
         if (["captcha", "login_required"].includes(candidate.errorCode) && candidate.acquisitionStatus === "acquired") errors.push(issue("ACCESS_BARRIER_ACQUIRED", "acquisitionStatus", "Access barrier cannot be acquired."));
         return result({ errors });
@@ -4342,20 +4414,25 @@ var MarkaKalkanDdtRuntime = (() => {
       var { validateCandidateSource } = require_validate_candidate_source();
       var { issue, result } = require_validator_result();
       var { validateSchema } = require_schema_engine();
-      function validateAcquisitionResultInternal(envelope, context = {}) {
+      var { readValidationContext } = require_context_validation();
+      function validateAcquisitionResultInternal(envelope, context) {
         const schema = validateSchema("acquisition_result", envelope);
         if (!schema.valid) return schema;
-        const taskId = context.taskId ?? envelope.taskId;
-        const executionId = context.executionId ?? envelope.executionId;
-        const productionCallback = context.productionCallback === true;
+        const supplied = context === void 0 ? Object.assign(/* @__PURE__ */ Object.create(null), {
+          taskId: envelope.taskId,
+          executionId: envelope.executionId,
+          productionCallback: false
+        }) : context;
+        const validationContext = readValidationContext(supplied);
         const errors = [], seenUrls = /* @__PURE__ */ new Set(), seenIds = /* @__PURE__ */ new Set();
-        if (typeof taskId !== "string" || !taskId || typeof executionId !== "string" || !executionId) {
+        if (!validationContext) {
           return result({ errors: [issue(
             "CONTEXT_REQUIRED",
             "$",
             "Task ve execution context zorunludur."
           )] });
         }
+        const { taskId, executionId, productionCallback } = validationContext;
         if (envelope.taskId !== taskId) {
           errors.push(issue("TASK_ID_MISMATCH", "taskId", "Task ID mismatch."));
         }
@@ -4369,11 +4446,14 @@ var MarkaKalkanDdtRuntime = (() => {
         if (envelope.candidates.length > 3) errors.push(issue("CANDIDATE_LIMIT_EXCEEDED", "candidates", "Maximum three candidates."));
         for (let i = 0; i < envelope.candidates.length; i++) {
           const candidate = envelope.candidates[i];
-          const child = validateCandidateSource(candidate, {
-            taskId,
-            executionId,
-            productionCallback
-          });
+          const child = validateCandidateSource(
+            candidate,
+            Object.assign(/* @__PURE__ */ Object.create(null), {
+              taskId,
+              executionId,
+              productionCallback
+            })
+          );
           errors.push(...child.errors.map((e) => ({ ...e, path: `candidates[${i}].${e.path}` })));
           if (seenUrls.has(candidate.canonicalUrl)) errors.push(issue("DUPLICATE_CANONICAL_URL", `candidates[${i}].canonicalUrl`, "Duplicate canonical URL."));
           if (seenIds.has(candidate.sourceId)) errors.push(issue("DUPLICATE_SOURCE_ID", `candidates[${i}].sourceId`, "Duplicate source ID."));
@@ -4399,71 +4479,33 @@ var MarkaKalkanDdtRuntime = (() => {
     }
   });
 
-  // validators/context_validation.js
-  var require_context_validation = __commonJS({
-    "validators/context_validation.js"(exports, module) {
-      "use strict";
-      var { isPlainRecord, issue } = require_validator_result();
-      function nonEmptyString(value) {
-        return typeof value === "string" && value.length > 0;
-      }
-      function candidateEntryValid(candidate) {
-        return isPlainRecord(candidate) && nonEmptyString(candidate.sourceId) && nonEmptyString(candidate.taskId) && nonEmptyString(candidate.executionId) && nonEmptyString(candidate.acquisitionStatus) && (nonEmptyString(candidate.canonicalUrl) || nonEmptyString(candidate.sourceUrl));
-      }
-      function evidenceEntryValid(evidence) {
-        return isPlainRecord(evidence) && nonEmptyString(evidence.sourceId) && nonEmptyString(evidence.taskId) && nonEmptyString(evidence.executionId) && nonEmptyString(evidence.acquisitionStatus) && (typeof evidence.snapshotId === "string" || evidence.snapshotId === null) && nonEmptyString(evidence.sourceUrl);
-      }
-      function invalidCandidateIssue(candidates) {
-        const index = candidates.findIndex((entry) => !candidateEntryValid(entry));
-        return index === -1 ? null : issue(
-          "CONTEXT_CANDIDATE_INVALID",
-          `candidates[${index}]`,
-          "Candidate context öğesi geçersiz."
-        );
-      }
-      function invalidEvidenceIssue(evidences) {
-        const index = evidences.findIndex((entry) => !evidenceEntryValid(entry));
-        return index === -1 ? null : issue(
-          "CONTEXT_EVIDENCE_INVALID",
-          `evidences[${index}]`,
-          "Evidence context öğesi geçersiz."
-        );
-      }
-      module["exports"] = {
-        candidateEntryValid,
-        evidenceEntryValid,
-        invalidCandidateIssue,
-        invalidEvidenceIssue
-      };
-    }
-  });
-
   // validators/validate_structured_evidence.js
   var require_validate_structured_evidence = __commonJS({
     "validators/validate_structured_evidence.js"(exports, module) {
       "use strict";
       var { buildContentHash, buildSnapshotId } = require_deterministic_ids();
-      var { isPlainRecord, issue, result } = require_validator_result();
+      var { issue, result } = require_validator_result();
       var { validateSchema } = require_schema_engine();
-      var { invalidCandidateIssue } = require_context_validation();
+      var { invalidCandidateIssue, readValidationContext } = require_context_validation();
       var { utf8ByteLength } = require_portable_primitives();
       function validateStructuredEvidenceInternal(evidence, context) {
         const schema = validateSchema("structured_evidence", evidence);
         if (!schema.valid) return schema;
         const errors = [], warnings = [];
-        if (!isPlainRecord(context) || typeof context.taskId !== "string" || !context.taskId || typeof context.executionId !== "string" || !context.executionId || !Array.isArray(context.candidates)) {
+        const validationContext = readValidationContext(context, { candidates: true });
+        if (!validationContext) {
           return result({ errors: [issue(
             "CONTEXT_REQUIRED",
             "$",
             "Task, execution ve candidates context zorunludur."
           )] });
         }
-        const { candidates } = context;
+        const { candidates } = validationContext;
         const invalidCandidate = invalidCandidateIssue(candidates);
         if (invalidCandidate) return result({ errors: [invalidCandidate] });
         const candidate = candidates.find((c) => c.sourceId === evidence.sourceId);
         if (!candidate) errors.push(issue("EVIDENCE_CANDIDATE_NOT_FOUND", "sourceId", "Candidate not found."));
-        if (evidence.taskId !== context.taskId || evidence.executionId !== context.executionId || candidate && (candidate.taskId !== evidence.taskId || candidate.executionId !== evidence.executionId)) {
+        if (evidence.taskId !== validationContext.taskId || evidence.executionId !== validationContext.executionId || candidate && (candidate.taskId !== evidence.taskId || candidate.executionId !== evidence.executionId)) {
           errors.push(issue("EVIDENCE_SCOPE_MISMATCH", "executionId", "Evidence scope mismatch."));
         }
         if (candidate && candidate.canonicalUrl !== evidence.sourceUrl) errors.push(issue("EVIDENCE_URL_MISMATCH", "sourceUrl", "Evidence URL mismatch."));
@@ -4502,9 +4544,9 @@ var MarkaKalkanDdtRuntime = (() => {
   var require_validate_evidence_batch = __commonJS({
     "validators/validate_evidence_batch.js"(exports, module) {
       "use strict";
-      var { isPlainRecord, issue } = require_validator_result();
+      var { issue } = require_validator_result();
       var { validateStructuredEvidence } = require_validate_structured_evidence();
-      var { invalidCandidateIssue } = require_context_validation();
+      var { invalidCandidateIssue, readValidationContext } = require_context_validation();
       var { validateSchema } = require_schema_engine();
       var { utf8ByteLength } = require_portable_primitives();
       var MAX_TOTAL_VISIBLE_TEXT_BYTES = 393216;
@@ -4528,7 +4570,8 @@ var MarkaKalkanDdtRuntime = (() => {
           ));
           return batchResult(errors, warnings, rejected, 0, 0);
         }
-        if (!isPlainRecord(context) || typeof context.taskId !== "string" || !context.taskId || typeof context.executionId !== "string" || !context.executionId || !Array.isArray(context.candidates)) {
+        const validationContext = readValidationContext(context, { candidates: true });
+        if (!validationContext) {
           errors.push(issue(
             "CONTEXT_REQUIRED",
             "$",
@@ -4536,7 +4579,7 @@ var MarkaKalkanDdtRuntime = (() => {
           ));
           return batchResult(errors, warnings, rejected, 0, 0);
         }
-        const invalidCandidate = invalidCandidateIssue(context.candidates);
+        const invalidCandidate = invalidCandidateIssue(validationContext.candidates);
         if (invalidCandidate) {
           errors.push(invalidCandidate);
           return batchResult(errors, warnings, rejected, 0, 0);
@@ -4544,7 +4587,7 @@ var MarkaKalkanDdtRuntime = (() => {
         const sourceIds = /* @__PURE__ */ new Set();
         const snapshots = /* @__PURE__ */ new Map();
         let totalVisibleTextBytes = 0;
-        if (context.candidates.length > 3) {
+        if (validationContext.candidates.length > 3) {
           errors.push(issue(
             "EVIDENCE_CANDIDATE_LIMIT_EXCEEDED",
             "candidates",
@@ -4555,7 +4598,7 @@ var MarkaKalkanDdtRuntime = (() => {
           const schema = validateSchema("structured_evidence", evidence);
           let validation;
           try {
-            validation = validateStructuredEvidence(evidence, context);
+            validation = validateStructuredEvidence(evidence, validationContext);
           } catch (_) {
             validation = { valid: false, warnings: [], errors: [issue(
               "EVIDENCE_VALIDATION_EXCEPTION",
@@ -4631,9 +4674,9 @@ var MarkaKalkanDdtRuntime = (() => {
       "use strict";
       var { canonicalizeUrl } = require_canonicalize_url();
       var { buildFindingKey } = require_deterministic_ids();
-      var { isPlainRecord, issue, result } = require_validator_result();
+      var { issue, result } = require_validator_result();
       var { validateSchema } = require_schema_engine();
-      var { invalidCandidateIssue, invalidEvidenceIssue } = require_context_validation();
+      var { invalidCandidateIssue, invalidEvidenceIssue, readValidationContext } = require_context_validation();
       var CONCLUSIVE = /(?:kesin|doğrulanmış)\s+(?:sahte|taklit)|confirmed[_ -]?counterfeit/i;
       var META = /\b(?:örnek|varsayımsal|demo|template|şablon|metodoloji)\b/i;
       function validateScannerResultInternal(scanner, context) {
@@ -4643,7 +4686,11 @@ var MarkaKalkanDdtRuntime = (() => {
           acceptedFindingCount: 0,
           rejectedFindingCount: 0
         });
-        if (!isPlainRecord(context) || typeof context.taskId !== "string" || !context.taskId || typeof context.executionId !== "string" || !context.executionId || !Array.isArray(context.candidates) || !Array.isArray(context.evidences)) {
+        const validationContext = readValidationContext(
+          context,
+          { candidates: true, evidences: true }
+        );
+        if (!validationContext) {
           return result({
             errors: [issue(
               "CONTEXT_REQUIRED",
@@ -4654,7 +4701,11 @@ var MarkaKalkanDdtRuntime = (() => {
             rejectedFindingCount: 0
           });
         }
-        const { candidates, evidences: evidence, productionCallback = false } = context;
+        const {
+          candidates,
+          evidences: evidence,
+          productionCallback = false
+        } = validationContext;
         const invalidCandidate = invalidCandidateIssue(candidates);
         if (invalidCandidate) return result({
           errors: [invalidCandidate],
@@ -4668,7 +4719,7 @@ var MarkaKalkanDdtRuntime = (() => {
           rejectedFindingCount: 0
         });
         const errors = [], warnings = [], seen = /* @__PURE__ */ new Set(), rejected = /* @__PURE__ */ new Set();
-        if (scanner.taskId !== context.taskId || scanner.executionId !== context.executionId) {
+        if (scanner.taskId !== validationContext.taskId || scanner.executionId !== validationContext.executionId) {
           errors.push(issue("SCANNER_SCOPE_MISMATCH", "executionId", "Scanner scope mismatch."));
         }
         const acquired = candidates.filter((c) => c.acquisitionStatus === "acquired");
@@ -4729,12 +4780,17 @@ var MarkaKalkanDdtRuntime = (() => {
       var { validateAcquisitionResult } = require_validate_acquisition_result();
       function evaluateScannerInvocation({
         acquisitionResult,
+        acquisitionValidation,
         evidenceBatchValidation,
         productionCallback = false
       } = {}) {
-        const acquisition = validateAcquisitionResult(
+        const acquisition = acquisitionValidation || validateAcquisitionResult(
           acquisitionResult,
-          { productionCallback }
+          Object.assign(/* @__PURE__ */ Object.create(null), {
+            taskId: acquisitionResult?.taskId,
+            executionId: acquisitionResult?.executionId,
+            productionCallback
+          })
         );
         if (!acquisition.valid) return {
           allowed: false,
@@ -4797,23 +4853,30 @@ var MarkaKalkanDdtRuntime = (() => {
           const taskId = acquisitionResult?.taskId;
           const executionId = acquisitionResult?.executionId;
           const productionCallback = input.productionCallback === true;
-          const rootContext = { taskId, executionId, productionCallback };
+          const rootContext = Object.assign(
+            /* @__PURE__ */ Object.create(null),
+            { taskId, executionId, productionCallback }
+          );
           const acquisitionValidation = validateAcquisitionResult(
             acquisitionResult,
             rootContext
           );
           const candidateValidations = Array.isArray(candidates) ? candidates.map((candidate) => validateCandidateSource(candidate, rootContext)) : [];
-          const evidenceBatchValidation = validateEvidenceBatch(evidences, {
-            ...rootContext,
-            candidates
-          });
-          const scannerValidation = validateScannerResult(scannerResult, {
-            ...rootContext,
-            candidates,
-            evidences
-          });
+          const evidenceBatchValidation = validateEvidenceBatch(
+            evidences,
+            Object.assign(/* @__PURE__ */ Object.create(null), rootContext, { candidates })
+          );
+          const scannerValidation = validateScannerResult(
+            scannerResult,
+            Object.assign(
+              /* @__PURE__ */ Object.create(null),
+              rootContext,
+              { candidates, evidences }
+            )
+          );
           const scannerInvocation = evaluateScannerInvocation({
             acquisitionResult,
+            acquisitionValidation,
             evidenceBatchValidation,
             productionCallback
           });
