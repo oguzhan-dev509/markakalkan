@@ -7,9 +7,24 @@ const FORBIDDEN_GLOBALS = ["process", "require", "module", "Buffer",
   "TextEncoder", "TextDecoder", "URL", "URLSearchParams", "fetch",
   "crypto", "items", "$json"];
 
-function runCodeNodeInIsolatedContext(jsCode, inputItems) {
+function runCodeNodeInIsolatedContext(jsCode, inputItems,
+    {n8nLikeNullPrototypeMembrane = false} = {}) {
   const original = clone(inputItems), supplied = clone(inputItems);
   const context = vm.createContext({$input: {all: () => clone(supplied)}});
+  if (n8nLikeNullPrototypeMembrane) {
+    new vm.Script(`{
+      const originalCreate = Object.create;
+      const membranePrototype = {};
+      Object.create = function(prototype, properties) {
+        const target = originalCreate(prototype, properties);
+        if (prototype !== null) return target;
+        return new Proxy(target, {
+          getPrototypeOf() { return membranePrototype; },
+        });
+      };
+    }`, {filename: "n8n-null-prototype-membrane.js"})
+        .runInContext(context, {timeout: 500});
+  }
   const source = `(function(){${jsCode}\n})()`;
   let output;
   try {

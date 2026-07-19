@@ -11,7 +11,7 @@
   },
   "validatorHashes": {
     "validators/canonicalize_url.js": "c782a255a9018bd340c7c38aed288df62b94c4f8fe19038db1f713e00b800c0a",
-    "validators/context_validation.js": "e055aa4d27c1601f8ada9c40728d0ee1ccad0bf2cc7337a9f97c114961c35077",
+    "validators/context_validation.js": "29385ae7eb1286d5489ce77b64542340ba2154fe50d4065149e9b90090389fd2",
     "validators/deterministic_ids.js": "a47a213753df5a4a1734ec4ab0d53a9660f077a47b26c9d560529a2cbcae5d74",
     "validators/pipeline_guard.js": "d63d14b2e666ace7d498cd3500b3149e57b36c4d3ea37d3d45211eb759662de3",
     "validators/schema_engine.js": "7712c9dbb68626697baa8322696ca32a4559fed453eec15e2774974b86e4ff5f",
@@ -48,11 +48,11 @@
     "build/generate_n8n_runtime.js": "5407f316c5adeec2a865dd6b86c5b190fcfb56160551f21074e5abaebb71d130"
   },
   "testProvenanceHashes": {
-    "tests/cross_realm_context.test.js": "65935494ee2ada1c64147774718c75882a7fdbc3acff69ffa99bf0466da3b977",
-    "tests/helpers/isolated_n8n_vm.js": "532fe58d3507e8e59ebe5eb33f94687ffc5934e40e97a529fe22a362b99b0e21"
+    "tests/cross_realm_context.test.js": "68f2b229bc43ef3fdd8619c0a76d457edf884623315a998820761e4ed266bee4",
+    "tests/helpers/isolated_n8n_vm.js": "3d3da5731673c899ed07dc6d5404d740bdb5dc9390c54ed02cba228e77b61e16"
   },
-  "bundleSha256": "dda8e2661a1de301bfb29b114814af3d1afa6dd01efabad61bf8c91452d6b876",
-  "bundleBytes": 259750,
+  "bundleSha256": "1338004eb02aedd8389ec4507adb48a5018eed7e0aa3224db9e0d812f58540cc",
+  "bundleBytes": 261717,
   "generatedAtPolicy": "deterministic-no-wall-clock",
   "externalRuntimeDependencies": [],
   "containsCredentials": false,

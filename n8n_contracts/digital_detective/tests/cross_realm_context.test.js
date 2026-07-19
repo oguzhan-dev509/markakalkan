@@ -20,7 +20,8 @@ const {validateEvidenceBatch} =
   require("../validators/validate_evidence_batch");
 const {validateScannerResult} =
   require("../validators/validate_scanner_result");
-const {runRuntimeExpressionInIsolatedContext, runRuntimeWithForeignInput} =
+const {runCodeNodeInIsolatedContext, runRuntimeExpressionInIsolatedContext,
+  runRuntimeWithForeignInput} =
   require("./helpers/isolated_n8n_vm");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -127,14 +128,59 @@ for (const [name, call] of [
 }
 
 for (const [name, value] of [
-  ["array", []], ["null", null], ["date", new Date()], ["map", new Map()],
-  ["set", new Set()], ["class instance", new (class Context {})()],
+  ["array", []], ["null", null], ["string", "context"], ["number", 1],
 ]) {
   test(`${name} is not a validation context`, () => {
     assert.equal(isValidationContext(value), false);
     assert.equal(readValidationContext(value), null);
   });
 }
+for (const [name, value] of [
+  ["date", new Date()], ["map", new Map()], ["set", new Set()],
+]) {
+  test(`${name} without required own fields is rejected`, () => {
+    assert.equal(readValidationContext(value), null);
+  });
+}
+test("class instance with own data fields is accepted as context", () => {
+  class Context {}
+  const value = Object.assign(new Context(), {taskId: "t", executionId: "e"});
+  assert.equal(readValidationContext(value).taskId, "t");
+});
+test("getPrototypeOf trap is never called for a valid context", () => {
+  let calls = 0;
+  const value = new Proxy({taskId: "t", executionId: "e"}, {
+    getPrototypeOf() { calls++; throw new Error("PRIVATE_PROTOTYPE"); },
+  });
+  assert.equal(readValidationContext(value).executionId, "e");
+  assert.equal(calls, 0);
+});
+test("inherited production callback is ignored", () => {
+  const value = Object.assign(Object.create({productionCallback: true}),
+      {taskId: "t", executionId: "e"});
+  assert.equal(readValidationContext(value).productionCallback, false);
+});
+test("own accessor context field is rejected without invocation", () => {
+  let calls = 0;
+  const value = {executionId: "e"};
+  Object.defineProperty(value, "taskId", {get() { calls++; return "t"; }});
+  assert.equal(readValidationContext(value), null);
+  assert.equal(calls, 0);
+});
+test("own accessor production callback is rejected without invocation", () => {
+  let calls = 0;
+  const value = {taskId: "t", executionId: "e"};
+  Object.defineProperty(value, "productionCallback",
+      {get() { calls++; return true; }});
+  assert.equal(readValidationContext(value), null);
+  assert.equal(calls, 0);
+});
+test("descriptor trap exception fails context closed", () => {
+  const value = new Proxy({taskId: "t", executionId: "e"}, {
+    getOwnPropertyDescriptor() { throw new Error("PRIVATE_DESCRIPTOR"); },
+  });
+  assert.equal(readValidationContext(value), null);
+});
 test("missing own taskId is rejected", () => {
   const inherited = Object.create({taskId: "t"}); inherited.executionId = "e";
   assert.equal(readValidationContext(inherited), null);
@@ -150,6 +196,42 @@ test("missing own evidences is rejected when required", () => {
   assert.equal(readValidationContext({taskId: "t", executionId: "e",
     candidates: []}, {candidates: true, evidences: true}), null);
 });
+test("inherited candidates and evidences are rejected when required", () => {
+  const inherited = Object.create({candidates: [], evidences: []});
+  inherited.taskId = "t"; inherited.executionId = "e";
+  assert.equal(readValidationContext(inherited, {candidates: true}), null);
+  assert.equal(readValidationContext(inherited,
+      {candidates: true, evidences: true}), null);
+});
+test("candidate accessor field is invalid without getter invocation", () => {
+  const {v, root} = contexts(); let calls = 0;
+  const candidate = {...v.candidates[0]};
+  Object.defineProperty(candidate, "sourceId",
+      {get() { calls++; return v.candidates[0].sourceId; }});
+  const output = validateEvidenceBatch(v.evidences,
+      {...root, candidates: [candidate]});
+  assert.equal(has(output, "CONTEXT_CANDIDATE_INVALID"), true);
+  assert.equal(calls, 0);
+});
+test("candidate inherited field is invalid", () => {
+  const {v, root} = contexts();
+  const candidate = {...v.candidates[0]};
+  const sourceId = candidate.sourceId; delete candidate.sourceId;
+  Object.setPrototypeOf(candidate, {sourceId});
+  const output = validateEvidenceBatch(v.evidences,
+      {...root, candidates: [candidate]});
+  assert.equal(has(output, "CONTEXT_CANDIDATE_INVALID"), true);
+});
+test("evidence accessor field is invalid without getter invocation", () => {
+  const {v, root} = contexts(); let calls = 0;
+  const evidence = {...v.evidences[0]};
+  Object.defineProperty(evidence, "sourceId",
+      {get() { calls++; return v.evidences[0].sourceId; }});
+  const output = validateScannerResult(v.scanner,
+      {...root, candidates: v.candidates, evidences: [evidence]});
+  assert.equal(has(output, "CONTEXT_EVIDENCE_INVALID"), true);
+  assert.equal(calls, 0);
+});
 
 for (const [name, make] of [
   ["getter", () => Object.defineProperty({executionId: "e"}, "taskId",
@@ -158,25 +240,25 @@ for (const [name, make] of [
     throw new Error("PRIVATE_PROXY");
   }})],
 ]) {
-  test(`${name} exception is contained by candidate validator`, () => {
+  test(`${name} context fails candidate validation closed`, () => {
     const {v} = contexts(); let output;
     assert.doesNotThrow(() => { output = validateCandidateSource(v.candidates[0],
       make()); });
-    assert.equal(has(output, "CANDIDATE_VALIDATION_EXCEPTION"), true);
+    assert.equal(has(output, "CONTEXT_REQUIRED"), true);
     assert.equal(JSON.stringify(output).includes("PRIVATE_"), false);
   });
-  test(`${name} exception is contained by evidence batch validator`, () => {
+  test(`${name} context fails evidence batch validation closed`, () => {
     const {v} = contexts(); let output;
     assert.doesNotThrow(() => { output = validateEvidenceBatch(v.evidences,
       make()); });
-    assert.equal(has(output, "EVIDENCE_BATCH_VALIDATION_EXCEPTION"), true);
+    assert.equal(has(output, "CONTEXT_REQUIRED"), true);
     assert.equal(JSON.stringify(output).includes("PRIVATE_"), false);
   });
-  test(`${name} exception is contained by scanner validator`, () => {
+  test(`${name} context fails scanner validation closed`, () => {
     const {v} = contexts(); let output;
     assert.doesNotThrow(() => { output = validateScannerResult(v.scanner,
       make()); });
-    assert.equal(has(output, "SCANNER_VALIDATION_EXCEPTION"), true);
+    assert.equal(has(output, "CONTEXT_REQUIRED"), true);
     assert.equal(JSON.stringify(output).includes("PRIVATE_"), false);
   });
 }
@@ -224,3 +306,30 @@ for (const [scenario, allowed, reason, findings] of [
     assert.equal(output.findingCount, findings);
   });
 }
+
+test("generated workflow passes the n8n-like null-prototype membrane", () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(ROOT, "workflows",
+      "MarkaKalkan Dijital Dedektif - Contract Fixture Harness - V1.json"),
+  "utf8"));
+  const names = ["Fixture Senaryolarını Hazırla", "Contract Runtime Harness",
+    "Sonuçları Özetle", "Production Guard — Hard False"];
+  let items = [{json: {}}];
+  for (const name of names) {
+    const node = workflow.nodes.find((entry) => entry.name === name);
+    items = runCodeNodeInIsolatedContext(node.parameters.jsCode, items,
+        {n8nLikeNullPrototypeMembrane: true});
+  }
+  assert.deepEqual(items.map((item) => [item.json.scenario, item.json.valid,
+    item.json.guard, item.json.findingCount, item.json.productionAllowed]), [
+    ["no_signal", true, "READY", 0, false],
+    ["synthetic_signal", true, "READY", 1, false],
+    ["blocked", true, "NO_ACQUIRED_EVIDENCE", 0, false],
+  ]);
+  assert.doesNotMatch(JSON.stringify(items), /CONTEXT_REQUIRED|CONTEXT_(?:CANDIDATE|EVIDENCE)_INVALID|ACQUISITION_INVALID/);
+});
+test("context validation source is prototype-free", () => {
+  const source = fs.readFileSync(path.join(ROOT, "validators",
+      "context_validation.js"), "utf8");
+  assert.doesNotMatch(source,
+      /Object\.getPrototypeOf|\binstanceof\b|\.constructor\b|Symbol\.toStringTag/);
+});
