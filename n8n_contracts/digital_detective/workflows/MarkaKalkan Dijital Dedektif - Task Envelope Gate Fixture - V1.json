@@ -1,0 +1,73 @@
+{
+  "name": "MarkaKalkan Dijital Dedektif — TASK ENVELOPE GATE FIXTURE — V1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ddt-task-envelope-manual-v1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "void $input.all();\nreturn [\"valid_task\",\"missing_task_id\",\"inherited_field\",\"accessor_field\",\"proxy_descriptor_error\"].map((scenario) => ({json: {scenario}}));"
+      },
+      "id": "ddt-task-envelope-scenarios-v1",
+      "name": "Task Envelope Scenarios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\"use strict\";\nconst validateTaskEnvelope = function validateTaskEnvelope(input) {\n  const invalid = () => ({\n    valid: false,\n    reason: \"TASK_ENVELOPE_INVALID\",\n    snapshot: null,\n  });\n  try {\n    if (input === null || typeof input !== \"object\" || Array.isArray(input)) {\n      return invalid();\n    }\n    const fields = [\"taskId\", \"tenantId\", \"brandId\", \"taskType\", \"target\",\n      \"priority\", \"createdAt\"];\n    const priorities = [\"critical\", \"high\", \"low\", \"medium\", \"normal\"];\n    const snapshot = Object.create(null);\n    for (const field of fields) {\n      if (!Object.prototype.hasOwnProperty.call(input, field)) return invalid();\n      const descriptor = Object.getOwnPropertyDescriptor(input, field);\n      if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor,\n          \"value\") || typeof descriptor.value !== \"string\") return invalid();\n      const cleaned = descriptor.value.trim();\n      if (!cleaned) return invalid();\n      if (field === \"priority\") {\n        const normalized = cleaned.toLowerCase();\n        if (!priorities.includes(normalized)) return invalid();\n        snapshot[field] = normalized;\n      } else {\n        snapshot[field] = cleaned;\n      }\n    }\n    return {\n      valid: true,\n      reason: \"READY_FOR_PLANNING\",\n      snapshot,\n    };\n  } catch (_) {\n    return invalid();\n  }\n};\nconst inputItems = $input.all();\nfunction baseTask() {\n  return {taskId: \"fixture-task-001\", tenantId: \"fixture-tenant-001\",\n    brandId: \"fixture-brand-001\", taskType: \"digital_market_intelligence\",\n    target: \"Fixture target\", priority: \"normal\",\n    createdAt: \"2026-07-19T00:00:00.000Z\", ignoredExtra: \"not-copied\"};\n}\nreturn inputItems.map((item) => {\n  const scenario = typeof item?.json?.scenario === \"string\"\n    ? item.json.scenario : \"\";\n  let getterInvocations = 0;\n  let task = baseTask();\n  if (scenario === \"missing_task_id\") delete task.taskId;\n  if (scenario === \"inherited_field\") {\n    delete task.taskId;\n    task = Object.assign(Object.create({taskId: \"inherited-task\"}), task);\n  }\n  if (scenario === \"accessor_field\") {\n    delete task.taskId;\n    Object.defineProperty(task, \"taskId\", {enumerable: true,\n      get() { getterInvocations++; return \"accessor-task\"; }});\n  }\n  if (scenario === \"proxy_descriptor_error\") {\n    task = new Proxy(task, {getOwnPropertyDescriptor() {\n      throw new Error(\"FIXTURE_PRIVATE_DESCRIPTOR_ERROR\");\n    }});\n  }\n  if (![\"valid_task\",\"missing_task_id\",\"inherited_field\",\"accessor_field\",\"proxy_descriptor_error\"].includes(scenario)) task = null;\n  const result = validateTaskEnvelope(task);\n  return {json: {\n    scenario,\n    valid: result.valid === true,\n    reason: result.reason,\n    snapshot: result.snapshot,\n    getterInvocations,\n    productionAllowed: false,\n    callbackAttempted: false,\n  }};\n});"
+      },
+      "id": "ddt-task-envelope-gate-v1",
+      "name": "Task Envelope Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Task Envelope Scenarios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Envelope Scenarios": {
+      "main": [
+        [
+          {
+            "node": "Task Envelope Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}

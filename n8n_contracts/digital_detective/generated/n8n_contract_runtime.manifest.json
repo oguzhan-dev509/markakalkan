@@ -15,6 +15,7 @@
     "validators/deterministic_ids.js": "a47a213753df5a4a1734ec4ab0d53a9660f077a47b26c9d560529a2cbcae5d74",
     "validators/pipeline_guard.js": "d63d14b2e666ace7d498cd3500b3149e57b36c4d3ea37d3d45211eb759662de3",
     "validators/schema_engine.js": "7712c9dbb68626697baa8322696ca32a4559fed453eec15e2774974b86e4ff5f",
+    "validators/task_envelope.js": "ae52cc5d85a5b471a136ba36a61fa0b1a3bcf4befd601609a1f2ea9f88085e82",
     "validators/validate_acquisition_result.js": "975975778850a0da28a2c75da7372d8187b12f4b91a1a437361c52f414781cdb",
     "validators/validate_candidate_source.js": "a7164a4c1f17a577daf978382c9f88e7ea3095ba9c7dee145b8815c715c13b7f",
     "validators/validate_evidence_batch.js": "f43874e227a035c03a82bdddb3fd66844a6cdea83585fb5cc7c5af61f91cd503",

@@ -100,7 +100,7 @@ test("manifest source hashes match every schema validator and fixture", () => {
     }
   }
   assert.equal(Object.keys(manifest.schemaHashes).length, 4);
-  assert.equal(Object.keys(manifest.validatorHashes).length, 11);
+  assert.equal(Object.keys(manifest.validatorHashes).length, 12);
   assert.equal(Object.keys(manifest.fixtureHashes).length, 15);
   assert.deepEqual(Object.keys(manifest.runtimeSourceHashes),
       ["runtime/n8n_contract_runtime_entry.js", "runtime/portable_primitives.js"]);
