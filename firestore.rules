@@ -5809,4 +5809,26 @@ allow delete: if request.auth != null
       allow create, update, delete: if false;
     }
 
+    // Shared risk persistence is server-only. Business policy remains in the
+    // authorized server transaction handler, not in Firestore Rules.
+    match /shared_risk_signals/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /shared_risk_assessments/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /shared_case_candidates/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /shared_risk_persistence_receipts/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /shared_risk_persistence_audit_events/{documentId} {
+      allow read, write: if false;
+    }
+
 }

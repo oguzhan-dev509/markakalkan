@@ -22,7 +22,7 @@ import {
   where,
 } from 'firebase/firestore';
 
-const projectId = 'markakalkan-app';
+const projectId = 'demo-markakalkan-rst-0h';
 const tenantA = 'tenant-a';
 const tenantB = 'tenant-b';
 

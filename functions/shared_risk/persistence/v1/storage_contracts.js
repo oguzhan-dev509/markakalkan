@@ -90,6 +90,7 @@ function buildSubjectStorageDocumentV1(facts, persistedAtPlaceholder) {
     brandId: facts.resolvedIdentityScope.brandId || null,
     subjectType: facts.subjectType,
     subjectId: facts.subjectId,
+    targetNamespace: facts.targetNamespace,
     contractVersion: facts.subjectContractVersion,
     canonicalSubjectPayload: facts.canonicalSubjectPayload,
     subjectFingerprint: facts.subjectFingerprint,
@@ -132,13 +133,17 @@ function buildReceiptStorageDocumentV1(plan, facts, createdAtPlaceholder) {
 }
 
 function buildAuditEventStorageDocumentV1({plan, facts,
-  occurredAt, serverRecordedAt, correlationId = null}) {
+  occurredAt, serverRecordedAt, correlationId = null,
+  auditEventId = null}) {
   return immutableSnapshot({
     schemaVersion: AUDIT_SCHEMA_VERSION,
+    auditEventId,
     tenantId: plan.tenantId,
     actorUid: facts.authenticatedActor.uid,
     serviceIdentity: facts.authenticatedActor.serviceIdentity || null,
     commandId: plan.commandId,
+    persistenceDocumentId: plan.persistenceDocumentId,
+    receiptId: plan.receiptId,
     subjectType: plan.subjectType,
     subjectId: plan.subjectId,
     target: plan.targetNamespace,

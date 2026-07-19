@@ -1,6 +1,7 @@
 const {createHash} = require("node:crypto");
 
-const {STORAGE_SCHEMA_VERSION} = require("./storage_contracts");
+const {AUDIT_SCHEMA_VERSION,
+  STORAGE_SCHEMA_VERSION} = require("./storage_contracts");
 
 const DOCUMENT_ID_ALGORITHM = "sha256-length-prefixed-v1";
 
@@ -39,8 +40,20 @@ function buildPersistenceReceiptIdV1(persistenceDocumentId) {
   ]));
 }
 
+function buildCreationAuditEventIdV1({receiptId, persistenceDocumentId,
+  commandId}) {
+  return sha256Hex(encodeParts([
+    AUDIT_SCHEMA_VERSION,
+    receiptId,
+    persistenceDocumentId,
+    commandId,
+    "persistence_created",
+  ]));
+}
+
 module.exports = {
   DOCUMENT_ID_ALGORITHM,
+  buildCreationAuditEventIdV1,
   buildPersistenceDocumentIdV1,
   buildPersistenceReceiptIdV1,
   encodeParts,

@@ -20,7 +20,7 @@ import {
   where,
 } from 'firebase/firestore';
 
-const projectId = 'markakalkan-trade-secret-rules-test';
+const projectId = 'demo-markakalkan-rst-0h';
 const ownerUid = 'owner-tenant-1';
 const otherUid = 'other-tenant-2';
 const secretId = `${ownerUid}__ipsecret_1001`;

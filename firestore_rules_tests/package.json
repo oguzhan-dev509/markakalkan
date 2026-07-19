@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test ip_ownership_rules.test.mjs ip_trade_secret_rules.test.mjs"
+    "test": "node --test --test-concurrency=1 ip_ownership_rules.test.mjs ip_trade_secret_rules.test.mjs shared_risk_server_only_rules.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
