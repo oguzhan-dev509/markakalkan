@@ -27,7 +27,7 @@ test("policy is exact super-admin and project scoped", () => {
   }
   assert.equal(evaluateProvisioningPolicyV1({request, admin: {exists: true,
     data: {active: true, roles: ["super_admin"]}}, invocation: {...invocation,
-    projectId: "markakalkan-app"}}).allowed, false);
+    projectId: "wrong-project"}}).allowed, false);
 });
 
 test("ids and internal documents are deterministic and private", () => {

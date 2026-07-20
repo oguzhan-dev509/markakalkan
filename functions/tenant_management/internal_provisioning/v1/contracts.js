@@ -1,6 +1,10 @@
 /* eslint-disable max-len */
 const PILOT_CODE = "MK-RST-0J-INTERNAL-001";
 const PROJECT_ID = "demo-markakalkan-rst-0k";
+const CALLABLE_EMULATOR_PROJECT_ID = "demo-markakalkan-rst-0l";
+const PRODUCTION_PROJECT_ID = "markakalkan-app";
+const ALLOWED_PROJECT_IDS = Object.freeze([PROJECT_ID,
+  CALLABLE_EMULATOR_PROJECT_ID, PRODUCTION_PROJECT_ID]);
 const PERMISSION = "internal_tenant_brand.provision";
 
 function required(value, field) {
@@ -32,5 +36,6 @@ function invocationContextV1(input) {
   receivedAt: required(input.receivedAt, "receivedAt")});
 }
 
-module.exports = {PERMISSION, PILOT_CODE, PROJECT_ID, invocationContextV1,
+module.exports = {ALLOWED_PROJECT_IDS, CALLABLE_EMULATOR_PROJECT_ID, PERMISSION,
+  PILOT_CODE, PRODUCTION_PROJECT_ID, PROJECT_ID, invocationContextV1,
   provisioningRequestV1};

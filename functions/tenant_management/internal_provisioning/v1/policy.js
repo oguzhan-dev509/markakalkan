@@ -1,9 +1,11 @@
 /* eslint-disable max-len */
-const {PERMISSION, PILOT_CODE, PROJECT_ID} = require("./contracts");
+const {ALLOWED_PROJECT_IDS, PERMISSION, PILOT_CODE} = require("./contracts");
 
 function evaluateProvisioningPolicyV1({request, invocation, admin}) {
   const blockers = [];
-  if (invocation.projectId !== PROJECT_ID) blockers.push("project.denied");
+  if (!ALLOWED_PROJECT_IDS.includes(invocation.projectId)) {
+    blockers.push("project.denied");
+  }
   if (!admin || admin.exists !== true) blockers.push("admin.missing");
   if (!admin || !admin.data || admin.data.active !== true) blockers.push("admin.inactive");
   if (!admin || !admin.data || !Array.isArray(admin.data.roles) ||

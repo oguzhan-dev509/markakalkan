@@ -81,6 +81,11 @@ const {
 } = require(
     "./shared_risk/monitoring/v1/monitoring_callable",
 );
+const {
+  buildProvisionInternalTenantBrandPilot,
+} = require(
+    "./tenant_management/internal_provisioning/v1/callable",
+);
 
 setGlobalOptions({
   region: "europe-west3",
@@ -204,3 +209,5 @@ exports.receiveDigitalDetectiveResult =
     });
 exports.persistMonitoringRiskSignalPilot =
     buildPersistMonitoringRiskSignalPilot({db});
+exports.provisionInternalTenantBrandPilot =
+    buildProvisionInternalTenantBrandPilot({db});
