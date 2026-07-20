@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/admin/data/internal_provisioning_dry_run_service.dart';
 import 'package:markakalkan/features/admin/data/platform_admin_access_service.dart';
+import 'package:markakalkan/features/admin/models/internal_provisioning_dry_run_result.dart';
 import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
 
 class ManagementCenterPage extends StatefulWidget {
@@ -244,12 +247,145 @@ class _AuthorizedManagementCenter extends StatelessWidget {
                   );
                 },
               ),
+              const SizedBox(height: 28),
+              const _InternalProvisioningDryRunPanel(),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+class _InternalProvisioningDryRunPanel extends StatefulWidget {
+  const _InternalProvisioningDryRunPanel();
+
+  @override
+  State<_InternalProvisioningDryRunPanel> createState() =>
+      _InternalProvisioningDryRunPanelState();
+}
+
+class _InternalProvisioningDryRunPanelState
+    extends State<_InternalProvisioningDryRunPanel> {
+  final InternalProvisioningDryRunService _service =
+      InternalProvisioningDryRunService();
+  late final Future<bool> _tokenVerified;
+  bool _submitting = false;
+  InternalProvisioningDryRunResult? _result;
+  String? _safeError;
+
+  @override
+  void initState() {
+    super.initState();
+    _tokenVerified = AppCheckBootstrap.instance.verifyTokenAcquisition();
+  }
+
+  Future<void> _run() async {
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _result = null;
+      _safeError = null;
+    });
+    try {
+      final result = await _service.run();
+      if (!mounted) return;
+      setState(() => _result = result);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _safeError = 'Dry-run güvenli biçimde tamamlanamadı.';
+      });
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey<String>('internal-provisioning-dry-run-panel'),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE0E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Internal Provisioning Dry-Run',
+            style: TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Yalnız doğrulama yapar; tenant, marka veya üyelik oluşturmaz.',
+            style: TextStyle(color: Color(0xFF687580), height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          FutureBuilder<bool>(
+            future: _tokenVerified,
+            builder: (context, snapshot) {
+              final verified = snapshot.data == true;
+              return FilledButton.icon(
+                key: const ValueKey<String>(
+                  'internal-provisioning-dry-run-action',
+                ),
+                onPressed: verified && !_submitting ? _run : null,
+                icon: _submitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.verified_user_outlined),
+                label: Text(
+                  _submitting ? 'Doğrulanıyor…' : 'Güvenli dry-run çalıştır',
+                ),
+              );
+            },
+          ),
+          if (_safeError != null) ...[
+            const SizedBox(height: 14),
+            Text(_safeError!, style: const TextStyle(color: Colors.red)),
+          ],
+          if (_result != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Sonuç: ${_result!.outcome} · commit: '
+              '${_result!.transactionCommitted} · rollout: '
+              '${_result!.rolloutMode}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              <String?>[
+                _result!.tenantId,
+                _result!.brandId,
+                _result!.membershipId,
+                _result!.receiptId,
+                _result!.auditEventId,
+              ].map(_maskIdentifier).join(' · '),
+              key: const ValueKey<String>(
+                'internal-provisioning-masked-identifiers',
+              ),
+              style: const TextStyle(color: Color(0xFF687580)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _maskIdentifier(String? value) {
+  if (value == null || value.isEmpty) return '—';
+  if (value.length <= 8) return '${value.substring(0, 2)}…';
+  return '${value.substring(0, 4)}…${value.substring(value.length - 4)}';
 }
 
 class _RoleBadge extends StatelessWidget {
