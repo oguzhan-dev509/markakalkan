@@ -1,7 +1,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {PILOT_CODE, PROJECT_ID, buildIdsV1, documents,
-  evaluateProvisioningPolicyV1, provisioningRequestV1} = require("./index");
+  evaluateProvisioningPolicyV1, provisioningRequestV1,
+  stateOutcome} = require("./index");
 
 test("request is minimal and rejects authority fields", () => {
   assert.deepEqual(provisioningRequestV1({pilotCode: PILOT_CODE, dryRun: true}),
@@ -46,4 +47,42 @@ test("ids and internal documents are deterministic and private", () => {
     const text = JSON.stringify(value);
     assert.doesNotMatch(text, /tax|phone|billing|subscription|email/i);
   }
+});
+
+function snapshot(id, data) {
+  return {id, exists: true, data: () => data};
+}
+
+test("receipt replay validates every immutable field and timestamps", () => {
+  const ids = buildIdsV1({pilotCode: PILOT_CODE, projectId: PROJECT_ID,
+    uid: "admin-1"});
+  const built = documents({ids, uid: "admin-1", pilotCode: PILOT_CODE,
+    at: "2026-07-20T00:00:00.000Z"});
+  const snapshots = (receipt) => ({
+    tenant: snapshot(ids.tenantId, built.tenant),
+    brand: snapshot(ids.brandId, built.brand),
+    membership: snapshot(ids.membershipId, built.membership),
+    receipt: snapshot(ids.receiptId, receipt),
+    audit: snapshot(ids.auditId, built.audit),
+  });
+  assert.equal(stateOutcome(snapshots(built.receipt), built), "complete");
+
+  const immutableFields = ["schemaVersion", "status", "operation",
+    "pilotCode", "tenantId", "brandId", "membershipId", "commandId",
+    "tenantFingerprint", "brandFingerprint", "auditEventId"];
+  for (const field of immutableFields) {
+    assert.equal(stateOutcome(snapshots({...built.receipt,
+      [field]: `mutated-${field}`}), built), "conflict", field);
+  }
+  for (const field of ["createdAt", "completedAt"]) {
+    const missing = {...built.receipt}; delete missing[field];
+    assert.equal(stateOutcome(snapshots(missing), built), "conflict", field);
+    assert.equal(stateOutcome(snapshots({...built.receipt,
+      [field]: "invalid-timestamp"}), built), "conflict", field);
+  }
+  assert.equal(stateOutcome(snapshots({...built.receipt,
+    unexpectedImmutable: true}), built), "conflict");
+  assert.equal(stateOutcome(snapshots({...built.receipt,
+    createdAt: "2026-07-21T00:00:00.000Z",
+    completedAt: "2026-07-21T00:00:01.000Z"}), built), "complete");
 });

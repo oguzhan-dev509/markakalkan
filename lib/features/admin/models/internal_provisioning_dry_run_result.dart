@@ -1,6 +1,25 @@
-class InternalProvisioningDryRunResult {
-  const InternalProvisioningDryRunResult({
+enum InternalProvisioningOutcome {
+  created('created'),
+  idempotentSuccess('idempotent_success'),
+  dryRunReady('dry_run_ready'),
+  conflict('conflict');
+
+  const InternalProvisioningOutcome(this.wireValue);
+  final String wireValue;
+
+  static InternalProvisioningOutcome parse(String value) {
+    return values.firstWhere(
+      (item) => item.wireValue == value,
+      orElse: () =>
+          throw const FormatException('Invalid provisioning response'),
+    );
+  }
+}
+
+class InternalProvisioningResult {
+  const InternalProvisioningResult({
     required this.outcome,
+    required this.dryRun,
     required this.transactionCommitted,
     required this.rolloutMode,
     required this.blockerCodes,
@@ -11,7 +30,8 @@ class InternalProvisioningDryRunResult {
     required this.auditEventId,
   });
 
-  final String outcome;
+  final InternalProvisioningOutcome outcome;
+  final bool dryRun;
   final bool transactionCommitted;
   final String rolloutMode;
   final List<String> blockerCodes;
@@ -21,7 +41,7 @@ class InternalProvisioningDryRunResult {
   final String? receiptId;
   final String? auditEventId;
 
-  factory InternalProvisioningDryRunResult.fromMap(Map<Object?, Object?> map) {
+  factory InternalProvisioningResult.fromMap(Map<Object?, Object?> map) {
     String requiredString(String key) {
       final value = map[key];
       if (value is! String || value.trim().isEmpty) {
@@ -36,7 +56,9 @@ class InternalProvisioningDryRunResult {
     }
 
     final rawBlockers = map['blockerCodes'];
-    if (rawBlockers is! List || map['transactionCommitted'] is! bool) {
+    if (rawBlockers is! List ||
+        map['dryRun'] is! bool ||
+        map['transactionCommitted'] is! bool) {
       throw const FormatException('Invalid provisioning response');
     }
     final blockers = rawBlockers
@@ -48,9 +70,22 @@ class InternalProvisioningDryRunResult {
       throw const FormatException('Invalid provisioning response');
     }
 
-    return InternalProvisioningDryRunResult(
-      outcome: requiredString('outcome'),
-      transactionCommitted: map['transactionCommitted'] == true,
+    final outcome = InternalProvisioningOutcome.parse(
+      requiredString('outcome'),
+    );
+    final dryRun = map['dryRun'] as bool;
+    final committed = map['transactionCommitted'] as bool;
+    if ((outcome == InternalProvisioningOutcome.created && !committed) ||
+        (outcome != InternalProvisioningOutcome.created && committed) ||
+        (outcome == InternalProvisioningOutcome.dryRunReady && !dryRun) ||
+        (outcome != InternalProvisioningOutcome.dryRunReady && dryRun)) {
+      throw const FormatException('Invalid provisioning response');
+    }
+
+    return InternalProvisioningResult(
+      outcome: outcome,
+      dryRun: dryRun,
+      transactionCommitted: committed,
       rolloutMode: requiredString('rolloutMode'),
       blockerCodes: blockers,
       tenantId: optionalString('tenantId'),
@@ -61,3 +96,5 @@ class InternalProvisioningDryRunResult {
     );
   }
 }
+
+typedef InternalProvisioningDryRunResult = InternalProvisioningResult;

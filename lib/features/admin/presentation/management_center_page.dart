@@ -1,10 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/admin/data/internal_provisioning_dry_run_service.dart';
+import 'package:markakalkan/features/admin/data/internal_real_provisioning_controller.dart';
 import 'package:markakalkan/features/admin/data/platform_admin_access_service.dart';
 import 'package:markakalkan/features/admin/models/internal_provisioning_dry_run_result.dart';
+import 'package:markakalkan/features/admin/models/internal_real_provisioning_gate.dart';
 import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
 
 class ManagementCenterPage extends StatefulWidget {
@@ -249,9 +252,165 @@ class _AuthorizedManagementCenter extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               const _InternalProvisioningDryRunPanel(),
+              const SizedBox(height: 18),
+              const _InternalRealProvisioningPanel(),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _InternalRealProvisioningPanel extends StatefulWidget {
+  const _InternalRealProvisioningPanel();
+
+  @override
+  State<_InternalRealProvisioningPanel> createState() =>
+      _InternalRealProvisioningPanelState();
+}
+
+class _InternalRealProvisioningPanelState
+    extends State<_InternalRealProvisioningPanel> {
+  late final InternalRealProvisioningController _controller;
+  late final Future<bool> _ready;
+  String? _safeError;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = InternalRealProvisioningController()..addListener(_refresh);
+    _ready = _verifyReadiness();
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_refresh);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  Future<bool> _verifyReadiness() async {
+    if (!InternalRealProvisioningGate.enabled ||
+        FirebaseAuth.instance.currentUser == null ||
+        !AppCheckBootstrap.instance.isReady) {
+      return false;
+    }
+    return AppCheckBootstrap.instance.verifyTokenAcquisition();
+  }
+
+  Future<void> _confirmAndSubmit() async {
+    if (!_controller.canSubmit) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Gerçek provisioning onayı'),
+        content: const Text(
+          'Bu işlem internal tenant, marka ve üyelik kayıtlarını atomik olarak '
+          'oluşturur. İşlemi yalnız canlı rollout ve pilot izni açıkken onaylayın.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey<String>(
+              'internal-real-provisioning-confirm-action',
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Gerçek işlemi onaylıyorum'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _safeError = null);
+    try {
+      await _controller.submitConfirmed(confirmed: true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _safeError = 'Gerçek provisioning güvenli biçimde tamamlanamadı.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = _controller.result;
+    final submitting =
+        _controller.state == InternalRealProvisioningSubmissionState.submitting;
+    return Container(
+      key: const ValueKey<String>('internal-real-provisioning-panel'),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE0E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Internal Real Provisioning',
+            style: TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Varsayılan olarak kapalıdır ve yalnız tek pilot için açık onayla çalışır.',
+            style: TextStyle(color: Color(0xFF687580), height: 1.5),
+          ),
+          const SizedBox(height: 16),
+          FutureBuilder<bool>(
+            future: _ready,
+            builder: (context, snapshot) {
+              final ready = snapshot.data == true;
+              return FilledButton.icon(
+                key: const ValueKey<String>(
+                  'internal-real-provisioning-action',
+                ),
+                onPressed: ready && _controller.canSubmit
+                    ? _confirmAndSubmit
+                    : null,
+                icon: submitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.warning_amber_rounded),
+                label: Text(
+                  submitting ? 'İşleniyor…' : 'Gerçek provisioning başlat',
+                ),
+              );
+            },
+          ),
+          if (_safeError != null) ...[
+            const SizedBox(height: 14),
+            Text(_safeError!, style: const TextStyle(color: Colors.red)),
+          ],
+          if (result != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Sonuç: ${result.outcome.wireValue} · commit: '
+              '${result.transactionCommitted} · rollout: ${result.rolloutMode}',
+              key: const ValueKey<String>(
+                'internal-real-provisioning-safe-result',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -356,7 +515,7 @@ class _InternalProvisioningDryRunPanelState
           if (_result != null) ...[
             const SizedBox(height: 14),
             Text(
-              'Sonuç: ${_result!.outcome} · commit: '
+              'Sonuç: ${_result!.outcome.wireValue} · commit: '
               '${_result!.transactionCommitted} · rollout: '
               '${_result!.rolloutMode}',
               style: const TextStyle(fontWeight: FontWeight.w700),

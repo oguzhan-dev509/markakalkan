@@ -15,6 +15,17 @@ function immutableFingerprint(value) {
   delete copy.updatedAt;
   return fingerprint(copy);
 }
+function receiptFingerprint(value) {
+  const copy = {...value};
+  delete copy.createdAt;
+  delete copy.completedAt;
+  return fingerprint(copy);
+}
+function validTimestamp(value) {
+  if (typeof value !== "string" || value.trim().length === 0) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+}
 
 function documents({ids, uid, pilotCode, at}) {
   const tenant = {contractVersion: "canonical-tenant-v1", tenantId: ids.tenantId,
@@ -57,9 +68,9 @@ function stateOutcome(snapshots, docs) {
   if (count === 0) return "empty";
   if (count !== 5) return "conflict";
   const receipt = snapshots.receipt.data();
-  if (!receipt || receipt.status !== "completed" ||
-      receipt.tenantFingerprint !== docs.tenantFingerprint ||
-      receipt.brandFingerprint !== docs.brandFingerprint ||
+  if (!receipt || !validTimestamp(receipt.createdAt) ||
+      !validTimestamp(receipt.completedAt) ||
+      receiptFingerprint(receipt) !== receiptFingerprint(docs.receipt) ||
       receipt.auditEventId !== snapshots.audit.id) return "conflict";
   if (immutableFingerprint(snapshots.tenant.data()) !==
       docs.tenantFingerprint ||

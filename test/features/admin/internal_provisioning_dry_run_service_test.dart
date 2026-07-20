@@ -21,7 +21,8 @@ void main() {
     expect(request!['pilotCode'], InternalProvisioningDryRunService.pilotCode);
     expect(request!['dryRun'], isTrue);
     expect(request!['correlationId'], matches(RegExp(r'^web-[0-9a-f]{32}$')));
-    expect(result.outcome, 'dry_run_ready');
+    expect(result.outcome, InternalProvisioningOutcome.dryRunReady);
+    expect(result.dryRun, isTrue);
     expect(result.transactionCommitted, isFalse);
   });
 
@@ -46,6 +47,7 @@ void main() {
 
 Map<Object?, Object?> _validResponse() => <Object?, Object?>{
   'outcome': 'dry_run_ready',
+  'dryRun': true,
   'transactionCommitted': false,
   'rolloutMode': 'dry_run_only',
   'blockerCodes': <String>[],
