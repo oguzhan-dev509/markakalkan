@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/features/admin/presentation/management_center_page.dart';
+import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
 import 'package:markakalkan/features/admin/presentation/counterfeit_twin_review_queue_page.dart';
 import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/features/auth/presentation/brand_application_page.dart';
@@ -414,6 +415,25 @@ abstract final class AppRouter {
           navigationRequestId: navigationRequestId,
           routeEntryCause: RiskOperationsRouteEntryCause.corporateHubCard,
           lifecycleProvider: lifecycle,
+        ),
+      ),
+    );
+  }
+
+  static Future<void> openInternalRiskOperationsConsole(
+    BuildContext context,
+    PlatformAdminAccess verifiedAccess,
+  ) {
+    final lifecycle = RiskOperationsLifecycleProvider.instance;
+    final navigationRequestId = lifecycle.createNavigationRequestId();
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/risk-operations-internal'),
+        builder: (_) => RiskOperationsConsolePage(
+          navigationRequestId: navigationRequestId,
+          routeEntryCause: RiskOperationsRouteEntryCause.directRoute,
+          lifecycleProvider: lifecycle,
+          internalAdminAccess: verifiedAccess,
         ),
       ),
     );

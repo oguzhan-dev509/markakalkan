@@ -217,6 +217,28 @@ class _AuthorizedManagementCenter extends StatelessWidget {
                     spacing: spacing,
                     runSpacing: spacing,
                     children: [
+                      GestureDetector(
+                        key: const ValueKey<String>(
+                          'internal-risk-operations-action',
+                        ),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () =>
+                            AppRouter.openInternalRiskOperationsConsole(
+                              context,
+                              access,
+                            ),
+                        child: SizedBox(
+                          width: cardWidth,
+                          child: const _ManagementModuleCard(
+                            title: 'Risk ve Şüpheli Taramalar',
+                            description:
+                                'Ortak risk adaylarını iç yönetim doğrulamasıyla '
+                                'yazısız olarak değerlendirin.',
+                            icon: Icons.policy_outlined,
+                            actionLabel: 'İç doğrulama görünümünü aç',
+                          ),
+                        ),
+                      ),
                       SizedBox(
                         width: cardWidth,
                         child: const _ManagementModuleCard(

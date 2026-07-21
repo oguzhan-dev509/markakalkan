@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_models.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_lifecycle.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_repository.dart';
 import 'package:markakalkan/features/risk_operations/data/shared_risk_promotion_service.dart';
+import 'package:markakalkan/features/risk_operations/data/shared_risk_dry_run_service.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
 
 class FakeRepository implements RiskOperationsRepository {
@@ -201,6 +203,26 @@ class FakePromotionService implements SharedRiskPromotionService {
   }
 }
 
+class FakeDryRunService implements SharedRiskDryRunService {
+  int calls = 0;
+  SharedRiskDryRunResult result = const SharedRiskDryRunResult(
+    SharedRiskDryRunOutcome.dryRunReady,
+  );
+
+  @override
+  Future<SharedRiskDryRunResult> validate(RiskOperationItem item) async {
+    calls += 1;
+    return result;
+  }
+}
+
+const verifiedSuperAdmin = PlatformAdminAccess(
+  active: true,
+  roles: ['super_admin'],
+  displayName: 'Internal Admin',
+  email: 'masked@example.invalid',
+);
+
 void main() {
   test('response model rejects a non-read-only contract', () {
     expect(
@@ -264,6 +286,133 @@ void main() {
     expect(find.text('Ortak risk kaydı oluşturuldu.'), findsOneWidget);
     final button = tester.widget<FilledButton>(find.byType(FilledButton).last);
     expect(button.onPressed, isNull);
+  });
+
+  testWidgets(
+    'dry-run is hidden unless gate, verified admin, auth and App Check pass',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      Future<void> pump({
+        bool gate = true,
+        PlatformAdminAccess? access = verifiedSuperAdmin,
+        bool auth = true,
+        bool appCheck = true,
+        bool realGate = false,
+      }) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RiskOperationsConsolePage(
+              navigationRequestId: 'dry-run-gates',
+              routeEntryCause: RiskOperationsRouteEntryCause.directRoute,
+              repository: RecordingRepository(
+                result: RiskOperationsPageResult.fromMap(
+                  responseMap(items: [itemMap()]),
+                ),
+              ),
+              lifecycleProvider: DeterministicIds(),
+              enableDryRun: gate,
+              enablePromotion: realGate,
+              internalAdminAccess: access,
+              dryRunAuthReady: auth,
+              dryRunAppCheckReady: appCheck,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final tile = find.descendant(
+          of: find.byKey(const ValueKey('risk-operation-signal-1')),
+          matching: find.byType(ExpansionTile),
+        );
+        await tester.ensureVisible(tile);
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+      }
+
+      await pump(gate: false);
+      expect(find.text('Yazmadan doğrula'), findsNothing);
+      await pump(access: null);
+      expect(find.text('Yazmadan doğrula'), findsNothing);
+      await pump(
+        access: const PlatformAdminAccess(
+          active: true,
+          roles: ['reviewer'],
+          displayName: 'Reviewer',
+          email: '',
+        ),
+      );
+      expect(find.text('Yazmadan doğrula'), findsNothing);
+      await pump(auth: false);
+      expect(find.text('Yazmadan doğrula'), findsNothing);
+      await pump(appCheck: false);
+      expect(find.text('Yazmadan doğrula'), findsNothing);
+      await pump(realGate: true);
+      expect(find.text('Yazmadan doğrula'), findsNothing);
+      await pump();
+      expect(find.text('Yazmadan doğrula'), findsOneWidget);
+    },
+  );
+
+  testWidgets('dry-run confirms once, calls once and locks the page record', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final dryRun = FakeDryRunService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RiskOperationsConsolePage(
+          navigationRequestId: 'dry-run-cardinality',
+          routeEntryCause: RiskOperationsRouteEntryCause.directRoute,
+          repository: RecordingRepository(
+            result: RiskOperationsPageResult.fromMap(
+              responseMap(items: [itemMap()]),
+            ),
+          ),
+          lifecycleProvider: DeterministicIds(),
+          enableDryRun: true,
+          internalAdminAccess: verifiedSuperAdmin,
+          dryRunService: dryRun,
+          dryRunAuthReady: true,
+          dryRunAppCheckReady: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(dryRun.calls, 0);
+    final tile = find.descendant(
+      of: find.byKey(const ValueKey('risk-operation-signal-1')),
+      matching: find.byType(ExpansionTile),
+    );
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    final action = find.byKey(const ValueKey('shared-risk-dry-run-signal-1'));
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Firestore ortak risk kaydı yazmaz'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('vaka dosyası açmaz'), findsOneWidget);
+    expect(find.textContaining('otomatik kayıt'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Yazmadan doğrula'));
+    await tester.pumpAndSettle();
+    expect(dryRun.calls, 1);
+    expect(
+      find.textContaining('Ortak risk kaydı oluşturulmadı'),
+      findsOneWidget,
+    );
+    final button = tester.widget<OutlinedButton>(action);
+    expect(button.onPressed, isNull);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    expect(dryRun.calls, 1);
   });
 
   testWidgets('shows error, permission and no-tenant states', (tester) async {

@@ -1,13 +1,17 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
 
 import '../data/risk_operations_models.dart';
 import '../data/risk_operations_lifecycle.dart';
 import '../data/risk_operations_repository.dart';
 import '../data/shared_risk_promotion_service.dart';
+import '../data/shared_risk_dry_run_service.dart';
+import '../models/shared_risk_dry_run_gate.dart';
 import 'risk_operations_labels.dart';
 
 class RiskOperationsConsolePage extends StatefulWidget {
@@ -25,6 +29,11 @@ class RiskOperationsConsolePage extends StatefulWidget {
     ),
     this.promotionAuthReady,
     this.promotionAppCheckReady,
+    this.internalAdminAccess,
+    this.dryRunService,
+    this.enableDryRun = SharedRiskDryRunGate.enabled,
+    this.dryRunAuthReady,
+    this.dryRunAppCheckReady,
   });
   final String navigationRequestId;
   final RiskOperationsRouteEntryCause routeEntryCause;
@@ -35,6 +44,11 @@ class RiskOperationsConsolePage extends StatefulWidget {
   final bool enablePromotion;
   final bool? promotionAuthReady;
   final bool? promotionAppCheckReady;
+  final PlatformAdminAccess? internalAdminAccess;
+  final SharedRiskDryRunService? dryRunService;
+  final bool enableDryRun;
+  final bool? dryRunAuthReady;
+  final bool? dryRunAppCheckReady;
   @override
   State<RiskOperationsConsolePage> createState() =>
       _RiskOperationsConsolePageState();
@@ -258,11 +272,19 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
           ...result.items.map(
             (item) => _RiskItemCard(
               item: item,
-              enabled: widget.enablePromotion,
+              enabled: _promotionEnabled,
               service: widget.promotionService,
               authReady: widget.promotionAuthReady ?? _authReady,
               appCheckReady:
                   widget.promotionAppCheckReady ??
+                  AppCheckBootstrap.instance.isReady,
+              dryRunEnabled: _dryRunEnabled,
+              internalAdminVerified:
+                  widget.internalAdminAccess?.isSuperAdmin == true,
+              dryRunService: widget.dryRunService,
+              dryRunAuthReady: widget.dryRunAuthReady ?? _authReady,
+              dryRunAppCheckReady:
+                  widget.dryRunAppCheckReady ??
                   AppCheckBootstrap.instance.isReady,
             ),
           ),
@@ -292,6 +314,21 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
       return false;
     }
   }
+
+  bool get _promotionEnabled => kReleaseMode
+      ? const bool.fromEnvironment(
+          'MARKAKALKAN_ENABLE_SHARED_RISK_PROMOTION',
+          defaultValue: false,
+        )
+      : widget.enablePromotion;
+
+  bool get _dryRunEnabled => kReleaseMode
+      ? SharedRiskDryRunGate.enabled &&
+            !const bool.fromEnvironment(
+              'MARKAKALKAN_ENABLE_SHARED_RISK_PROMOTION',
+              defaultValue: false,
+            )
+      : widget.enableDryRun && !widget.enablePromotion;
 }
 
 class _SummaryGrid extends StatelessWidget {
@@ -464,31 +501,45 @@ class _RiskItemCard extends StatefulWidget {
     required this.enabled,
     required this.authReady,
     required this.appCheckReady,
+    required this.dryRunEnabled,
+    required this.internalAdminVerified,
+    required this.dryRunAuthReady,
+    required this.dryRunAppCheckReady,
     this.service,
+    this.dryRunService,
   });
   final RiskOperationItem item;
   final bool enabled;
   final SharedRiskPromotionService? service;
   final bool authReady;
   final bool appCheckReady;
+  final bool dryRunEnabled;
+  final bool internalAdminVerified;
+  final bool dryRunAuthReady;
+  final bool dryRunAppCheckReady;
+  final SharedRiskDryRunService? dryRunService;
   @override
   State<_RiskItemCard> createState() => _RiskItemCardState();
 }
 
 class _RiskItemCardState extends State<_RiskItemCard> {
-  bool _busy = false;
-  bool _submitted = false;
-  String? _message;
+  bool _dryRunBusy = false;
+  bool _dryRunAttempted = false;
+  String? _dryRunMessage;
   RiskOperationItem get item => widget.item;
 
-  Future<void> _promote() async {
-    if (_busy || _submitted) return;
+  Future<void> _validateWithoutWriting() async {
+    if (_dryRunBusy || _dryRunAttempted) return;
     final approved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Ortak risk kaydı oluştur'),
+        title: const Text('Yazmadan doğrula'),
         content: const Text(
-          'Ortak risk kaydı oluşturulacaktır. Bu işlem gerçek vaka dosyası açmaz, hukuki hüküm oluşturmaz ve insan incelemesi zorunluluğu devam eder.',
+          'Bu işlem yalnız güvenlik ve bütünlük kontrollerini çalıştırır. '
+          'Firestore ortak risk kaydı yazmaz, vaka dosyası açmaz ve hukuki '
+          'veya müdahale sonucu üretmez. Başarılı sonuç otomatik kayıt '
+          'oluşturulacağı anlamına gelmez. Aynı kayıt bu sayfa oturumunda '
+          'yalnız bir kez doğrulanabilir.',
         ),
         actions: [
           TextButton(
@@ -497,26 +548,24 @@ class _RiskItemCardState extends State<_RiskItemCard> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Onayla ve oluştur'),
+            child: const Text('Yazmadan doğrula'),
           ),
         ],
       ),
     );
     if (approved != true || !mounted) return;
     setState(() {
-      _busy = true;
-      _submitted = true;
+      _dryRunBusy = true;
+      _dryRunAttempted = true;
     });
     final result =
-        await (widget.service ?? CallableSharedRiskPromotionService()).promote(
-          item,
-        );
-    if (mounted) {
-      setState(() {
-        _busy = false;
-        _message = result.turkishMessage;
-      });
-    }
+        await (widget.dryRunService ?? CallableSharedRiskDryRunService())
+            .validate(item);
+    if (!mounted) return;
+    setState(() {
+      _dryRunBusy = false;
+      _dryRunMessage = result.turkishMessage;
+    });
   }
 
   @override
@@ -615,23 +664,36 @@ class _RiskItemCardState extends State<_RiskItemCard> {
             item.caseCandidacy.requiresHumanReview &&
             item.sourceRecordVersion.isNotEmpty &&
             item.projectionFingerprint.isNotEmpty) ...[
+          _RealPromotionAction(item: item, service: widget.service),
+        ],
+        if (widget.dryRunEnabled &&
+            widget.internalAdminVerified &&
+            widget.dryRunAuthReady &&
+            widget.dryRunAppCheckReady &&
+            item.caseCandidacy.requiresHumanReview &&
+            item.sourceSystem.isNotEmpty &&
+            item.sourceRecordId.isNotEmpty &&
+            item.sourceRecordVersion.isNotEmpty &&
+            item.projectionFingerprint.isNotEmpty) ...[
           Align(
             alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-              key: ValueKey('shared-risk-promote-${item.signalId}'),
-              onPressed: _busy || _submitted ? null : _promote,
-              icon: const Icon(Icons.playlist_add_check_circle_outlined),
+            child: OutlinedButton.icon(
+              key: ValueKey('shared-risk-dry-run-${item.signalId}'),
+              onPressed: _dryRunBusy || _dryRunAttempted
+                  ? null
+                  : _validateWithoutWriting,
+              icon: const Icon(Icons.fact_check_outlined),
               label: Text(
-                _busy ? 'İşlem doğrulanıyor…' : 'Ortak risk kaydı oluştur',
+                _dryRunBusy ? 'Yazısız doğrulanıyor…' : 'Yazmadan doğrula',
               ),
             ),
           ),
-          if (_message != null)
+          if (_dryRunMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(_message!),
+                child: Text(_dryRunMessage!),
               ),
             ),
         ],
@@ -648,6 +710,76 @@ class _RiskItemCardState extends State<_RiskItemCard> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text('$label: $value'),
     ),
+  );
+}
+
+class _RealPromotionAction extends StatefulWidget {
+  const _RealPromotionAction({required this.item, this.service});
+
+  final RiskOperationItem item;
+  final SharedRiskPromotionService? service;
+
+  @override
+  State<_RealPromotionAction> createState() => _RealPromotionActionState();
+}
+
+class _RealPromotionActionState extends State<_RealPromotionAction> {
+  bool _busy = false;
+  bool _submitted = false;
+  String? _message;
+
+  Future<void> _promote() async {
+    if (_busy || _submitted) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ortak risk kaydı oluştur'),
+        content: const Text(
+          'Ortak risk kaydı oluşturulacaktır. Bu işlem gerçek vaka dosyası '
+          'açmaz, hukuki hüküm oluşturmaz ve insan incelemesi zorunluluğu '
+          'devam eder.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Onayla ve oluştur'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _submitted = true;
+    });
+    final result =
+        await (widget.service ?? CallableSharedRiskPromotionService()).promote(
+          widget.item,
+        );
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _message = result.turkishMessage;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      FilledButton.icon(
+        key: ValueKey('shared-risk-promote-${widget.item.signalId}'),
+        onPressed: _busy || _submitted ? null : _promote,
+        icon: const Icon(Icons.playlist_add_check_circle_outlined),
+        label: Text(_busy ? 'İşlem doğrulanıyor…' : 'Ortak risk kaydı oluştur'),
+      ),
+      if (_message != null)
+        Padding(padding: const EdgeInsets.only(top: 8), child: Text(_message!)),
+    ],
   );
 }
 
