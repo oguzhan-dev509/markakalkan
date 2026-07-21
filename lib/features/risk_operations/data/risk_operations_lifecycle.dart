@@ -13,6 +13,16 @@ enum RiskOperationsNavigationType {
   final String wireValue;
 }
 
+RiskOperationsNavigationType riskOperationsNavigationTypeFromWire(
+  String? value,
+) => switch (value) {
+  'navigate' => RiskOperationsNavigationType.navigate,
+  'reload' => RiskOperationsNavigationType.reload,
+  'back_forward' => RiskOperationsNavigationType.backForward,
+  'prerender' => RiskOperationsNavigationType.prerender,
+  _ => RiskOperationsNavigationType.unknown,
+};
+
 enum RiskOperationsRouteEntryCause {
   corporateHubCard('corporate_hub_card'),
   browserReloadRestore('browser_reload_restore'),
@@ -51,20 +61,24 @@ abstract interface class RiskOperationsSessionStorage {
 
 class RiskOperationsBrowserContext {
   const RiskOperationsBrowserContext({
+    this.providerKind = 'stub_v1',
     this.sessionStorage,
     this.navigationType = RiskOperationsNavigationType.unknown,
     bool Function()? pageshowPersisted,
     this.initialVisibilityState = 'unknown',
     this.documentReferrerPresent = false,
     this.serviceWorkerControlled = false,
+    this.browserAccessDegraded = false,
   }) : _pageshowPersisted = pageshowPersisted;
 
+  final String providerKind;
   final RiskOperationsSessionStorage? sessionStorage;
   final RiskOperationsNavigationType navigationType;
   final bool Function()? _pageshowPersisted;
   final String initialVisibilityState;
   final bool documentReferrerPresent;
   final bool serviceWorkerControlled;
+  final bool browserAccessDegraded;
 
   bool get pageshowPersisted => _pageshowPersisted?.call() ?? false;
 }
@@ -113,11 +127,21 @@ class RiskOperationsLifecycleProvider {
       try {
         final existing = storage.read(sessionStorageKey);
         if (existing != null && _validId(existing)) {
-          return (existing, RiskOperationsLifecycleQuality.normal);
+          return (
+            existing,
+            browserContext.browserAccessDegraded
+                ? RiskOperationsLifecycleQuality.degraded
+                : RiskOperationsLifecycleQuality.normal,
+          );
         }
         final created = _nextId();
         storage.write(sessionStorageKey, created);
-        return (created, RiskOperationsLifecycleQuality.normal);
+        return (
+          created,
+          browserContext.browserAccessDegraded
+              ? RiskOperationsLifecycleQuality.degraded
+              : RiskOperationsLifecycleQuality.normal,
+        );
       } catch (_) {
         // Privacy settings can disable sessionStorage. Degrade to app memory.
       }

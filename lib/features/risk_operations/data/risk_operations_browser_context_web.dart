@@ -1,49 +1,97 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
+import 'dart:js_interop';
 
-// ignore: deprecated_member_use
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 
 import 'risk_operations_lifecycle.dart';
 
+const riskOperationsBrowserProviderKind = 'web_interop_v1';
+
 class _WebSessionStorage implements RiskOperationsSessionStorage {
   @override
-  String? read(String key) => html.window.sessionStorage[key];
+  String? read(String key) => web.window.sessionStorage.getItem(key);
 
   @override
   void write(String key, String value) {
-    html.window.sessionStorage[key] = value;
+    web.window.sessionStorage.setItem(key, value);
   }
 }
 
-RiskOperationsNavigationType _navigationType() {
-  final entries = html.window.performance.getEntriesByType('navigation');
-  if (entries.isEmpty) {
-    return RiskOperationsNavigationType.unknown;
+(RiskOperationsNavigationType, bool) _navigationType() {
+  try {
+    final entries = web.window.performance
+        .getEntriesByType('navigation')
+        .toDart;
+    if (entries.isEmpty) {
+      return (RiskOperationsNavigationType.unknown, false);
+    }
+    final navigation = entries.first as web.PerformanceNavigationTiming;
+    return (riskOperationsNavigationTypeFromWire(navigation.type), false);
+  } catch (_) {
+    return (RiskOperationsNavigationType.unknown, true);
   }
-  final type = (entries.first as dynamic).type;
-  return switch (type) {
-    'navigate' => RiskOperationsNavigationType.navigate,
-    'reload' => RiskOperationsNavigationType.reload,
-    'back_forward' => RiskOperationsNavigationType.backForward,
-    'prerender' => RiskOperationsNavigationType.prerender,
-    _ => RiskOperationsNavigationType.unknown,
-  };
 }
 
 RiskOperationsBrowserContext createRiskOperationsBrowserContext() {
-  var pageShowPersisted = false;
-  html.window.onPageShow.listen((event) {
-    if (event is html.PageTransitionEvent) {
-      pageShowPersisted = event.persisted == true;
+  try {
+    var accessDegraded = false;
+    var pageShowPersisted = false;
+    final navigation = _navigationType();
+    accessDegraded = navigation.$2;
+
+    var initialVisibilityState = 'unknown';
+    try {
+      initialVisibilityState = web.document.visibilityState;
+    } catch (_) {
+      accessDegraded = true;
     }
-  });
-  return RiskOperationsBrowserContext(
-    sessionStorage: _WebSessionStorage(),
-    navigationType: _navigationType(),
-    pageshowPersisted: () => pageShowPersisted,
-    initialVisibilityState: html.document.visibilityState,
-    documentReferrerPresent: html.document.referrer.isNotEmpty,
-    serviceWorkerControlled:
-        html.window.navigator.serviceWorker?.controller != null,
-  );
+
+    var documentReferrerPresent = false;
+    try {
+      documentReferrerPresent = web.document.referrer.isNotEmpty;
+    } catch (_) {
+      accessDegraded = true;
+    }
+
+    var serviceWorkerControlled = false;
+    try {
+      serviceWorkerControlled =
+          web.window.navigator.serviceWorker.controller != null;
+    } catch (_) {
+      accessDegraded = true;
+    }
+
+    try {
+      web.window.addEventListener(
+        'pageshow',
+        ((web.Event event) {
+          try {
+            final transition = event as web.PageTransitionEvent;
+            pageShowPersisted = transition.persisted;
+          } catch (_) {
+            pageShowPersisted = false;
+          }
+        }).toJS,
+      );
+    } catch (_) {
+      accessDegraded = true;
+    }
+
+    return RiskOperationsBrowserContext(
+      providerKind: riskOperationsBrowserProviderKind,
+      sessionStorage: _WebSessionStorage(),
+      navigationType: accessDegraded
+          ? RiskOperationsNavigationType.unknown
+          : navigation.$1,
+      pageshowPersisted: () => pageShowPersisted,
+      initialVisibilityState: initialVisibilityState,
+      documentReferrerPresent: documentReferrerPresent,
+      serviceWorkerControlled: serviceWorkerControlled,
+      browserAccessDegraded: accessDegraded,
+    );
+  } catch (_) {
+    return const RiskOperationsBrowserContext(
+      providerKind: riskOperationsBrowserProviderKind,
+      browserAccessDegraded: true,
+    );
+  }
 }

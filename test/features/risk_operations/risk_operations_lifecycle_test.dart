@@ -73,6 +73,22 @@ void main() {
     expect(lifecycle.lifecycleQuality, RiskOperationsLifecycleQuality.degraded);
   });
 
+  test('browser API failure degrades lifecycle and navigation safely', () {
+    final lifecycle = RiskOperationsLifecycleProvider(
+      nextId: _ids('browser-failure'),
+      browserContext: RiskOperationsBrowserContext(
+        sessionStorage: _MemoryStorage(),
+        navigationType: RiskOperationsNavigationType.unknown,
+        browserAccessDegraded: true,
+      ),
+    );
+    expect(lifecycle.lifecycleQuality, RiskOperationsLifecycleQuality.degraded);
+    expect(
+      lifecycle.browserContext.navigationType,
+      RiskOperationsNavigationType.unknown,
+    );
+  });
+
   test('auth epoch changes only on transitions into authenticated state', () {
     final lifecycle = RiskOperationsLifecycleProvider(
       nextId: _ids('auth'),
@@ -148,6 +164,29 @@ void main() {
         'prerender',
         'unknown',
       ]),
+    );
+  });
+
+  test('PerformanceNavigationTiming values normalize deterministically', () {
+    expect(
+      riskOperationsNavigationTypeFromWire('navigate'),
+      RiskOperationsNavigationType.navigate,
+    );
+    expect(
+      riskOperationsNavigationTypeFromWire('reload'),
+      RiskOperationsNavigationType.reload,
+    );
+    expect(
+      riskOperationsNavigationTypeFromWire('back_forward'),
+      RiskOperationsNavigationType.backForward,
+    );
+    expect(
+      riskOperationsNavigationTypeFromWire('prerender'),
+      RiskOperationsNavigationType.prerender,
+    );
+    expect(
+      riskOperationsNavigationTypeFromWire('unexpected'),
+      RiskOperationsNavigationType.unknown,
     );
   });
 
