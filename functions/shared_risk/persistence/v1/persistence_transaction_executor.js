@@ -24,6 +24,10 @@ function buildCreateDocumentsV1({facts, plan, creationAuditEventId,
     outcome: "created",
     completedAt: executedAt,
     creationAuditEventId,
+    ...(plan.subjectType === "risk_signal" &&
+      facts.provenance.contractVersion ===
+        "shared-risk-promotion-command-v1" ?
+      {auditEventId: creationAuditEventId} : {}),
   });
   const audit = immutableSnapshot({
     ...buildAuditEventStorageDocumentV1({
@@ -76,14 +80,22 @@ async function executePersistenceTransactionV1({store, facts,
             ["source.record_missing"]), committed: false};
       }
       const data = source.data() || {};
-      if (data.tenantId !== sourceRevalidation.tenantId) {
-        return {plan: nonWritePlan(facts, plannedAt, OUTCOMES.conflict,
-            ["source.tenant_changed"]), committed: false};
-      }
-      if ((data.brandId || null) !== (sourceRevalidation.brandId || null)) {
-        return {plan: nonWritePlan(facts, plannedAt,
-            OUTCOMES.recomputeRequired, ["source.brand_changed"]),
-        committed: false};
+      if (typeof sourceRevalidation.validate === "function") {
+        const sourceBlockers = sourceRevalidation.validate({source, data});
+        if (Array.isArray(sourceBlockers) && sourceBlockers.length > 0) {
+          return {plan: nonWritePlan(facts, plannedAt, OUTCOMES.conflict,
+              sourceBlockers), committed: false};
+        }
+      } else {
+        if (data.tenantId !== sourceRevalidation.tenantId) {
+          return {plan: nonWritePlan(facts, plannedAt, OUTCOMES.conflict,
+              ["source.tenant_changed"]), committed: false};
+        }
+        if ((data.brandId || null) !== (sourceRevalidation.brandId || null)) {
+          return {plan: nonWritePlan(facts, plannedAt,
+              OUTCOMES.recomputeRequired, ["source.brand_changed"]),
+          committed: false};
+        }
       }
       const updateTime = source.updateTime.toDate().toISOString();
       if (updateTime !== sourceRevalidation.updateTime) {

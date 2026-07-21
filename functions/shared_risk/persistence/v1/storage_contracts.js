@@ -111,6 +111,8 @@ function buildSubjectStorageDocumentV1(facts, persistedAtPlaceholder) {
 }
 
 function buildReceiptStorageDocumentV1(plan, facts, createdAtPlaceholder) {
+  const promotion = facts.provenance &&
+    facts.provenance.contractVersion === "shared-risk-promotion-command-v1";
   return immutableSnapshot({
     schemaVersion: RECEIPT_SCHEMA_VERSION,
     receiptId: plan.receiptId,
@@ -129,12 +131,22 @@ function buildReceiptStorageDocumentV1(plan, facts, createdAtPlaceholder) {
     sourceRecordVersion: facts.sourceRecordVersion || null,
     sourceRecordUpdateTime: facts.sourceRecordUpdateTime || null,
     immutableProvenanceSummary: facts.provenance,
+    ...(promotion ? {operation: "human_approved_shared_risk_promotion",
+      signalId: plan.persistenceDocumentId,
+      canonicalBrandId: facts.resolvedIdentityScope.brandId,
+      sourceSystem: facts.sourceModule,
+      sourceRecordId: facts.canonicalSubjectPayload.sourceRecordId,
+      projectionFingerprint: facts.provenance.projectionFingerprint,
+      signalFingerprint: facts.subjectFingerprint,
+      auditEventId: null} : {}),
   });
 }
 
 function buildAuditEventStorageDocumentV1({plan, facts,
   occurredAt, serverRecordedAt, correlationId = null,
   auditEventId = null}) {
+  const promotion = facts.provenance &&
+    facts.provenance.contractVersion === "shared-risk-promotion-command-v1";
   return immutableSnapshot({
     schemaVersion: AUDIT_SCHEMA_VERSION,
     auditEventId,
@@ -158,6 +170,11 @@ function buildAuditEventStorageDocumentV1({plan, facts,
     serverRecordedAt,
     correlationId,
     immutableMetadata: facts.provenance,
+    ...(promotion ? {sourceReference: facts.sourceRecordRef,
+      canonicalBrandId: facts.resolvedIdentityScope.brandId,
+      sourceSystem: facts.sourceModule,
+      sourceRecordVersion: facts.sourceRecordVersion,
+      producer: "shared_risk_promotion_v1"} : {}),
   });
 }
 

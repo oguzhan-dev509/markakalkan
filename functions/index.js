@@ -89,6 +89,9 @@ const {
 const {
   buildListRiskOperationsReadModel,
 } = require("./risk_operations/v1");
+const {
+  buildPromoteRiskOperationToSharedRisk,
+} = require("./shared_risk/promotion/v1");
 
 setGlobalOptions({
   region: "europe-west3",
@@ -216,3 +219,5 @@ exports.provisionInternalTenantBrandPilot =
     buildProvisionInternalTenantBrandPilot({db});
 exports.listRiskOperationsReadModel =
     buildListRiskOperationsReadModel({db});
+exports.promoteRiskOperationToSharedRisk =
+    buildPromoteRiskOperationToSharedRisk({db});

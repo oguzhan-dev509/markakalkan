@@ -124,6 +124,7 @@ class RiskOperationItem {
     required this.timeline,
     required this.relationshipNodes,
     required this.adapterVersion,
+    required this.projectionFingerprint,
   });
   final String signalId;
   final String sourceSystem;
@@ -145,6 +146,7 @@ class RiskOperationItem {
   final List<RiskTimelineEvent> timeline;
   final List<RiskRelationshipNode> relationshipNodes;
   final String adapterVersion;
+  final String projectionFingerprint;
   factory RiskOperationItem.fromMap(Map<String, dynamic> map) {
     final graph = _map(map['relationshipGraph']);
     return RiskOperationItem(
@@ -179,6 +181,10 @@ class RiskOperationItem {
         graph['nodes'],
       ).map(RiskRelationshipNode.fromMap).toList(growable: false),
       adapterVersion: _required(map['adapterVersion'], 'adapterVersion'),
+      projectionFingerprint: _required(
+        map['projectionFingerprint'],
+        'projectionFingerprint',
+      ),
     );
   }
 }

@@ -33,6 +33,35 @@ function validateStorageIntegrityV1({facts, receipt, subject, audit,
       conflicts.push("integrity.subject_missing");
     }
     if (audit.status !== "present") conflicts.push("integrity.audit_missing");
+    mismatch("integrity.receipt_schema", receipt.schemaVersion,
+        "shared-risk-receipt-v1");
+    mismatch("integrity.receipt_outcome", receipt.outcome, "created");
+    mismatch("integrity.receipt_audit", receipt.creationAuditEventId,
+        creationAuditEventId);
+    mismatch("integrity.receipt_source_version", receipt.sourceRecordVersion,
+        facts.sourceRecordVersion || null);
+    mismatch("integrity.receipt_fingerprint_algorithm",
+        receipt.fingerprintAlgorithm, facts.fingerprintAlgorithm);
+    if (facts.provenance.contractVersion ===
+        "shared-risk-promotion-command-v1") {
+      mismatch("integrity.receipt_operation", receipt.operation,
+          "human_approved_shared_risk_promotion");
+      mismatch("integrity.receipt_signal", receipt.signalId,
+          facts.persistenceDocumentId);
+      mismatch("integrity.receipt_brand", receipt.canonicalBrandId,
+          facts.resolvedIdentityScope.brandId);
+      mismatch("integrity.receipt_source_system", receipt.sourceSystem,
+          facts.sourceModule);
+      mismatch("integrity.receipt_source_record", receipt.sourceRecordId,
+          facts.canonicalSubjectPayload.sourceRecordId);
+      mismatch("integrity.receipt_projection_fingerprint",
+          receipt.projectionFingerprint,
+          facts.provenance.projectionFingerprint);
+      mismatch("integrity.receipt_signal_fingerprint",
+          receipt.signalFingerprint, facts.subjectFingerprint);
+      mismatch("integrity.receipt_audit_event", receipt.auditEventId,
+          creationAuditEventId);
+    }
   }
   if (subject.status === "present") {
     mismatch("integrity.subject_tenant", subject.tenantId,
@@ -48,6 +77,8 @@ function validateStorageIntegrityV1({facts, receipt, subject, audit,
         facts.subjectFingerprint);
   }
   if (audit.status === "present") {
+    mismatch("integrity.audit_schema", audit.schemaVersion,
+        "shared-risk-audit-v1");
     mismatch("integrity.audit_id", audit.auditEventId, creationAuditEventId);
     mismatch("integrity.audit_tenant", audit.tenantId,
         facts.resolvedIdentityScope.tenantId);
@@ -59,6 +90,23 @@ function validateStorageIntegrityV1({facts, receipt, subject, audit,
         facts.subjectFingerprint);
     mismatch("integrity.audit_event_type", audit.eventType,
         "persistence_created");
+    mismatch("integrity.audit_outcome", audit.outcome, "create");
+    mismatch("integrity.audit_subject_type", audit.subjectType,
+        facts.subjectType);
+    mismatch("integrity.audit_subject_id", audit.subjectId, facts.subjectId);
+    if (facts.provenance.contractVersion ===
+        "shared-risk-promotion-command-v1") {
+      mismatch("integrity.audit_source_ref", audit.sourceReference,
+          facts.sourceRecordRef);
+      mismatch("integrity.audit_brand", audit.canonicalBrandId,
+          facts.resolvedIdentityScope.brandId);
+      mismatch("integrity.audit_source_system", audit.sourceSystem,
+          facts.sourceModule);
+      mismatch("integrity.audit_source_version", audit.sourceRecordVersion,
+          facts.sourceRecordVersion);
+      mismatch("integrity.audit_producer", audit.producer,
+          "shared_risk_promotion_v1");
+    }
   }
   return Object.freeze([...new Set(conflicts)].sort());
 }

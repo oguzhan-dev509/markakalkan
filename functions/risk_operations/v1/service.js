@@ -2,7 +2,9 @@
 const {RiskOperationsError, riskOperationsRequestV1} = require("./contracts");
 const {baseProjection, caseCandidacy, evidenceQuality, monitoringProjection, timelineEvent, traceabilityProjection} = require("./projection");
 
-const dataOf = (snapshot) => ({id: snapshot.id, data: snapshot.data() || {}});
+const dataOf = (snapshot) => ({id: snapshot.id, data: snapshot.data() || {},
+  version: snapshot.updateTime && snapshot.updateTime.toDate ?
+    snapshot.updateTime.toDate().toISOString() : null});
 async function resolveTenantContextV1({db, uid, request}) {
   const memberships = (await db.collection("tenant_memberships").where("uid", "==", uid).limit(20).get()).docs.map(dataOf).filter((item) => item.data.status === "active");
   const eligible = request.tenantId ? memberships.filter((item) => item.data.tenantId === request.tenantId) : memberships;
@@ -32,11 +34,11 @@ async function querySource(db, name, field, value, limit = 200) {
 }
 async function readSources({db, context, evaluatedAt}) {
   const sources = [
-    ["monitoring", async () => (await querySource(db, "monitoring_signals", "tenantId", context.tenantId)).filter((item) => item.data.brandId === context.brandId).map((item) => monitoringProjection({...item, context, evaluatedAt}))],
-    ["traceability", async () => (await querySource(db, "verificationScans", "ownerUid", context.uid)).map((item) => traceabilityProjection({...item, context, evaluatedAt}))],
+    ["monitoring", async () => (await querySource(db, "monitoring_signals", "tenantId", context.tenantId)).filter((item) => item.data.brandId === context.brandId).map((item) => monitoringProjection({...item, data: {...item.data, sourceRecordVersion: item.version || item.data.sourceRecordVersion}, context, evaluatedAt}))],
+    ["traceability", async () => (await querySource(db, "verificationScans", "ownerUid", context.uid)).map((item) => traceabilityProjection({...item, data: {...item.data, sourceRecordVersion: item.version || item.data.sourceRecordVersion}, context, evaluatedAt}))],
     ["shared_risk", async () => (await querySource(db, "shared_risk_signals", "tenantId", context.tenantId)).map((item) => sharedRiskProjection({...item, context, evaluatedAt}))],
     ["digital_detective", async () => {
-      const snap = await db.collection("brands").doc(context.uid).collection("digitalDetectiveTasks").limit(200).get(); return snap.docs.map(dataOf).filter((item) => item.data.status === "completed").map((item) => sharedRiskProjection({id: item.id, data: {...item.data, tenantId: context.tenantId, canonicalSubjectId: item.id, subjectType: "source_record", sourceModule: "digital_detective", title: item.data.title || "Dijital Dedektif sonucu", riskClass: item.data.riskClass || "other"}, context, evaluatedAt}));
+      const snap = await db.collection("brands").doc(context.uid).collection("digitalDetectiveTasks").limit(200).get(); return snap.docs.map(dataOf).filter((item) => item.data.status === "completed").map((item) => sharedRiskProjection({id: item.id, data: {...item.data, contractVersion: item.version || item.data.contractVersion, tenantId: context.tenantId, canonicalSubjectId: item.id, subjectType: "source_record", sourceModule: "digital_detective", title: item.data.title || "Dijital Dedektif sonucu", riskClass: item.data.riskClass || "other"}, context, evaluatedAt}));
     }],
   ];
   const settled = await Promise.allSettled(sources.map((item) => item[1]()));

@@ -8,6 +8,15 @@ const iso = (value) => {
 };
 const text = (value, fallback = "") => typeof value === "string" && value.trim() ? value.trim().slice(0, 500) : fallback;
 const stableId = (...parts) => createHash("sha256").update(parts.join("\u001f")).digest("hex");
+const canonicalize = (value) => Array.isArray(value) ? value.map(canonicalize) :
+  value && typeof value === "object" ? Object.fromEntries(Object.keys(value)
+      .sort().map((key) => [key, canonicalize(value[key])])) : value;
+const projectionFingerprint = (projection) => {
+  const stable = {...projection, caseCandidacy: {
+    ...projection.caseCandidacy, evaluatedAt: null}};
+  return createHash("sha256").update(JSON.stringify(canonicalize(stable)))
+      .digest("hex");
+};
 const confidence = (value) => Number.isFinite(value) ? Math.max(0, Math.min(1, Number(value))) : null;
 function evidenceQuality({evidenceRefs = [], sourceCount = 0, primaryVerified = false, assessable = true}) {
   let level; const reasons = [];
@@ -50,7 +59,9 @@ function graphNode({id, type, label, sourceSystem, confidenceValue, evidence, fi
 function baseProjection({sourceSystem, sourceRecordId, sourceRecordVersion = "v1", tenantId, canonicalBrandId, canonicalSubjectId, subjectType, title, summary, occurredAt, observedAt, ingestedAt, currentStatus, riskClass, severity, confidenceValue, evidence, candidacy, timeline, nodes = [], edges = []}) {
   if (!SEVERITIES.includes(severity) || !EVIDENCE_LEVELS.includes(evidence.level) || !CASE_STATUSES.includes(candidacy.status)) throw new Error("projection.enum_invalid");
   const signalId = stableId("risk-operation", sourceSystem, sourceRecordId, sourceRecordVersion);
-  return Object.freeze({signalId, sourceSystem, sourceRecordId, sourceRecordVersion, tenantId, canonicalBrandId, canonicalSubjectId, subjectType, title: text(title, "Risk sinyali"), summary: text(summary, "Ayrıntı bulunmuyor"), occurredAt: iso(occurredAt), observedAt: iso(observedAt), ingestedAt: iso(ingestedAt), currentStatus: text(currentStatus, "unknown"), riskClass, severity, confidence: confidenceValue, evidenceQuality: evidence, caseCandidacy: candidacy, timeline, timelineSummary: Object.freeze({eventCount: timeline.length, unknownTimeCount: timeline.filter((item) => item.occurredAt == null).length}), relationshipGraph: Object.freeze({nodes, edges}), relationshipSummary: Object.freeze({nodeCount: nodes.length, edgeCount: edges.length}), adapterVersion: ADAPTER_VERSION});
+  const projection = {signalId, sourceSystem, sourceRecordId, sourceRecordVersion, tenantId, canonicalBrandId, canonicalSubjectId, subjectType, title: text(title, "Risk sinyali"), summary: text(summary, "Ayrıntı bulunmuyor"), occurredAt: iso(occurredAt), observedAt: iso(observedAt), ingestedAt: iso(ingestedAt), currentStatus: text(currentStatus, "unknown"), riskClass, severity, confidence: confidenceValue, evidenceQuality: evidence, caseCandidacy: candidacy, timeline, timelineSummary: Object.freeze({eventCount: timeline.length, unknownTimeCount: timeline.filter((item) => item.occurredAt == null).length}), relationshipGraph: Object.freeze({nodes, edges}), relationshipSummary: Object.freeze({nodeCount: nodes.length, edgeCount: edges.length}), adapterVersion: ADAPTER_VERSION};
+  return Object.freeze({...projection,
+    projectionFingerprint: projectionFingerprint(projection)});
 }
 function monitoringProjection({id, data, context, evaluatedAt}) {
   const severity = SEVERITIES.includes(data.signalLevel) ? data.signalLevel : "info";
@@ -61,7 +72,7 @@ function monitoringProjection({id, data, context, evaluatedAt}) {
   const occurred = data.detectedAt || data.occurredAt;
   const timeline = [timelineEvent({sourceSystem: "monitoring", sourceRecordId: id, occurredAt: occurred, summary: data.summary, evidenceReferenceCount: refs.length})];
   const node = graphNode({id: context.brandId, type: "brand", label: data.brandName || "Marka", sourceSystem: "monitoring", confidenceValue, evidence, firstObservedAt: occurred, lastObservedAt: occurred});
-  return baseProjection({sourceSystem: "monitoring", sourceRecordId: id, tenantId: context.tenantId, canonicalBrandId: context.brandId, canonicalSubjectId: data.pageId || id, subjectType: data.listingId ? "listing" : "source_record", title: data.title, summary: data.summary, occurredAt: occurred, observedAt: data.detectedAt, ingestedAt: data.createdAt, currentStatus: data.status, riskClass: data.eventCategory || "marketplace_abuse", severity, confidenceValue, evidence, candidacy, timeline, nodes: [node]});
+  return baseProjection({sourceSystem: "monitoring", sourceRecordId: id, sourceRecordVersion: data.sourceRecordVersion || "v1", tenantId: context.tenantId, canonicalBrandId: context.brandId, canonicalSubjectId: data.pageId || id, subjectType: data.listingId ? "listing" : "source_record", title: data.title, summary: data.summary, occurredAt: occurred, observedAt: data.detectedAt, ingestedAt: data.createdAt, currentStatus: data.status, riskClass: data.eventCategory || "marketplace_abuse", severity, confidenceValue, evidence, candidacy, timeline, nodes: [node]});
 }
 function traceabilityProjection({id, data, context, evaluatedAt}) {
   const severity = SEVERITIES.includes(data.riskLevel) ? data.riskLevel : "info";
@@ -69,6 +80,6 @@ function traceabilityProjection({id, data, context, evaluatedAt}) {
   const confidenceValue = Number.isFinite(data.riskScore) ? Math.max(0, Math.min(1, data.riskScore / 100)) : null;
   const candidacy = caseCandidacy({severity, confidenceValue, evidence, sourceCount: 1, repeated: data.repeatScan === true, identityResolved: Boolean(data.productId || data.publicCode), criticalSafetyRisk: ["blocked", "revoked"].includes(data.status), evaluatedAt});
   const timeline = [timelineEvent({sourceSystem: "traceability", sourceRecordId: id, occurredAt: data.createdAt, summary: "Ürün doğrulama taraması", immutableSource: true})];
-  return baseProjection({sourceSystem: "traceability", sourceRecordId: id, tenantId: context.tenantId, canonicalBrandId: context.brandId, canonicalSubjectId: data.productId || stableId("scan-subject", id), subjectType: "product", title: text(data.productName, "Şüpheli ürün taraması"), summary: Array.isArray(data.riskReasons) && data.riskReasons.length ? data.riskReasons.join(", ") : "Doğrulama taraması", occurredAt: data.createdAt, observedAt: data.createdAt, ingestedAt: data.createdAt, currentStatus: data.reviewStatus, riskClass: "traceability_anomaly", severity, confidenceValue, evidence, candidacy, timeline, nodes: [graphNode({id: context.brandId, type: "brand", label: data.brandName || "Marka", sourceSystem: "traceability", confidenceValue, evidence, firstObservedAt: data.createdAt, lastObservedAt: data.createdAt})]});
+  return baseProjection({sourceSystem: "traceability", sourceRecordId: id, sourceRecordVersion: data.sourceRecordVersion || "v1", tenantId: context.tenantId, canonicalBrandId: context.brandId, canonicalSubjectId: data.productId || stableId("scan-subject", id), subjectType: "product", title: text(data.productName, "Şüpheli ürün taraması"), summary: Array.isArray(data.riskReasons) && data.riskReasons.length ? data.riskReasons.join(", ") : "Doğrulama taraması", occurredAt: data.createdAt, observedAt: data.createdAt, ingestedAt: data.createdAt, currentStatus: data.reviewStatus, riskClass: "traceability_anomaly", severity, confidenceValue, evidence, candidacy, timeline, nodes: [graphNode({id: context.brandId, type: "brand", label: data.brandName || "Marka", sourceSystem: "traceability", confidenceValue, evidence, firstObservedAt: data.createdAt, lastObservedAt: data.createdAt})]});
 }
-module.exports = {ADAPTER_VERSION, EVALUATOR_VERSION, baseProjection, caseCandidacy, evidenceQuality, graphNode, maskLabel, monitoringProjection, timelineEvent, traceabilityProjection};
+module.exports = {ADAPTER_VERSION, EVALUATOR_VERSION, baseProjection, caseCandidacy, evidenceQuality, graphNode, maskLabel, monitoringProjection, projectionFingerprint, timelineEvent, traceabilityProjection};

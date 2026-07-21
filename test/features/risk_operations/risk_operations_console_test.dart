@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_models.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_lifecycle.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_repository.dart';
+import 'package:markakalkan/features/risk_operations/data/shared_risk_promotion_service.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
 
 class FakeRepository implements RiskOperationsRepository {
@@ -131,6 +132,8 @@ Map<String, dynamic> itemMap() => {
     'edges': [],
   },
   'adapterVersion': 'risk-operations-read-adapter-v1',
+  'projectionFingerprint':
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
 };
 
 Map<String, dynamic> traceabilityItemMap() => {
@@ -189,6 +192,15 @@ Widget app(RiskOperationsRepository repository) => MaterialApp(
   ),
 );
 
+class FakePromotionService implements SharedRiskPromotionService {
+  int calls = 0;
+  @override
+  Future<SharedRiskPromotionResult> promote(RiskOperationItem item) async {
+    calls += 1;
+    return const SharedRiskPromotionResult(SharedRiskPromotionOutcome.created);
+  }
+}
+
 void main() {
   test('response model rejects a non-read-only contract', () {
     expect(
@@ -210,6 +222,48 @@ void main() {
     completer.complete(RiskOperationsPageResult.fromMap(responseMap()));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('risk-operations-empty')), findsOneWidget);
+  });
+
+  testWidgets('human approval is Turkish, confirmed once and session locked', (
+    tester,
+  ) async {
+    final promotion = FakePromotionService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RiskOperationsConsolePage(
+          navigationRequestId: 'promotion-navigation',
+          routeEntryCause: RiskOperationsRouteEntryCause.corporateHubCard,
+          repository: RecordingRepository(
+            result: RiskOperationsPageResult.fromMap(
+              responseMap(items: [itemMap()]),
+            ),
+          ),
+          lifecycleProvider: DeterministicIds(),
+          promotionService: promotion,
+          enablePromotion: true,
+          promotionAuthReady: true,
+          promotionAppCheckReady: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Şüpheli ilan sinyali'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ortak risk kaydı oluştur'), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -700));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ortak risk kaydı oluştur'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('gerçek vaka dosyası açmaz'), findsOneWidget);
+    expect(find.textContaining('hukuki hüküm oluşturmaz'), findsOneWidget);
+    await tester.tap(find.text('Onayla ve oluştur'));
+    await tester.pumpAndSettle();
+    expect(promotion.calls, 1);
+    expect(find.text('Ortak risk kaydı oluşturuldu.'), findsOneWidget);
+    final button = tester.widget<FilledButton>(find.byType(FilledButton).last);
+    expect(button.onPressed, isNull);
   });
 
   testWidgets('shows error, permission and no-tenant states', (tester) async {

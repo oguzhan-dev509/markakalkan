@@ -7,6 +7,9 @@ const {spawnSync} = require("node:child_process");
 
 const repo = path.resolve(__dirname, "..");
 const modes = Object.freeze({
+  "rst-1c": {projectId: "demo-markakalkan-rst-1c", only: "firestore",
+    script: path.join(repo, "functions", "shared_risk", "promotion", "v1",
+        "promotion_emulator.test.js")},
   "rst-1a": {projectId: "demo-markakalkan-rst-1a", only: "firestore",
     script: path.join(repo, "functions", "risk_operations", "v1",
         "risk_operations_emulator.test.js")},

@@ -1,10 +1,13 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 import '../data/risk_operations_models.dart';
 import '../data/risk_operations_lifecycle.dart';
 import '../data/risk_operations_repository.dart';
+import '../data/shared_risk_promotion_service.dart';
 import 'risk_operations_labels.dart';
 
 class RiskOperationsConsolePage extends StatefulWidget {
@@ -15,12 +18,23 @@ class RiskOperationsConsolePage extends StatefulWidget {
     this.repository,
     this.lifecycleProvider,
     this.onStateCreated,
+    this.promotionService,
+    this.enablePromotion = const bool.fromEnvironment(
+      'MARKAKALKAN_ENABLE_SHARED_RISK_PROMOTION',
+      defaultValue: false,
+    ),
+    this.promotionAuthReady,
+    this.promotionAppCheckReady,
   });
   final String navigationRequestId;
   final RiskOperationsRouteEntryCause routeEntryCause;
   final RiskOperationsRepository? repository;
   final RiskOperationsLifecycleProvider? lifecycleProvider;
   final VoidCallback? onStateCreated;
+  final SharedRiskPromotionService? promotionService;
+  final bool enablePromotion;
+  final bool? promotionAuthReady;
+  final bool? promotionAppCheckReady;
   @override
   State<RiskOperationsConsolePage> createState() =>
       _RiskOperationsConsolePageState();
@@ -241,7 +255,17 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
             icon: Icons.inbox_outlined,
           )
         else
-          ...result.items.map((item) => _RiskItemCard(item: item)),
+          ...result.items.map(
+            (item) => _RiskItemCard(
+              item: item,
+              enabled: widget.enablePromotion,
+              service: widget.promotionService,
+              authReady: widget.promotionAuthReady ?? _authReady,
+              appCheckReady:
+                  widget.promotionAppCheckReady ??
+                  AppCheckBootstrap.instance.isReady,
+            ),
+          ),
         if (result.nextPageToken != null) ...[
           const SizedBox(height: 8),
           Align(
@@ -259,6 +283,14 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
         ],
       ],
     );
+  }
+
+  bool get _authReady {
+    try {
+      return FirebaseAuth.instance.currentUser != null;
+    } catch (_) {
+      return false;
+    }
   }
 }
 
@@ -426,9 +458,67 @@ class _Filters extends StatelessWidget {
             '${date.day.toString().padLeft(2, '0')}';
 }
 
-class _RiskItemCard extends StatelessWidget {
-  const _RiskItemCard({required this.item});
+class _RiskItemCard extends StatefulWidget {
+  const _RiskItemCard({
+    required this.item,
+    required this.enabled,
+    required this.authReady,
+    required this.appCheckReady,
+    this.service,
+  });
   final RiskOperationItem item;
+  final bool enabled;
+  final SharedRiskPromotionService? service;
+  final bool authReady;
+  final bool appCheckReady;
+  @override
+  State<_RiskItemCard> createState() => _RiskItemCardState();
+}
+
+class _RiskItemCardState extends State<_RiskItemCard> {
+  bool _busy = false;
+  bool _submitted = false;
+  String? _message;
+  RiskOperationItem get item => widget.item;
+
+  Future<void> _promote() async {
+    if (_busy || _submitted) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ortak risk kaydı oluştur'),
+        content: const Text(
+          'Ortak risk kaydı oluşturulacaktır. Bu işlem gerçek vaka dosyası açmaz, hukuki hüküm oluşturmaz ve insan incelemesi zorunluluğu devam eder.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Onayla ve oluştur'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _submitted = true;
+    });
+    final result =
+        await (widget.service ?? CallableSharedRiskPromotionService()).promote(
+          item,
+        );
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _message = result.turkishMessage;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Card(
     key: ValueKey('risk-operation-${item.signalId}'),
@@ -519,6 +609,32 @@ class _RiskItemCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
+        if (widget.enabled &&
+            widget.authReady &&
+            widget.appCheckReady &&
+            item.caseCandidacy.requiresHumanReview &&
+            item.sourceRecordVersion.isNotEmpty &&
+            item.projectionFingerprint.isNotEmpty) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              key: ValueKey('shared-risk-promote-${item.signalId}'),
+              onPressed: _busy || _submitted ? null : _promote,
+              icon: const Icon(Icons.playlist_add_check_circle_outlined),
+              label: Text(
+                _busy ? 'İşlem doğrulanıyor…' : 'Ortak risk kaydı oluştur',
+              ),
+            ),
+          ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(_message!),
+              ),
+            ),
+        ],
         const Text(
           'Bu değerlendirme hukuki geçerlilik veya suçluluk kararı değildir; insan incelemesi zorunludur.',
           style: TextStyle(color: Color(0xFF687580)),
