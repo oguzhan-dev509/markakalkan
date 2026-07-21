@@ -6,21 +6,39 @@ import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/admin/data/admin_entry_gate_service.dart';
 import 'package:markakalkan/features/admin/data/platform_admin_access_service.dart';
 
+typedef RiskOperationsRouteOpener = Future<void> Function(BuildContext context);
+
 class CorporateHubPage extends StatefulWidget {
-  const CorporateHubPage({super.key});
+  const CorporateHubPage({
+    super.key,
+    this.riskOperationsRouteOpener,
+    this.userEmailProvider,
+    this.entryGateService,
+    this.accessService,
+  });
+
+  final RiskOperationsRouteOpener? riskOperationsRouteOpener;
+  final String? Function()? userEmailProvider;
+  final AdminEntryGateService? entryGateService;
+  final PlatformAdminAccessService? accessService;
 
   @override
   State<CorporateHubPage> createState() => _CorporateHubPageState();
 }
 
 class _CorporateHubPageState extends State<CorporateHubPage> {
-  final AdminEntryGateService _entryGateService = AdminEntryGateService();
-  final PlatformAdminAccessService _accessService =
-      PlatformAdminAccessService();
+  AdminEntryGateService? _entryGateService;
+  PlatformAdminAccessService? _accessService;
 
   bool _entryDialogOpen = false;
   int _managementTapCount = 0;
   DateTime? _managementTapExpiresAt;
+
+  AdminEntryGateService get _resolvedEntryGateService =>
+      widget.entryGateService ??
+      (_entryGateService ??= AdminEntryGateService());
+  PlatformAdminAccessService get _resolvedAccessService =>
+      widget.accessService ?? (_accessService ??= PlatformAdminAccessService());
 
   static const List<_CorporateModule> _modules = [
     _CorporateModule(
@@ -218,10 +236,9 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                 });
 
                 try {
-                  final gateGranted = await _entryGateService.verifyEntryCode(
-                    code,
-                  );
-                  final access = await _accessService.getMyAccess();
+                  final gateGranted = await _resolvedEntryGateService
+                      .verifyEntryCode(code);
+                  final access = await _resolvedAccessService.getMyAccess();
 
                   if (!gateGranted || !access.isSuperAdmin) {
                     throw StateError('Admin access denied');
@@ -367,7 +384,10 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = widget.userEmailProvider == null
+        ? FirebaseAuth.instance.currentUser
+        : null;
+    final userEmail = widget.userEmailProvider?.call() ?? user?.email;
 
     return Scaffold(
       backgroundColor: MarkaKalkanTheme.background,
@@ -387,7 +407,7 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
             padding: const EdgeInsets.only(right: 20),
             child: Center(
               child: Text(
-                user?.email ?? 'MarkaKalkan kullanıcısı',
+                userEmail ?? 'MarkaKalkan kullanıcısı',
                 style: const TextStyle(
                   color: Color(0xFF687580),
                   fontWeight: FontWeight.w600,
@@ -405,7 +425,7 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _CorporateHeader(email: user?.email),
+                _CorporateHeader(email: userEmail),
                 const SizedBox(height: 30),
                 const Text(
                   'Marka Koruma Merkezleri',
@@ -447,7 +467,11 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                           .map(
                             (module) => SizedBox(
                               width: cardWidth,
-                              child: _CorporateModuleCard(module: module),
+                              child: _CorporateModuleCard(
+                                module: module,
+                                riskOperationsRouteOpener:
+                                    widget.riskOperationsRouteOpener,
+                              ),
                             ),
                           )
                           .toList(),
@@ -551,9 +575,13 @@ class _CorporateHeader extends StatelessWidget {
 }
 
 class _CorporateModuleCard extends StatelessWidget {
-  const _CorporateModuleCard({required this.module});
+  const _CorporateModuleCard({
+    required this.module,
+    this.riskOperationsRouteOpener,
+  });
 
   final _CorporateModule module;
+  final RiskOperationsRouteOpener? riskOperationsRouteOpener;
 
   void _openModule(BuildContext context) {
     switch (module.id) {
@@ -588,7 +616,9 @@ class _CorporateModuleCard extends StatelessWidget {
         AppRouter.openSupplySecurityHub(context);
         return;
       case 'risk_scans':
-        AppRouter.openRiskOperationsConsole(context);
+        (riskOperationsRouteOpener ?? AppRouter.openRiskOperationsConsole)(
+          context,
+        );
         return;
     }
 

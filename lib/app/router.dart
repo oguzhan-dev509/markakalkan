@@ -10,6 +10,7 @@ import 'package:markakalkan/features/dashboard/presentation/brand_portfolio_page
 import 'package:markakalkan/features/product_codes/presentation/product_codes_page.dart';
 import 'package:markakalkan/features/production_batches/presentation/production_batches_page.dart';
 import 'package:markakalkan/features/products/presentation/products_page.dart';
+import 'package:markakalkan/features/risk_operations/data/risk_operations_repository.dart';
 import 'package:markakalkan/features/verification/presentation/product_verification_page.dart';
 import 'package:markakalkan/features/verification/presentation/qr_scanner_page.dart';
 import 'package:markakalkan/features/traceability/presentation/suspicious_verification_scans_page.dart';
@@ -404,9 +405,15 @@ abstract final class AppRouter {
   }
 
   static Future<void> openRiskOperationsConsole(BuildContext context) {
+    final diagnostics = RiskOperationsDiagnosticIdProvider.instance;
+    final navigationId = diagnostics.createNavigationId();
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const RiskOperationsConsolePage(),
+        settings: const RouteSettings(name: '/risk-operations'),
+        builder: (_) => RiskOperationsConsolePage(
+          navigationId: navigationId,
+          diagnosticIdProvider: diagnostics,
+        ),
       ),
     );
   }

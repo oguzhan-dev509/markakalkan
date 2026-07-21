@@ -6,8 +6,17 @@ import '../data/risk_operations_models.dart';
 import '../data/risk_operations_repository.dart';
 
 class RiskOperationsConsolePage extends StatefulWidget {
-  const RiskOperationsConsolePage({super.key, this.repository});
+  const RiskOperationsConsolePage({
+    super.key,
+    required this.navigationId,
+    this.repository,
+    this.diagnosticIdProvider,
+    this.onStateCreated,
+  });
+  final String navigationId;
   final RiskOperationsRepository? repository;
+  final RiskOperationsDiagnosticIdProvider? diagnosticIdProvider;
+  final VoidCallback? onStateCreated;
   @override
   State<RiskOperationsConsolePage> createState() =>
       _RiskOperationsConsolePageState();
@@ -15,6 +24,9 @@ class RiskOperationsConsolePage extends StatefulWidget {
 
 class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
   late final RiskOperationsRepository _repository;
+  late final RiskOperationsDiagnosticIdProvider _diagnosticIds;
+  late final String _pageInstanceId;
+  int _attemptSequence = 0;
   RiskOperationsLoadState _state = RiskOperationsLoadState.loading;
   RiskOperationsPageResult? _result;
   String? _source;
@@ -28,10 +40,27 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? CallableRiskOperationsRepository();
-    _load();
+    _diagnosticIds =
+        widget.diagnosticIdProvider ??
+        RiskOperationsDiagnosticIdProvider.instance;
+    _pageInstanceId = _diagnosticIds.createPageInstanceId();
+    widget.onStateCreated?.call();
+    _load(trigger: RiskOperationsLoadTrigger.initialMount);
   }
 
-  Future<void> _load({String? pageToken}) async {
+  Future<void> _load({
+    required RiskOperationsLoadTrigger trigger,
+    String? pageToken,
+  }) async {
+    _attemptSequence += 1;
+    final diagnostics = RiskOperationsReadDiagnostics(
+      clientTabId: _diagnosticIds.clientTabId,
+      navigationId: widget.navigationId,
+      pageInstanceId: _pageInstanceId,
+      loadAttemptId: _diagnosticIds.createLoadAttemptId(),
+      trigger: trigger,
+      attemptSequence: _attemptSequence,
+    );
     setState(() => _state = RiskOperationsLoadState.loading);
     try {
       final result = await _repository.list(
@@ -45,6 +74,7 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
           occurredFrom: _occurredFrom,
           occurredTo: _occurredTo,
         ),
+        diagnostics,
       );
       if (!mounted) return;
       setState(() {
@@ -95,7 +125,7 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
         );
       }
     });
-    await _load();
+    await _load(trigger: RiskOperationsLoadTrigger.dateChange);
   }
 
   @override
@@ -103,7 +133,7 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
     backgroundColor: MarkaKalkanTheme.background,
     appBar: AppBar(title: const Text('Risk ve Şüpheli Taramalar')),
     body: RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(trigger: RiskOperationsLoadTrigger.pullToRefresh),
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -143,7 +173,7 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
         key: const ValueKey('risk-operations-error'),
         title: 'Risk görünümü yüklenemedi.',
         icon: Icons.error_outline,
-        action: _load,
+        action: () => _load(trigger: RiskOperationsLoadTrigger.errorRetry),
       );
     }
     final result = _result!;
@@ -169,6 +199,13 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
           onPickFrom: () => _pickDate(from: true),
           onPickTo: () => _pickDate(from: false),
           onChanged: (source, riskClass, severity, evidence, candidacy) {
+            if (source == _source &&
+                riskClass == _riskClass &&
+                severity == _severity &&
+                evidence == _evidence &&
+                candidacy == _candidacy) {
+              return;
+            }
             setState(() {
               _source = source;
               _riskClass = riskClass;
@@ -176,7 +213,7 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
               _evidence = evidence;
               _candidacy = candidacy;
             });
-            _load();
+            _load(trigger: RiskOperationsLoadTrigger.filterChange);
           },
         ),
         const SizedBox(height: 18),
@@ -194,7 +231,10 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
             alignment: Alignment.centerRight,
             child: OutlinedButton.icon(
               key: const ValueKey('risk-operations-next-page'),
-              onPressed: () => _load(pageToken: result.nextPageToken),
+              onPressed: () => _load(
+                trigger: RiskOperationsLoadTrigger.pagination,
+                pageToken: result.nextPageToken,
+              ),
               icon: const Icon(Icons.navigate_next),
               label: const Text('Sonraki sayfa'),
             ),

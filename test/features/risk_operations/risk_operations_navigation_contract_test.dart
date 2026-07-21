@@ -1,6 +1,51 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
+import 'package:markakalkan/features/risk_operations/data/risk_operations_models.dart';
+import 'package:markakalkan/features/risk_operations/data/risk_operations_repository.dart';
+import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
+
+class _Observer extends NavigatorObserver {
+  final pushed = <Route<dynamic>>[];
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    pushed.add(route);
+  }
+}
+
+class _Repository implements RiskOperationsRepository {
+  int calls = 0;
+  @override
+  Future<RiskOperationsPageResult> list(
+    RiskOperationsQuery query,
+    RiskOperationsReadDiagnostics diagnostics,
+  ) async {
+    calls++;
+    return RiskOperationsPageResult.fromMap({
+      'contractVersion': 'risk-operations-read-v1',
+      'readOnly': true,
+      'writesPerformed': 0,
+      'summary': {
+        'totalVisibleSignals': 0,
+        'highOrCriticalRisk': 0,
+        'awaitingHumanReview': 0,
+        'strongCaseCandidates': 0,
+        'insufficientEvidence': 0,
+      },
+      'items': <Object>[],
+      'nextPageToken': null,
+      'sourceAvailability': <Object>[],
+    });
+  }
+}
+
+class _Ids extends RiskOperationsDiagnosticIdProvider {
+  _Ids() : super(clientTabId: 'client-tab-test', nextId: _next);
+  static int value = 0;
+  static String _next() => 'navigation-id-${++value}';
+}
 
 void main() {
   test(
@@ -12,7 +57,7 @@ void main() {
       final router = File('lib/app/router.dart').readAsStringSync();
       expect(hub, contains("id: 'risk_scans'"));
       expect(hub, contains("case 'risk_scans':"));
-      expect(hub, contains('AppRouter.openRiskOperationsConsole(context)'));
+      expect(hub, contains('AppRouter.openRiskOperationsConsole'));
       expect(router, contains('openRiskOperationsConsole'));
       expect(router, contains('RiskOperationsConsolePage'));
     },
@@ -42,5 +87,85 @@ void main() {
     ).readAsStringSync();
     expect(home, contains('Müşteriniz orijinalini bilsin'));
     expect(home, isNot(contains('RiskOperationsConsolePage')));
+  });
+
+  testWidgets(
+    'one real Corporate Hub card tap pushes one named page instance',
+    (tester) async {
+      final observer = _Observer();
+      final repository = _Repository();
+      final ids = _Ids();
+      var navigationIdsCreated = 0;
+      var pageInstances = 0;
+      Future<void> open(BuildContext context) {
+        final navigationId = ids.createNavigationId();
+        navigationIdsCreated++;
+        return Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            settings: const RouteSettings(name: '/risk-operations'),
+            builder: (_) => RiskOperationsConsolePage(
+              navigationId: navigationId,
+              repository: repository,
+              diagnosticIdProvider: ids,
+              onStateCreated: () => pageInstances++,
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorObservers: [observer],
+          home: CorporateHubPage(
+            userEmailProvider: () => null,
+            riskOperationsRouteOpener: open,
+          ),
+        ),
+      );
+      observer.pushed.clear();
+      final card = find.text('Risk ve Şüpheli Taramalar');
+      await tester.ensureVisible(card);
+      await tester.tap(card);
+      await tester.pumpAndSettle();
+      expect(observer.pushed, hasLength(1));
+      expect(observer.pushed.single.settings.name, '/risk-operations');
+      expect(navigationIdsCreated, 1);
+      expect(pageInstances, 1);
+      expect(repository.calls, 1);
+    },
+  );
+
+  testWidgets('rapid double card tap currently produces one route push', (
+    tester,
+  ) async {
+    final observer = _Observer();
+    var pushesRequested = 0;
+    Future<void> open(BuildContext context) {
+      pushesRequested++;
+      return Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/risk-operations'),
+          builder: (_) => const Scaffold(body: Text('risk route')),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorObservers: [observer],
+        home: CorporateHubPage(
+          userEmailProvider: () => null,
+          riskOperationsRouteOpener: open,
+        ),
+      ),
+    );
+    observer.pushed.clear();
+    final card = find.text('Risk ve Şüpheli Taramalar');
+    await tester.ensureVisible(card);
+    await tester.tap(card, warnIfMissed: false);
+    await tester.tap(card, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(pushesRequested, 1);
+    expect(observer.pushed, hasLength(1));
   });
 }

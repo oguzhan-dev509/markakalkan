@@ -1,6 +1,73 @@
+import 'dart:math';
+
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'risk_operations_models.dart';
+
+enum RiskOperationsLoadTrigger {
+  initialMount('initial_mount'),
+  dateChange('date_change'),
+  filterChange('filter_change'),
+  pullToRefresh('pull_to_refresh'),
+  errorRetry('error_retry'),
+  pagination('pagination');
+
+  const RiskOperationsLoadTrigger(this.wireValue);
+  final String wireValue;
+}
+
+class RiskOperationsReadDiagnostics {
+  const RiskOperationsReadDiagnostics({
+    required this.clientTabId,
+    required this.navigationId,
+    required this.pageInstanceId,
+    required this.loadAttemptId,
+    required this.trigger,
+    required this.attemptSequence,
+  });
+
+  final String clientTabId;
+  final String navigationId;
+  final String pageInstanceId;
+  final String loadAttemptId;
+  final RiskOperationsLoadTrigger trigger;
+  final int attemptSequence;
+
+  Map<String, dynamic> toMap() => {
+    'clientTabId': clientTabId,
+    'navigationId': navigationId,
+    'pageInstanceId': pageInstanceId,
+    'loadAttemptId': loadAttemptId,
+    'trigger': trigger.wireValue,
+    'attemptSequence': attemptSequence,
+  };
+}
+
+class RiskOperationsDiagnosticIdProvider {
+  RiskOperationsDiagnosticIdProvider({
+    String Function()? nextId,
+    String? clientTabId,
+  }) : _nextId = nextId ?? _secureId,
+       clientTabId = clientTabId ?? (nextId ?? _secureId)();
+
+  static final RiskOperationsDiagnosticIdProvider instance =
+      RiskOperationsDiagnosticIdProvider();
+
+  final String Function() _nextId;
+  final String clientTabId;
+
+  String createNavigationId() => _nextId();
+  String createPageInstanceId() => _nextId();
+  String createLoadAttemptId() => _nextId();
+
+  static String _secureId() {
+    final random = Random.secure();
+    return List<int>.generate(
+      16,
+      (_) => random.nextInt(256),
+    ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+  }
+}
 
 class RiskOperationsQuery {
   const RiskOperationsQuery({
@@ -41,7 +108,10 @@ class RiskOperationsQuery {
 }
 
 abstract interface class RiskOperationsRepository {
-  Future<RiskOperationsPageResult> list(RiskOperationsQuery query);
+  Future<RiskOperationsPageResult> list(
+    RiskOperationsQuery query,
+    RiskOperationsReadDiagnostics diagnostics,
+  );
 }
 
 class CallableRiskOperationsRepository implements RiskOperationsRepository {
@@ -50,10 +120,13 @@ class CallableRiskOperationsRepository implements RiskOperationsRepository {
           functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3');
   final FirebaseFunctions _functions;
   @override
-  Future<RiskOperationsPageResult> list(RiskOperationsQuery query) async {
+  Future<RiskOperationsPageResult> list(
+    RiskOperationsQuery query,
+    RiskOperationsReadDiagnostics diagnostics,
+  ) async {
     final response = await _functions
         .httpsCallable('listRiskOperationsReadModel')
-        .call<Map<String, dynamic>>(query.toMap());
+        .call<Map<String, dynamic>>({...query.toMap(), ...diagnostics.toMap()});
     return RiskOperationsPageResult.fromMap(
       Map<String, dynamic>.from(response.data),
     );
