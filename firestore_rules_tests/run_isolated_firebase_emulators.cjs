@@ -7,6 +7,9 @@ const {spawnSync} = require("node:child_process");
 
 const repo = path.resolve(__dirname, "..");
 const modes = Object.freeze({
+  "rst-1a": {projectId: "demo-markakalkan-rst-1a", only: "firestore",
+    script: path.join(repo, "functions", "risk_operations", "v1",
+        "risk_operations_emulator.test.js")},
   "rst-0l": {projectId: "demo-markakalkan-rst-0l",
     only: "auth,firestore,functions:provisionInternalTenantBrandPilot",
     script: path.join(repo, "firestore_rules_tests",
@@ -98,7 +101,9 @@ try {
   if (result.status !== 0) process.stderr.write(output);
   assert.equal(result.status, 0, "isolated emulator suite failed");
   assert.match(output, /Detected demo project ID/);
-  if (modeName === "rst-0l") {
+  if (modeName === "rst-1a") {
+    assert.match(output, /read-only application harness: PASS; writes 0/);
+  } else if (modeName === "rst-0l") {
     assert.match(output, /provisionInternalTenantBrandPilot/);
     assert.match(output, /Accepted request POST \/demo-markakalkan-rst-0l\/europe-west3\/provisionInternalTenantBrandPilot/);
     assert.match(output, /negative App Check callable protocol: PASS \(3\/3\)/);

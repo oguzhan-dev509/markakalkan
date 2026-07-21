@@ -86,6 +86,9 @@ const {
 } = require(
     "./tenant_management/internal_provisioning/v1/callable",
 );
+const {
+  buildListRiskOperationsReadModel,
+} = require("./risk_operations/v1");
 
 setGlobalOptions({
   region: "europe-west3",
@@ -211,3 +214,5 @@ exports.persistMonitoringRiskSignalPilot =
     buildPersistMonitoringRiskSignalPilot({db});
 exports.provisionInternalTenantBrandPilot =
     buildProvisionInternalTenantBrandPilot({db});
+exports.listRiskOperationsReadModel =
+    buildListRiskOperationsReadModel({db});

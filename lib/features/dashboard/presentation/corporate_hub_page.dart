@@ -112,7 +112,7 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
       description:
           'Tekrarlanan kodları, bölgesel anomalileri ve sahtecilik risklerini inceleyin.',
       icon: Icons.warning_amber_rounded,
-      status: _ModuleStatus.pilot,
+      status: _ModuleStatus.active,
     ),
     _CorporateModule(
       id: 'cases',
@@ -586,6 +586,9 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'supply_security':
         AppRouter.openSupplySecurityHub(context);
+        return;
+      case 'risk_scans':
+        AppRouter.openRiskOperationsConsole(context);
         return;
     }
 
