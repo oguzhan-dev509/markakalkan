@@ -252,8 +252,10 @@ class _AuthorizedManagementCenter extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               const _InternalProvisioningDryRunPanel(),
-              const SizedBox(height: 18),
-              const _InternalRealProvisioningPanel(),
+              if (InternalRealProvisioningGate.enabled) ...[
+                const SizedBox(height: 18),
+                const _InternalRealProvisioningPanel(),
+              ],
             ],
           ),
         ),
