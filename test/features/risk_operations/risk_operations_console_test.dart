@@ -226,9 +226,20 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Şüpheli ilan sinyali'));
       await tester.pumpAndSettle();
-      expect(find.text('Delil kalitesi: corroborated'), findsOneWidget);
-      expect(find.text('Vaka adaylığı: review_candidate'), findsOneWidget);
-      expect(find.text('Zaman bilinmiyor'), findsOneWidget);
+      expect(
+        find.text('Delil kalitesi: Birden Fazla Kaynakla Desteklenmiş'),
+        findsOneWidget,
+      );
+      expect(find.text('Vaka adaylığı: İnceleme Adayı'), findsOneWidget);
+      expect(find.text('Durum: Yeni'), findsOneWidget);
+      expect(find.text('Kaynakta Gözlemlendi · İzleme'), findsOneWidget);
+      expect(
+        find.text('Marka · İzleme · Birden Fazla Kaynakla Desteklenmiş'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('marketplace_abuse'), findsNothing);
+      expect(find.textContaining('review_candidate'), findsNothing);
+      expect(find.textContaining('Zaman bilinmiyor'), findsOneWidget);
       expect(find.text('Ma***an'), findsOneWidget);
       expect(find.textContaining('hukuki geçerlilik'), findsOneWidget);
     },
@@ -253,7 +264,7 @@ void main() {
     expect(dropdowns, findsNWidgets(5));
     await tester.tap(dropdowns.at(1));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('counterfeit').last);
+    await tester.tap(find.text('Sahtecilik').last);
     await tester.pumpAndSettle();
     expect(calls, 2);
     expect(latest?.riskClass, 'counterfeit');
@@ -371,7 +382,7 @@ void main() {
     expect(repository.diagnostics, hasLength(1));
     await tester.tap(dropdowns.at(1));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('counterfeit').last);
+    await tester.tap(find.text('Sahtecilik').last);
     await tester.pumpAndSettle();
     expect(repository.diagnostics, hasLength(2));
     expect(

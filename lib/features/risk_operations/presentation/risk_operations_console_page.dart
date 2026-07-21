@@ -5,6 +5,7 @@ import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import '../data/risk_operations_models.dart';
 import '../data/risk_operations_lifecycle.dart';
 import '../data/risk_operations_repository.dart';
+import 'risk_operations_labels.dart';
 
 class RiskOperationsConsolePage extends StatefulWidget {
   const RiskOperationsConsolePage({
@@ -334,53 +335,39 @@ class _Filters extends StatelessWidget {
         spacing: 12,
         runSpacing: 12,
         children: [
-          _drop('Kaynak', source, const [
-            'monitoring',
-            'traceability',
-            'digital_detective',
-            'shared_risk',
-          ], (v) => onChanged(v, riskClass, severity, evidence, candidacy)),
+          _drop(
+            'Kaynak',
+            source,
+            RiskOperationsLabels.sourceSystems,
+            RiskOperationsLabels.sourceSystem,
+            (v) => onChanged(v, riskClass, severity, evidence, candidacy),
+          ),
           _drop(
             'Risk sınıfı',
             riskClass,
-            const [
-              'counterfeit',
-              'traceability_anomaly',
-              'marketplace_abuse',
-              'identity_risk',
-              'safety_risk',
-              'other',
-            ],
+            RiskOperationsLabels.riskClasses,
+            RiskOperationsLabels.riskClass,
             (v) => onChanged(source, v, severity, evidence, candidacy),
           ),
-          _drop('Önem', severity, const [
-            'info',
-            'low',
-            'medium',
-            'high',
-            'critical',
-          ], (v) => onChanged(source, riskClass, v, evidence, candidacy)),
+          _drop(
+            'Önem',
+            severity,
+            RiskOperationsLabels.severities,
+            RiskOperationsLabels.severity,
+            (v) => onChanged(source, riskClass, v, evidence, candidacy),
+          ),
           _drop(
             'Delil kalitesi',
             evidence,
-            const [
-              'verified_primary',
-              'corroborated',
-              'single_source',
-              'insufficient',
-              'unavailable',
-            ],
+            RiskOperationsLabels.evidenceQualities,
+            RiskOperationsLabels.evidenceQuality,
             (v) => onChanged(source, riskClass, severity, v, candidacy),
           ),
           _drop(
             'Vaka adaylığı',
             candidacy,
-            const [
-              'not_candidate',
-              'review_candidate',
-              'strong_candidate',
-              'blocked_insufficient_evidence',
-            ],
+            RiskOperationsLabels.caseCandidacies,
+            RiskOperationsLabels.caseCandidacy,
             (v) => onChanged(source, riskClass, severity, evidence, v),
           ),
           OutlinedButton.icon(
@@ -403,6 +390,7 @@ class _Filters extends StatelessWidget {
     String label,
     String? value,
     List<String> options,
+    String Function(String) labelFor,
     ValueChanged<String?> onChanged,
   ) => SizedBox(
     width: 220,
@@ -418,7 +406,7 @@ class _Filters extends StatelessWidget {
         ...options.map(
           (item) => DropdownMenuItem(
             value: item,
-            child: Text(item, overflow: TextOverflow.ellipsis),
+            child: Text(labelFor(item), overflow: TextOverflow.ellipsis),
           ),
         ),
       ],
@@ -442,15 +430,23 @@ class _RiskItemCard extends StatelessWidget {
     child: ExpansionTile(
       title: Text(item.title),
       subtitle: Text(
-        '${item.sourceSystem} · ${item.riskClass} · ${item.severity}',
+        '${RiskOperationsLabels.sourceSystem(item.sourceSystem)} · '
+        '${RiskOperationsLabels.riskClass(item.riskClass)} · '
+        '${RiskOperationsLabels.severity(item.severity)}',
       ),
       childrenPadding: const EdgeInsets.all(18),
       children: [
         Align(alignment: Alignment.centerLeft, child: Text(item.summary)),
         const SizedBox(height: 12),
-        _line('Delil kalitesi', item.evidenceQuality.level),
-        _line('Vaka adaylığı', item.caseCandidacy.status),
-        _line('Durum', item.currentStatus),
+        _line(
+          'Delil kalitesi',
+          RiskOperationsLabels.evidenceQuality(item.evidenceQuality.level),
+        ),
+        _line(
+          'Vaka adaylığı',
+          RiskOperationsLabels.caseCandidacy(item.caseCandidacy.status),
+        ),
+        _line('Durum', RiskOperationsLabels.status(item.currentStatus)),
         _line(
           'Olay zamanı',
           item.occurredAt?.toLocal().toString() ?? 'Bilinmiyor',
@@ -466,9 +462,13 @@ class _RiskItemCard extends StatelessWidget {
         ...item.timeline.map(
           (event) => ListTile(
             dense: true,
-            title: Text(event.summary),
+            title: Text(
+              '${RiskOperationsLabels.timelineEvent(event.eventType)} · '
+              '${RiskOperationsLabels.sourceSystem(event.sourceSystem)}',
+            ),
             subtitle: Text(
-              event.occurredAt?.toLocal().toString() ?? 'Zaman bilinmiyor',
+              '${event.summary}\n'
+              '${event.occurredAt?.toLocal().toString() ?? 'Zaman bilinmiyor'}',
             ),
           ),
         ),
@@ -483,7 +483,11 @@ class _RiskItemCard extends StatelessWidget {
           (node) => ListTile(
             dense: true,
             title: Text(node.maskedLabel),
-            subtitle: Text('${node.type} · ${node.evidenceQuality}'),
+            subtitle: Text(
+              '${RiskOperationsLabels.relationshipType(node.type)} · '
+              '${RiskOperationsLabels.sourceSystem(node.sourceSystem)} · '
+              '${RiskOperationsLabels.evidenceQuality(node.evidenceQuality)}',
+            ),
           ),
         ),
         const SizedBox(height: 8),
