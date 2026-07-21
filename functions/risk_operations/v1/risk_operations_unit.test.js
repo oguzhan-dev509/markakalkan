@@ -46,7 +46,7 @@ class FakeDb {
 }
 const contextDocs = {"tenant_memberships": [{id: "membership-1", data: {uid: "user-1", tenantId: "tenant-1", status: "active"}}], "canonical_brands": [{id: "brand-1", data: {tenantId: "tenant-1", status: "active"}}], "monitoring_signals": [], "verificationScans": [], "shared_risk_signals": [], "brands/user-1/digitalDetectiveTasks": []};
 const clock = {now: () => "2026-07-21T00:00:00.000Z"};
-const diagnostics = Object.freeze({clientTabId: "client-tab-0001", navigationId: "navigation-0001", pageInstanceId: "page-instance-0001", loadAttemptId: "load-attempt-0001", trigger: "initial_mount", attemptSequence: 1});
+const diagnostics = Object.freeze({browserTabSessionId: "browser-tab-0001", appBootId: "app-boot-0001", authEpoch: 1, navigationRequestId: "navigation-0001", routeEntryId: "route-entry-0001", pageInstanceId: "page-instance-0001", loadAttemptId: "load-attempt-0001", navigationType: "navigate", routeEntryCause: "corporate_hub_card", pageshowPersisted: false, initialVisibilityState: "visible", documentReferrerPresent: true, serviceWorkerControlled: true, lifecycleQuality: "normal", trigger: "initial_mount", attemptSequence: 1});
 const request = (value = {}) => ({...diagnostics, ...value});
 
 test("request filters are strict and bounded", () => {
@@ -56,7 +56,7 @@ test("request filters are strict and bounded", () => {
 
 test("diagnostic contract accepts canonical triggers and rejects malformed values", () => {
   for (const trigger of ["initial_mount", "date_change", "filter_change", "pull_to_refresh", "error_retry", "pagination"]) assert.equal(riskOperationsDiagnosticsV1(request({trigger})).trigger, trigger);
-  for (const invalid of [request({trigger: "automatic_retry"}), request({attemptSequence: 0}), request({attemptSequence: -1}), request({attemptSequence: 1000001}), request({clientTabId: "x"}), request({loadAttemptId: "x".repeat(65)})]) assert.throws(() => riskOperationsDiagnosticsV1(invalid), /invalid|unsupported/);
+  for (const invalid of [request({trigger: "automatic_retry"}), request({attemptSequence: 0}), request({authEpoch: -1}), request({authEpoch: 1000001}), request({browserTabSessionId: "x"}), request({loadAttemptId: "x".repeat(65)}), request({navigationType: "refresh"}), request({navigationType: null}), request({routeEntryCause: "guessed"}), request({pageshowPersisted: "false"}), request({initialVisibilityState: "foreground"}), request({lifecycleQuality: "trusted"})]) assert.throws(() => riskOperationsDiagnosticsV1(invalid), /invalid|unsupported|required/);
 });
 
 test("evidence quality covers every canonical level", () => {
@@ -128,8 +128,8 @@ test("callable requires Auth and App Check and exposes immutable metadata", asyn
   const result = await handler({auth: {uid: "user-1", token: {email: "private@example.test"}}, app: {appId: "verified", token: "raw-app-check-token"}, data: request({query: "private-query"})});
   assert.equal(result.readOnly, true); assert.equal(result.writesPerformed, 0);
   assert.equal(logs.length, 2); assert.equal(logs[0].eventName, "risk_operations_read_started"); assert.equal(logs[1].eventName, "risk_operations_read_completed"); assert.equal(logs[1].transactionCommitted, false); assert.equal(logs[1].writeAttempted, false);
-  const serialized = JSON.stringify(logs); for (const key of ["clientTabId", "navigationId", "pageInstanceId", "loadAttemptId"]) assert.equal(serialized.includes(diagnostics[key]), false); for (const sensitive of ["user-1", "verified", "private@example.test", "raw-app-check-token", "private-query"]) assert.equal(serialized.includes(sensitive), false);
-  assert.equal(diagnosticLogFields(diagnostics).hashedClientTabId.length, 64);
+  const serialized = JSON.stringify(logs); for (const key of ["browserTabSessionId", "appBootId", "navigationRequestId", "routeEntryId", "pageInstanceId", "loadAttemptId"]) assert.equal(serialized.includes(diagnostics[key]), false); for (const sensitive of ["user-1", "verified", "private@example.test", "raw-app-check-token", "private-query"]) assert.equal(serialized.includes(sensitive), false);
+  const fields = diagnosticLogFields(diagnostics); for (const key of ["hashedBrowserTabSessionId", "hashedAppBootId", "hashedNavigationRequestId", "hashedRouteEntryId", "hashedPageInstanceId", "hashedLoadAttemptId"]) assert.equal(fields[key].length, 64);
 });
 
 test("diagnostics never grant tenant authority or bypass membership", async () => {

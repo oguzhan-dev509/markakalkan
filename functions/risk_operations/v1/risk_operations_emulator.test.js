@@ -15,7 +15,7 @@ const paths = [
   "canonical_brands/brand-1",
   "monitoring_signals/signal-1",
 ];
-const diagnostics = {clientTabId: "client-tab-0001", navigationId: "navigation-0001", pageInstanceId: "page-instance-0001", loadAttemptId: "load-attempt-0001", trigger: "initial_mount", attemptSequence: 1};
+const diagnostics = {browserTabSessionId: "browser-tab-0001", appBootId: "app-boot-0001", authEpoch: 1, navigationRequestId: "navigation-0001", routeEntryId: "route-entry-0001", pageInstanceId: "page-instance-0001", loadAttemptId: "load-attempt-0001", navigationType: "navigate", routeEntryCause: "corporate_hub_card", pageshowPersisted: false, initialVisibilityState: "visible", documentReferrerPresent: true, serviceWorkerControlled: true, lifecycleQuality: "normal", trigger: "initial_mount", attemptSequence: 1};
 
 async function state() {
   const snapshots = await db.getAll(...paths.map((path) => db.doc(path)));

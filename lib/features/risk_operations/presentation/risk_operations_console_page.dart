@@ -3,19 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 
 import '../data/risk_operations_models.dart';
+import '../data/risk_operations_lifecycle.dart';
 import '../data/risk_operations_repository.dart';
 
 class RiskOperationsConsolePage extends StatefulWidget {
   const RiskOperationsConsolePage({
     super.key,
-    required this.navigationId,
+    required this.navigationRequestId,
+    required this.routeEntryCause,
     this.repository,
-    this.diagnosticIdProvider,
+    this.lifecycleProvider,
     this.onStateCreated,
   });
-  final String navigationId;
+  final String navigationRequestId;
+  final RiskOperationsRouteEntryCause routeEntryCause;
   final RiskOperationsRepository? repository;
-  final RiskOperationsDiagnosticIdProvider? diagnosticIdProvider;
+  final RiskOperationsLifecycleProvider? lifecycleProvider;
   final VoidCallback? onStateCreated;
   @override
   State<RiskOperationsConsolePage> createState() =>
@@ -24,7 +27,8 @@ class RiskOperationsConsolePage extends StatefulWidget {
 
 class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
   late final RiskOperationsRepository _repository;
-  late final RiskOperationsDiagnosticIdProvider _diagnosticIds;
+  late final RiskOperationsLifecycleProvider _lifecycle;
+  late final String _routeEntryId;
   late final String _pageInstanceId;
   int _attemptSequence = 0;
   RiskOperationsLoadState _state = RiskOperationsLoadState.loading;
@@ -40,10 +44,10 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? CallableRiskOperationsRepository();
-    _diagnosticIds =
-        widget.diagnosticIdProvider ??
-        RiskOperationsDiagnosticIdProvider.instance;
-    _pageInstanceId = _diagnosticIds.createPageInstanceId();
+    _lifecycle =
+        widget.lifecycleProvider ?? RiskOperationsLifecycleProvider.instance;
+    _routeEntryId = _lifecycle.createRouteEntryId();
+    _pageInstanceId = _lifecycle.createPageInstanceId();
     widget.onStateCreated?.call();
     _load(trigger: RiskOperationsLoadTrigger.initialMount);
   }
@@ -54,10 +58,22 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
   }) async {
     _attemptSequence += 1;
     final diagnostics = RiskOperationsReadDiagnostics(
-      clientTabId: _diagnosticIds.clientTabId,
-      navigationId: widget.navigationId,
+      browserTabSessionId: _lifecycle.browserTabSessionId,
+      appBootId: _lifecycle.appBootId,
+      authEpoch: _lifecycle.authEpoch,
+      navigationRequestId: widget.navigationRequestId,
+      routeEntryId: _routeEntryId,
+      navigationType: _lifecycle.browserContext.navigationType,
+      routeEntryCause: widget.routeEntryCause,
+      pageshowPersisted: _lifecycle.browserContext.pageshowPersisted,
+      initialVisibilityState: _lifecycle.browserContext.initialVisibilityState,
+      documentReferrerPresent:
+          _lifecycle.browserContext.documentReferrerPresent,
+      serviceWorkerControlled:
+          _lifecycle.browserContext.serviceWorkerControlled,
+      lifecycleQuality: _lifecycle.lifecycleQuality,
       pageInstanceId: _pageInstanceId,
-      loadAttemptId: _diagnosticIds.createLoadAttemptId(),
+      loadAttemptId: _lifecycle.createLoadAttemptId(),
       trigger: trigger,
       attemptSequence: _attemptSequence,
     );

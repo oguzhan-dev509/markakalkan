@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_models.dart';
+import 'package:markakalkan/features/risk_operations/data/risk_operations_lifecycle.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_repository.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
 
@@ -21,8 +22,12 @@ class FakeRepository implements RiskOperationsRepository {
   ) => response(query, diagnostics);
 }
 
-class DeterministicIds extends RiskOperationsDiagnosticIdProvider {
-  DeterministicIds() : super(clientTabId: 'client-tab-test', nextId: _next);
+class DeterministicIds extends RiskOperationsLifecycleProvider {
+  DeterministicIds()
+    : super(
+        nextId: _next,
+        browserContext: const RiskOperationsBrowserContext(),
+      );
   static int _value = 0;
   static String _next() => 'diagnostic-${++_value}';
 }
@@ -130,9 +135,10 @@ Map<String, dynamic> itemMap() => {
 
 Widget app(RiskOperationsRepository repository) => MaterialApp(
   home: RiskOperationsConsolePage(
-    navigationId: 'navigation-test',
+    navigationRequestId: 'navigation-test',
+    routeEntryCause: RiskOperationsRouteEntryCause.corporateHubCard,
     repository: repository,
-    diagnosticIdProvider: DeterministicIds(),
+    lifecycleProvider: DeterministicIds(),
   ),
 );
 
@@ -297,9 +303,10 @@ void main() {
       home: MediaQuery(
         data: MediaQueryData(size: Size(width, 700)),
         child: RiskOperationsConsolePage(
-          navigationId: 'navigation-test',
+          navigationRequestId: 'navigation-test',
+          routeEntryCause: RiskOperationsRouteEntryCause.corporateHubCard,
           repository: repository,
-          diagnosticIdProvider: ids,
+          lifecycleProvider: ids,
           onStateCreated: () => stateInstances++,
         ),
       ),
@@ -333,9 +340,10 @@ void main() {
           builder: (_, _, _) => ValueListenableBuilder<int>(
             valueListenable: appCheckEmission,
             builder: (_, _, _) => RiskOperationsConsolePage(
-              navigationId: 'navigation-test',
+              navigationRequestId: 'navigation-test',
+              routeEntryCause: RiskOperationsRouteEntryCause.corporateHubCard,
               repository: repository,
-              diagnosticIdProvider: DeterministicIds(),
+              lifecycleProvider: DeterministicIds(),
             ),
           ),
         ),

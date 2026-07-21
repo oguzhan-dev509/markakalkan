@@ -1,7 +1,6 @@
-import 'dart:math';
-
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'risk_operations_lifecycle.dart';
 import 'risk_operations_models.dart';
 
 enum RiskOperationsLoadTrigger {
@@ -18,55 +17,59 @@ enum RiskOperationsLoadTrigger {
 
 class RiskOperationsReadDiagnostics {
   const RiskOperationsReadDiagnostics({
-    required this.clientTabId,
-    required this.navigationId,
+    required this.browserTabSessionId,
+    required this.appBootId,
+    required this.authEpoch,
+    required this.navigationRequestId,
+    required this.routeEntryId,
+    required this.navigationType,
+    required this.routeEntryCause,
+    required this.pageshowPersisted,
+    required this.initialVisibilityState,
+    required this.documentReferrerPresent,
+    required this.serviceWorkerControlled,
+    required this.lifecycleQuality,
     required this.pageInstanceId,
     required this.loadAttemptId,
     required this.trigger,
     required this.attemptSequence,
   });
 
-  final String clientTabId;
-  final String navigationId;
+  final String browserTabSessionId;
+  final String appBootId;
+  final int authEpoch;
+  final String navigationRequestId;
+  final String routeEntryId;
+  final RiskOperationsNavigationType navigationType;
+  final RiskOperationsRouteEntryCause routeEntryCause;
+  final bool pageshowPersisted;
+  final String initialVisibilityState;
+  final bool documentReferrerPresent;
+  final bool serviceWorkerControlled;
+  final RiskOperationsLifecycleQuality lifecycleQuality;
   final String pageInstanceId;
   final String loadAttemptId;
   final RiskOperationsLoadTrigger trigger;
   final int attemptSequence;
 
   Map<String, dynamic> toMap() => {
-    'clientTabId': clientTabId,
-    'navigationId': navigationId,
+    'browserTabSessionId': browserTabSessionId,
+    'appBootId': appBootId,
+    'authEpoch': authEpoch,
+    'navigationRequestId': navigationRequestId,
+    'routeEntryId': routeEntryId,
+    'navigationType': navigationType.wireValue,
+    'routeEntryCause': routeEntryCause.wireValue,
+    'pageshowPersisted': pageshowPersisted,
+    'initialVisibilityState': initialVisibilityState,
+    'documentReferrerPresent': documentReferrerPresent,
+    'serviceWorkerControlled': serviceWorkerControlled,
+    'lifecycleQuality': lifecycleQuality.wireValue,
     'pageInstanceId': pageInstanceId,
     'loadAttemptId': loadAttemptId,
     'trigger': trigger.wireValue,
     'attemptSequence': attemptSequence,
   };
-}
-
-class RiskOperationsDiagnosticIdProvider {
-  RiskOperationsDiagnosticIdProvider({
-    String Function()? nextId,
-    String? clientTabId,
-  }) : _nextId = nextId ?? _secureId,
-       clientTabId = clientTabId ?? (nextId ?? _secureId)();
-
-  static final RiskOperationsDiagnosticIdProvider instance =
-      RiskOperationsDiagnosticIdProvider();
-
-  final String Function() _nextId;
-  final String clientTabId;
-
-  String createNavigationId() => _nextId();
-  String createPageInstanceId() => _nextId();
-  String createLoadAttemptId() => _nextId();
-
-  static String _secureId() {
-    final random = Random.secure();
-    return List<int>.generate(
-      16,
-      (_) => random.nextInt(256),
-    ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
-  }
 }
 
 class RiskOperationsQuery {

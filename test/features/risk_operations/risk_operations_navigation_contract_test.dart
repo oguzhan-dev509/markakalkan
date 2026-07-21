@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_models.dart';
+import 'package:markakalkan/features/risk_operations/data/risk_operations_lifecycle.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_repository.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
 
@@ -41,8 +42,12 @@ class _Repository implements RiskOperationsRepository {
   }
 }
 
-class _Ids extends RiskOperationsDiagnosticIdProvider {
-  _Ids() : super(clientTabId: 'client-tab-test', nextId: _next);
+class _Ids extends RiskOperationsLifecycleProvider {
+  _Ids()
+    : super(
+        nextId: _next,
+        browserContext: const RiskOperationsBrowserContext(),
+      );
   static int value = 0;
   static String _next() => 'navigation-id-${++value}';
 }
@@ -98,15 +103,16 @@ void main() {
       var navigationIdsCreated = 0;
       var pageInstances = 0;
       Future<void> open(BuildContext context) {
-        final navigationId = ids.createNavigationId();
+        final navigationId = ids.createNavigationRequestId();
         navigationIdsCreated++;
         return Navigator.of(context).push(
           MaterialPageRoute<void>(
             settings: const RouteSettings(name: '/risk-operations'),
             builder: (_) => RiskOperationsConsolePage(
-              navigationId: navigationId,
+              navigationRequestId: navigationId,
+              routeEntryCause: RiskOperationsRouteEntryCause.corporateHubCard,
               repository: repository,
-              diagnosticIdProvider: ids,
+              lifecycleProvider: ids,
               onStateCreated: () => pageInstances++,
             ),
           ),
