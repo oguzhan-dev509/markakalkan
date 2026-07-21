@@ -133,6 +133,53 @@ Map<String, dynamic> itemMap() => {
   'adapterVersion': 'risk-operations-read-adapter-v1',
 };
 
+Map<String, dynamic> traceabilityItemMap() => {
+  ...itemMap(),
+  'signalId': 'signal-traceability',
+  'sourceSystem': 'traceability',
+  'riskClass': 'traceability_anomaly',
+  'severity': 'medium',
+  'summary': 'repeat_scan_observed, rapid_repeat_scan',
+  'currentStatus': 'escalated',
+  'occurredAt': '2026-07-16T13:19:00.000Z',
+  'evidenceQuality': {
+    'level': 'verified_primary',
+    'reasonCodes': ['evidence.primary_verified'],
+    'evaluatorVersion': 'risk-operations-evaluator-v1',
+  },
+  'caseCandidacy': {
+    'status': 'review_candidate',
+    'reasonCodes': ['case.human_review_threshold'],
+    'evaluatedAt': '2026-07-16T13:20:00.000Z',
+    'evaluatorVersion': 'risk-operations-evaluator-v1',
+    'requiresHumanReview': true,
+  },
+  'timeline': [
+    {
+      'eventId': 'event-traceability',
+      'eventType': 'source_observed',
+      'occurredAt': '2026-07-16T13:19:00.000Z',
+      'occurredAtStatus': 'known',
+      'sourceSystem': 'traceability',
+      'summary': 'rapid_repeat_scan',
+      'evidenceReferenceCount': 1,
+    },
+  ],
+  'relationshipGraph': {
+    'nodes': [
+      {
+        'canonicalId': 'brand-1',
+        'type': 'brand',
+        'maskedLabel': 'Ma***an',
+        'sourceSystem': 'traceability',
+        'confidence': .8,
+        'evidenceQuality': 'verified_primary',
+      },
+    ],
+    'edges': [],
+  },
+};
+
 Widget app(RiskOperationsRepository repository) => MaterialApp(
   home: RiskOperationsConsolePage(
     navigationRequestId: 'navigation-test',
@@ -276,6 +323,117 @@ void main() {
       find.byKey(const ValueKey('risk-operations-date-to')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('every dropdown renders Turkish labels', (tester) async {
+    final groups = <int, List<String>>{
+      0: ['İzleme', 'İzlenebilirlik', 'Dijital Dedektif', 'Ortak Risk'],
+      1: [
+        'Sahtecilik',
+        'İzlenebilirlik Anomalisi',
+        'Dijital Pazar İhlali',
+        'Kimlik Riski',
+        'Güvenlik Riski',
+        'Diğer',
+      ],
+      2: ['Bilgilendirme', 'Düşük', 'Orta', 'Yüksek', 'Kritik'],
+      3: [
+        'Doğrulanmış Birincil Delil',
+        'Birden Fazla Kaynakla Desteklenmiş',
+        'Tek Kaynak',
+        'Yetersiz Delil',
+        'Değerlendirilemiyor',
+      ],
+      4: [
+        'Vaka Adayı Değil',
+        'İnceleme Adayı',
+        'Güçlü Vaka Adayı',
+        'Yetersiz Delil Nedeniyle Engelli',
+      ],
+    };
+    for (final entry in groups.entries) {
+      await tester.pumpWidget(
+        app(
+          FakeRepository(
+            (_, _) async => RiskOperationsPageResult.fromMap(responseMap()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final dropdowns = find.byType(DropdownButtonFormField<String>);
+      await tester.tap(dropdowns.at(entry.key));
+      await tester.pumpAndSettle();
+      for (final label in entry.value) {
+        expect(find.text(label), findsWidgets);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('Turkish filter labels preserve canonical request values', (
+    tester,
+  ) async {
+    final repository = RecordingRepository();
+    await tester.pumpWidget(app(repository));
+    await tester.pumpAndSettle();
+    var dropdowns = find.byType(DropdownButtonFormField<String>);
+    await tester.tap(dropdowns.at(2));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Orta').last);
+    await tester.pumpAndSettle();
+    expect(repository.queries.last.severity, 'medium');
+    dropdowns = find.byType(DropdownButtonFormField<String>);
+    await tester.tap(dropdowns.at(4));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('İnceleme Adayı').last);
+    await tester.pumpAndSettle();
+    expect(repository.queries.last.severity, 'medium');
+    expect(repository.queries.last.caseCandidacy, 'review_candidate');
+  });
+
+  testWidgets('rendered console contains no raw snake case presentation text', (
+    tester,
+  ) async {
+    final result = RiskOperationsPageResult.fromMap(
+      responseMap(items: [traceabilityItemMap()]),
+    );
+    await tester.pumpWidget(app(FakeRepository((_, _) async => result)));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('İzlenebilirlik · İzlenebilirlik Anomalisi · Orta'),
+      findsOneWidget,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Şüpheli ilan sinyali'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Tekrarlanan Tarama Tespit Edildi · Kısa Sürede Tekrarlanan Tarama',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Delil kalitesi: Doğrulanmış Birincil Delil'),
+      findsOneWidget,
+    );
+    expect(find.text('Vaka adaylığı: İnceleme Adayı'), findsOneWidget);
+    expect(find.text('Durum: Üst İncelemeye Aktarıldı'), findsOneWidget);
+    expect(find.text('• Birincil Delil Doğrulandı'), findsOneWidget);
+    expect(find.text('• İnsan İncelemesi Eşiğine Ulaştı'), findsOneWidget);
+    expect(find.text('Kaynakta Gözlemlendi · İzlenebilirlik'), findsOneWidget);
+    expect(
+      find.text('Marka · İzlenebilirlik · Doğrulanmış Birincil Delil'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('16 Temmuz 2026, 16:19'), findsWidgets);
+    final visibleText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data ?? '')
+        .where((text) => text.isNotEmpty)
+        .join('\n');
+    expect(RegExp(r'\b[a-z]+(?:_[a-z]+)+\b').hasMatch(visibleText), isFalse);
   });
 
   testWidgets('pagination token triggers the next read-only query', (

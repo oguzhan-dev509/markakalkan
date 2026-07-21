@@ -410,6 +410,12 @@ class _Filters extends StatelessWidget {
           ),
         ),
       ],
+      selectedItemBuilder: (context) => [
+        const Text('Tümü'),
+        ...options.map(
+          (item) => Text(labelFor(item), overflow: TextOverflow.ellipsis),
+        ),
+      ],
       onChanged: onChanged,
     ),
   );
@@ -436,7 +442,10 @@ class _RiskItemCard extends StatelessWidget {
       ),
       childrenPadding: const EdgeInsets.all(18),
       children: [
-        Align(alignment: Alignment.centerLeft, child: Text(item.summary)),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(RiskOperationsLabels.summary(item.summary)),
+        ),
         const SizedBox(height: 12),
         _line(
           'Delil kalitesi',
@@ -446,11 +455,30 @@ class _RiskItemCard extends StatelessWidget {
           'Vaka adaylığı',
           RiskOperationsLabels.caseCandidacy(item.caseCandidacy.status),
         ),
+        if (item.evidenceQuality.reasonCodes.isNotEmpty ||
+            item.caseCandidacy.reasonCodes.isNotEmpty) ...[
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'İnceleme gerekçeleri',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          ...{
+            ...item.evidenceQuality.reasonCodes,
+            ...item.caseCandidacy.reasonCodes,
+          }.map(
+            (reason) => Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('• ${RiskOperationsLabels.reasonCode(reason)}'),
+              ),
+            ),
+          ),
+        ],
         _line('Durum', RiskOperationsLabels.status(item.currentStatus)),
-        _line(
-          'Olay zamanı',
-          item.occurredAt?.toLocal().toString() ?? 'Bilinmiyor',
-        ),
+        _line('Olay zamanı', RiskOperationsLabels.dateTime(item.occurredAt)),
         const Divider(),
         const Align(
           alignment: Alignment.centerLeft,
@@ -467,8 +495,8 @@ class _RiskItemCard extends StatelessWidget {
               '${RiskOperationsLabels.sourceSystem(event.sourceSystem)}',
             ),
             subtitle: Text(
-              '${event.summary}\n'
-              '${event.occurredAt?.toLocal().toString() ?? 'Zaman bilinmiyor'}',
+              '${RiskOperationsLabels.summary(event.summary)}\n'
+              '${RiskOperationsLabels.dateTime(event.occurredAt)}',
             ),
           ),
         ),
@@ -484,7 +512,7 @@ class _RiskItemCard extends StatelessWidget {
             dense: true,
             title: Text(node.maskedLabel),
             subtitle: Text(
-              '${RiskOperationsLabels.relationshipType(node.type)} · '
+              '${RiskOperationsLabels.relationshipNode(node.type)} · '
               '${RiskOperationsLabels.sourceSystem(node.sourceSystem)} · '
               '${RiskOperationsLabels.evidenceQuality(node.evidenceQuality)}',
             ),

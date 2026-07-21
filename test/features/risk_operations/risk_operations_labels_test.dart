@@ -87,8 +87,69 @@ void main() {
       'Bilinmeyen Olay',
     );
     expect(
-      RiskOperationsLabels.relationshipType('future_node'),
+      RiskOperationsLabels.relationshipNode('future_node'),
       'Diğer İlişki',
+    );
+    expect(
+      RiskOperationsLabels.relationshipEdge('future_edge'),
+      'Diğer İlişki',
+    );
+    expect(
+      RiskOperationsLabels.reasonCode('future_reason'),
+      'Diğer İnceleme Gerekçesi',
+    );
+  });
+
+  test('all repository reason codes have Turkish labels', () {
+    const reasons = {
+      'repeat_scan_observed': 'Tekrarlanan Tarama Tespit Edildi',
+      'repeated_scan': 'Tekrarlanan Tarama Tespit Edildi',
+      'rapid_repeat_scan': 'Kısa Sürede Tekrarlanan Tarama',
+      'platform_changed': 'Tarama Platformu Değişti',
+      'revoked_code': 'İptal Edilmiş Kod Kullanıldı',
+      'evidence.assessment_unavailable': 'Delil Değerlendirmesi Yapılamadı',
+      'evidence.primary_verified': 'Birincil Delil Doğrulandı',
+      'evidence.multiple_independent_sources':
+          'Birden Fazla Bağımsız Kaynak Doğruladı',
+      'evidence.single_source_only': 'Yalnız Tek Kaynak Bulunuyor',
+      'evidence.references_missing': 'Delil Referansı Bulunmuyor',
+      'case.evidence_insufficient': 'Vaka İçin Delil Yetersiz',
+      'case.high_risk_corroborated':
+          'Yüksek Risk Birden Fazla Kaynakla Doğrulandı',
+      'case.human_review_threshold': 'İnsan İncelemesi Eşiğine Ulaştı',
+      'case.threshold_not_met': 'Vaka Adaylığı Eşiğine Ulaşmadı',
+      'source.read_failed': 'Kaynak Geçici Olarak Okunamadı',
+    };
+    for (final entry in reasons.entries) {
+      expect(RiskOperationsLabels.reasonCode(entry.key), entry.value);
+    }
+  });
+
+  test('all source status values have Turkish labels', () {
+    expect(RiskOperationsLabels.status('active'), 'Aktif');
+    expect(RiskOperationsLabels.status('pending'), 'Bekliyor');
+    expect(RiskOperationsLabels.status('completed'), 'Tamamlandı');
+    expect(
+      RiskOperationsLabels.status('escalated'),
+      'Üst İncelemeye Aktarıldı',
+    );
+    expect(RiskOperationsLabels.status('closed'), 'Kapatıldı');
+    expect(RiskOperationsLabels.status('archived'), 'Arşivlendi');
+    expect(RiskOperationsLabels.status('unknown'), 'Bilinmiyor');
+  });
+
+  test('reason-only summaries and dates are presentation-safe', () {
+    expect(
+      RiskOperationsLabels.summary('repeat_scan_observed, rapid_repeat_scan'),
+      'Tekrarlanan Tarama Tespit Edildi · Kısa Sürede Tekrarlanan Tarama',
+    );
+    expect(
+      RiskOperationsLabels.summary('Mevcut Türkçe başlık'),
+      'Mevcut Türkçe başlık',
+    );
+    expect(
+      RiskOperationsLabels.dateTime(DateTime(2026, 7, 16, 16, 19)),
+      '16 Temmuz 2026, 16:19',
     );
   });
 }
