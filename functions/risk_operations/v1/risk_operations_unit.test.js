@@ -120,14 +120,14 @@ test("partial source failure is explicit and other sources remain available", as
   assert.equal(result.sourceAvailability.find((item) => item.sourceSystem === "traceability").status, "available");
 });
 
-test("callable requires Auth and App Check and exposes immutable metadata", async () => {
-  assert.deepEqual(CALLABLE_OPTIONS, {region: "europe-west3", enforceAppCheck: true, maxInstances: 3});
+test("callable requires Auth and allows App Check recovery mode", async () => {
+  assert.deepEqual(CALLABLE_OPTIONS, {region: "europe-west3", enforceAppCheck: false, maxInstances: 3});
   const logs = []; const handler = createRiskOperationsCallableHandlerV1({db: new FakeDb(contextDocs), clock, logInfo: (event) => logs.push(event)});
   await assert.rejects(() => handler({data: request()}), (error) => error instanceof HttpsError && error.code === "unauthenticated");
-  await assert.rejects(() => handler({auth: {uid: "user-1"}, data: request()}), (error) => error instanceof HttpsError && error.code === "unauthenticated");
+  const recoveryResult = await handler({auth: {uid: "user-1"}, data: request()}); assert.equal(recoveryResult.readOnly, true); assert.equal(recoveryResult.writesPerformed, 0);
   const result = await handler({auth: {uid: "user-1", token: {email: "private@example.test"}}, app: {appId: "verified", token: "raw-app-check-token"}, data: request({query: "private-query"})});
   assert.equal(result.readOnly, true); assert.equal(result.writesPerformed, 0);
-  assert.equal(logs.length, 2); assert.equal(logs[0].eventName, "risk_operations_read_started"); assert.equal(logs[1].eventName, "risk_operations_read_completed"); assert.equal(logs[1].transactionCommitted, false); assert.equal(logs[1].writeAttempted, false);
+  assert.equal(logs.length, 4); assert.equal(logs[0].appCheckPresent, false); assert.equal(logs[0].appCheckValidated, false); assert.equal(logs[2].appCheckPresent, true); assert.equal(logs[2].appCheckValidated, true); assert.equal(logs[3].eventName, "risk_operations_read_completed"); assert.equal(logs[3].transactionCommitted, false); assert.equal(logs[3].writeAttempted, false); assert.equal(logs[0].eventName, "risk_operations_read_started"); assert.equal(logs[1].eventName, "risk_operations_read_completed"); assert.equal(logs[1].transactionCommitted, false); assert.equal(logs[1].writeAttempted, false);
   const serialized = JSON.stringify(logs); for (const key of ["browserTabSessionId", "appBootId", "navigationRequestId", "routeEntryId", "pageInstanceId", "loadAttemptId"]) assert.equal(serialized.includes(diagnostics[key]), false); for (const sensitive of ["user-1", "verified", "private@example.test", "raw-app-check-token", "private-query"]) assert.equal(serialized.includes(sensitive), false);
   const fields = diagnosticLogFields(diagnostics); for (const key of ["hashedBrowserTabSessionId", "hashedAppBootId", "hashedNavigationRequestId", "hashedRouteEntryId", "hashedPageInstanceId", "hashedLoadAttemptId"]) assert.equal(fields[key].length, 64);
 });

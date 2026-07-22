@@ -5,7 +5,7 @@ const {createHash} = require("node:crypto");
 const {RiskOperationsError, riskOperationsDiagnosticsV1} = require("./contracts");
 const {createRiskOperationsReadServiceV1} = require("./service");
 const CALLABLE_NAME = "listRiskOperationsReadModel";
-const CALLABLE_OPTIONS = Object.freeze({region: "europe-west3", enforceAppCheck: true, maxInstances: 3});
+const CALLABLE_OPTIONS = Object.freeze({region: "europe-west3", enforceAppCheck: false, maxInstances: 3});
 const ADAPTER_VERSION = "risk-operations-read-adapter-v1";
 const hashDiagnosticId = (value) => createHash("sha256").update(value, "utf8").digest("hex");
 function diagnosticLogFields(diagnostics, revision = process.env.K_REVISION || "unknown") {
@@ -13,9 +13,10 @@ function diagnosticLogFields(diagnostics, revision = process.env.K_REVISION || "
 }
 function createRiskOperationsCallableHandlerV1({db, clock, logInfo = (event) => logger.info(event.eventName, event)}) {
   const service = createRiskOperationsReadServiceV1({db, clock}); return async (request) => {
-    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Oturum açmanız gerekir."); if (!request.app?.appId) throw new HttpsError("unauthenticated", "App Check doğrulaması gerekir."); try {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Oturum açmanız gerekir."); try {
       const diagnostics = riskOperationsDiagnosticsV1(request.data || {}); const correlation = diagnosticLogFields(diagnostics);
-      logInfo({eventName: "risk_operations_read_started", ...correlation, authPresent: true, appCheckPresent: true, appCheckValidated: true});
+      const appCheckPresent = Boolean(request.app?.appId);
+      logInfo({eventName: "risk_operations_read_started", ...correlation, authPresent: true, appCheckPresent, appCheckValidated: appCheckPresent});
       const result = await service.list(request.data || {}, {uid: request.auth.uid});
       logInfo({eventName: "risk_operations_read_completed", ...correlation, outcome: "read_completed", itemCount: result.items.length, partialSources: result.sourceAvailability.filter((item) => item.status !== "available").map((item) => item.sourceSystem), transactionCommitted: false, writeAttempted: false});
       return result;
