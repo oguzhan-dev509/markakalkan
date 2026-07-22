@@ -4,14 +4,17 @@ import 'package:flutter/foundation.dart';
 enum AppCheckBootstrapState { uninitialized, activating, ready, unavailable }
 
 typedef AppCheckActivator = Future<void> Function(String siteKey);
+typedef AppCheckAutoRefreshEnabler = Future<void> Function(bool enabled);
 typedef AppCheckTokenProbe = Future<String?> Function();
 
 class AppCheckBootstrap extends ChangeNotifier {
   AppCheckBootstrap({
     AppCheckActivator? activate,
+    AppCheckAutoRefreshEnabler? enableAutoRefresh,
     AppCheckTokenProbe? tokenProbe,
     bool? isWeb,
   }) : _activate = activate ?? _activateEnterprise,
+       _enableAutoRefresh = enableAutoRefresh ?? _enableTokenAutoRefresh,
        _tokenProbe = tokenProbe ?? _probeToken,
        _isWeb = isWeb ?? kIsWeb;
 
@@ -20,6 +23,7 @@ class AppCheckBootstrap extends ChangeNotifier {
   static final AppCheckBootstrap instance = AppCheckBootstrap();
 
   final AppCheckActivator _activate;
+  final AppCheckAutoRefreshEnabler _enableAutoRefresh;
   final AppCheckTokenProbe _tokenProbe;
   final bool _isWeb;
   AppCheckBootstrapState _state = AppCheckBootstrapState.uninitialized;
@@ -41,6 +45,7 @@ class AppCheckBootstrap extends ChangeNotifier {
 
     try {
       await _activate(configuredKey);
+      await _enableAutoRefresh(true);
       _setState(AppCheckBootstrapState.ready);
     } catch (_) {
       _setState(AppCheckBootstrapState.unavailable);
@@ -67,6 +72,9 @@ class AppCheckBootstrap extends ChangeNotifier {
       providerWeb: ReCaptchaEnterpriseProvider(siteKey),
     );
   }
+
+  static Future<void> _enableTokenAutoRefresh(bool enabled) =>
+      FirebaseAppCheck.instance.setTokenAutoRefreshEnabled(enabled);
 
   static Future<String?> _probeToken() => FirebaseAppCheck.instance.getToken();
 }
