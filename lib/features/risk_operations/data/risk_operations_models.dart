@@ -7,6 +7,18 @@ enum RiskOperationsLoadState {
   noActiveTenant,
 }
 
+class RiskOperationsFieldTypeException implements Exception {
+  const RiskOperationsFieldTypeException({
+    required this.fieldPath,
+    required this.expectedType,
+    required this.actualRuntimeType,
+  });
+
+  final String fieldPath;
+  final String expectedType;
+  final String actualRuntimeType;
+}
+
 class EvidenceQualityProjection {
   const EvidenceQualityProjection({
     required this.level,
@@ -260,17 +272,22 @@ void _validatePageResult(Map<String, dynamic> map) {
   }
   _optionalType<String>(map, 'nextPageToken');
   final availability = _requireMapList(map, 'sourceAvailability');
-  for (final source in availability) {
-    _requireType<String>(source, 'sourceSystem');
-    _requireType<String>(source, 'status');
+  for (var index = 0; index < availability.length; index++) {
+    final source = availability[index];
+    _requireType<String>(
+      source,
+      'sourceSystem',
+      'sourceAvailability[$index].sourceSystem',
+    );
+    _requireType<String>(source, 'status', 'sourceAvailability[$index].status');
   }
   final items = _requireMapList(map, 'items');
-  for (final item in items) {
-    _validateItem(item);
+  for (var index = 0; index < items.length; index++) {
+    _validateItem(items[index], 'items[$index]');
   }
 }
 
-void _validateItem(Map<String, dynamic> item) {
+void _validateItem(Map<String, dynamic> item, String path) {
   for (final field in const [
     'signalId',
     'sourceSystem',
@@ -288,26 +305,32 @@ void _validateItem(Map<String, dynamic> item) {
     'adapterVersion',
     'projectionFingerprint',
   ]) {
-    _requireType<String>(item, field);
+    _requireType<String>(item, field, '$path.$field');
   }
   _optionalType<String>(item, 'occurredAt');
   _optionalType<String>(item, 'observedAt');
   _optionalType<String>(item, 'ingestedAt');
   _optionalNum(item, 'confidence');
 
-  final evidence = _requireMap(item, 'evidenceQuality');
+  final evidence = _requireMap(
+    item,
+    'evidenceQuality',
+    '$path.evidenceQuality',
+  );
   _requireType<String>(evidence, 'level');
   _requireStringList(evidence, 'reasonCodes');
   _requireType<String>(evidence, 'evaluatorVersion');
 
-  final candidacy = _requireMap(item, 'caseCandidacy');
+  final candidacy = _requireMap(item, 'caseCandidacy', '$path.caseCandidacy');
   _requireType<String>(candidacy, 'status');
   _requireStringList(candidacy, 'reasonCodes');
   _optionalType<String>(candidacy, 'evaluatedAt');
   _requireType<String>(candidacy, 'evaluatorVersion');
   _requireType<bool>(candidacy, 'requiresHumanReview');
 
-  for (final event in _requireMapList(item, 'timeline')) {
+  final timeline = _requireMapList(item, 'timeline', '$path.timeline');
+  for (var eventIndex = 0; eventIndex < timeline.length; eventIndex++) {
+    final event = timeline[eventIndex];
     for (final field in const [
       'eventId',
       'eventType',
@@ -315,14 +338,24 @@ void _validateItem(Map<String, dynamic> item) {
       'sourceSystem',
       'summary',
     ]) {
-      _requireType<String>(event, field);
+      _requireType<String>(event, field, '$path.timeline[$eventIndex].$field');
     }
     _optionalType<String>(event, 'occurredAt');
     _requireNum(event, 'evidenceReferenceCount');
   }
 
-  final graph = _requireMap(item, 'relationshipGraph');
-  for (final node in _requireMapList(graph, 'nodes')) {
+  final graph = _requireMap(
+    item,
+    'relationshipGraph',
+    '$path.relationshipGraph',
+  );
+  final nodes = _requireMapList(
+    graph,
+    'nodes',
+    '$path.relationshipGraph.nodes',
+  );
+  for (var nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+    final node = nodes[nodeIndex];
     for (final field in const [
       'canonicalId',
       'type',
@@ -330,18 +363,32 @@ void _validateItem(Map<String, dynamic> item) {
       'sourceSystem',
       'evidenceQuality',
     ]) {
-      _requireType<String>(node, field);
+      _requireType<String>(
+        node,
+        field,
+        '$path.relationshipGraph.nodes[$nodeIndex].$field',
+      );
     }
-    _requireNum(node, 'confidence');
+    _optionalNum(
+      node,
+      'confidence',
+      '$path.relationshipGraph.nodes[$nodeIndex].confidence',
+    );
     _optionalType<String>(node, 'firstObservedAt');
     _optionalType<String>(node, 'lastObservedAt');
   }
   _requireMapList(graph, 'edges');
 }
 
-T _requireType<T>(Map<String, dynamic> map, String field) {
+T _requireType<T>(Map<String, dynamic> map, String field, [String? path]) {
   final value = map[field];
-  if (value is! T) throw FormatException('$field has invalid type');
+  if (value is! T) {
+    throw RiskOperationsFieldTypeException(
+      fieldPath: path ?? field,
+      expectedType: T.toString(),
+      actualRuntimeType: value?.runtimeType.toString() ?? 'null',
+    );
+  }
   return value;
 }
 
@@ -358,28 +405,45 @@ num _requireNum(Map<String, dynamic> map, String field) {
   return value;
 }
 
-void _optionalNum(Map<String, dynamic> map, String field) {
+void _optionalNum(Map<String, dynamic> map, String field, [String? path]) {
   final value = map[field];
   if (value != null && value is! num) {
-    throw FormatException('$field has invalid type');
+    throw RiskOperationsFieldTypeException(
+      fieldPath: path ?? field,
+      expectedType: 'num?',
+      actualRuntimeType: value.runtimeType.toString(),
+    );
   }
 }
 
-Map<String, dynamic> _requireMap(Map<String, dynamic> map, String field) {
+Map<String, dynamic> _requireMap(
+  Map<String, dynamic> map,
+  String field, [
+  String? path,
+]) {
   final value = map[field];
   if (value is! Map<String, dynamic>) {
-    throw FormatException('$field has invalid type');
+    throw RiskOperationsFieldTypeException(
+      fieldPath: path ?? field,
+      expectedType: 'Map<String, dynamic>',
+      actualRuntimeType: value?.runtimeType.toString() ?? 'null',
+    );
   }
   return value;
 }
 
 List<Map<String, dynamic>> _requireMapList(
   Map<String, dynamic> map,
-  String field,
-) {
+  String field, [
+  String? path,
+]) {
   final value = map[field];
   if (value is! List || value.any((item) => item is! Map<String, dynamic>)) {
-    throw FormatException('$field has invalid type');
+    throw RiskOperationsFieldTypeException(
+      fieldPath: path ?? field,
+      expectedType: 'List<Map<String, dynamic>>',
+      actualRuntimeType: value?.runtimeType.toString() ?? 'null',
+    );
   }
   return value.cast<Map<String, dynamic>>();
 }

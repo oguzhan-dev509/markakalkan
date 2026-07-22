@@ -148,36 +148,56 @@ class RiskOperationsRepositoryException implements Exception {
 }
 
 class RiskOperationsResponseNormalizationException implements Exception {
-  const RiskOperationsResponseNormalizationException();
+  const RiskOperationsResponseNormalizationException({
+    this.fieldPath = r'$',
+    this.expectedType = 'supported callable value',
+    this.actualRuntimeType = 'unknown',
+  });
+  final String fieldPath;
+  final String expectedType;
+  final String actualRuntimeType;
 }
 
 Map<String, dynamic> normalizeRiskOperationsResponse(Object? value) {
-  final normalized = _normalizeCallableValue(value);
+  final normalized = _normalizeCallableValue(value, r'$');
   if (normalized is! Map<String, dynamic>) {
-    throw const RiskOperationsResponseNormalizationException();
+    throw RiskOperationsResponseNormalizationException(
+      expectedType: 'Map<String, dynamic>',
+      actualRuntimeType: normalized?.runtimeType.toString() ?? 'null',
+    );
   }
   return normalized;
 }
 
-Object? _normalizeCallableValue(Object? value) {
+Object? _normalizeCallableValue(Object? value, String path) {
   if (value == null || value is String || value is bool || value is num) {
     return value;
   }
   if (value is List) {
-    return value.map(_normalizeCallableValue).toList(growable: false);
+    return [
+      for (var index = 0; index < value.length; index++)
+        _normalizeCallableValue(value[index], '$path[$index]'),
+    ];
   }
   if (value is Map) {
     final normalized = <String, dynamic>{};
     for (final entry in value.entries) {
       final key = entry.key;
       if (key is! String) {
-        throw const RiskOperationsResponseNormalizationException();
+        throw RiskOperationsResponseNormalizationException(
+          fieldPath: path,
+          expectedType: 'String map key',
+          actualRuntimeType: key.runtimeType.toString(),
+        );
       }
-      normalized[key] = _normalizeCallableValue(entry.value);
+      normalized[key] = _normalizeCallableValue(entry.value, '$path.$key');
     }
     return normalized;
   }
-  throw const RiskOperationsResponseNormalizationException();
+  throw RiskOperationsResponseNormalizationException(
+    fieldPath: path,
+    actualRuntimeType: value.runtimeType.toString(),
+  );
 }
 
 class CallableRiskOperationsRepository implements RiskOperationsRepository {
@@ -245,6 +265,21 @@ class CallableRiskOperationsRepository implements RiskOperationsRepository {
       exceptionType: error.runtimeType.toString(),
       firebaseCode: error is FirebaseFunctionsException ? error.code : null,
     );
+    final fieldPath = switch (error) {
+      RiskOperationsResponseNormalizationException e => e.fieldPath,
+      RiskOperationsFieldTypeException e => e.fieldPath,
+      _ => r'$',
+    };
+    final expectedType = switch (error) {
+      RiskOperationsResponseNormalizationException e => e.expectedType,
+      RiskOperationsFieldTypeException e => e.expectedType,
+      _ => 'valid risk operations response',
+    };
+    final actualRuntimeType = switch (error) {
+      RiskOperationsResponseNormalizationException e => e.actualRuntimeType,
+      RiskOperationsFieldTypeException e => e.actualRuntimeType,
+      _ => error.runtimeType.toString(),
+    };
     _failureLogger(<String, Object?>{
       'event': 'risk_operations_repository_failed',
       'failureStage': stage.wireValue,
@@ -252,6 +287,9 @@ class CallableRiskOperationsRepository implements RiskOperationsRepository {
       'lifecycleCorrelationHash': _correlationHash(diagnostics),
       'routeEntryCause': diagnostics.routeEntryCause.wireValue,
       'responseRootType': responseRoot?.runtimeType.toString() ?? 'null',
+      'fieldPath': fieldPath,
+      'expectedType': expectedType,
+      'actualRuntimeType': actualRuntimeType,
       'transactionCommitted': false,
       'writeAttempted': false,
     });

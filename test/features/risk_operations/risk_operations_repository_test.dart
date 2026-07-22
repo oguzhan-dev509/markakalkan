@@ -119,6 +119,9 @@ void main() {
         'lifecycleCorrelationHash',
         'routeEntryCause',
         'responseRootType',
+        'fieldPath',
+        'expectedType',
+        'actualRuntimeType',
         'transactionCommitted',
         'writeAttempted',
       });
@@ -171,10 +174,22 @@ void main() {
     test('parser rejects missing required fields and wrong item types', () {
       final missing = _stringResponse();
       (missing['items'] as List).first.remove('signalId');
-      expect(() => _parse(missing), throwsA(isA<FormatException>()));
+      expect(
+        () => _parse(missing),
+        throwsA(
+          isA<RiskOperationsFieldTypeException>().having(
+            (error) => error.fieldPath,
+            'fieldPath',
+            'items[0].signalId',
+          ),
+        ),
+      );
 
       final wrongItem = _stringResponse()..['items'] = <Object?>['invalid'];
-      expect(() => _parse(wrongItem), throwsA(isA<FormatException>()));
+      expect(
+        () => _parse(wrongItem),
+        throwsA(isA<RiskOperationsFieldTypeException>()),
+      );
     });
 
     for (final entry in const [
@@ -330,7 +345,7 @@ Map<String, dynamic> _item(int index) => <String, dynamic>{
         'type': 'brand',
         'maskedLabel': 'Ma***an',
         'sourceSystem': 'traceability',
-        'confidence': 0.75,
+        'confidence': index.isEven ? null : 0.75,
         'evidenceQuality': 'verified_primary',
         'firstObservedAt': null,
         'lastObservedAt': null,
