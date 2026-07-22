@@ -378,7 +378,6 @@ void main() {
           internalAdminAccess: verifiedSuperAdmin,
           dryRunService: dryRun,
           dryRunAuthReady: true,
-          dryRunAppCheckReady: true,
         ),
       ),
     );

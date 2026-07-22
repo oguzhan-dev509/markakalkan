@@ -294,9 +294,7 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
                   widget.internalAdminAccess?.isSuperAdmin == true,
               dryRunService: widget.dryRunService,
               dryRunAuthReady: widget.dryRunAuthReady ?? _authReady,
-              dryRunAppCheckReady:
-                  widget.dryRunAppCheckReady ??
-                  AppCheckBootstrap.instance.isReady,
+              dryRunAppCheckReady: widget.dryRunAppCheckReady ?? true,
             ),
           ),
         if (result.nextPageToken != null) ...[
