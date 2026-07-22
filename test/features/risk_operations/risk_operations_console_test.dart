@@ -234,6 +234,43 @@ void main() {
     );
   });
 
+  testWidgets('risk operations intro banner shows permanent identity', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RiskOperationsConsolePage(
+          navigationRequestId: 'intro-banner',
+          routeEntryCause: RiskOperationsRouteEntryCause.directRoute,
+          repository: RecordingRepository(
+            result: RiskOperationsPageResult.fromMap(responseMap()),
+          ),
+          lifecycleProvider: DeterministicIds(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('risk-operations-intro-banner')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Sinyali erken yakala, riski görünür kıl.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'İzlenebilirlik, dijital saha ve izleme kaynaklarından',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Güvenli, salt-okunur operasyon görünümü'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('shows loading then empty state', (tester) async {
     final completer = Completer<RiskOperationsPageResult>();
     await tester.pumpWidget(app(FakeRepository((_, _) => completer.future)));

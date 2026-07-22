@@ -193,11 +193,8 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Text(
-            'Salt-okunur operasyon konsolu',
-            style: TextStyle(fontSize: 14, color: Color(0xFF687580)),
-          ),
-          const SizedBox(height: 16),
+          const _RiskOperationsIntroBanner(),
+          const SizedBox(height: 18),
           _buildBody(),
         ],
       ),
@@ -338,6 +335,108 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
               defaultValue: false,
             )
       : widget.enableDryRun && !widget.enablePromotion;
+}
+
+class _RiskOperationsIntroBanner extends StatelessWidget {
+  const _RiskOperationsIntroBanner();
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact = constraints.maxWidth < 620;
+      final icon = Container(
+        width: 52,
+        height: 52,
+        decoration: const BoxDecoration(
+          color: Color(0xFF0E6251),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.radar, color: Colors.white, size: 30),
+      );
+      const content = Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sinyali erken yakala, riski görünür kıl.',
+              style: TextStyle(
+                fontSize: 22,
+                height: 1.2,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF17342E),
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'İzlenebilirlik, dijital saha ve izleme kaynaklarından gelen '
+              'şüpheli sinyalleri tek merkezde değerlendirin; delil '
+              'kalitesini, risk seviyesini ve vaka adaylığını insan '
+              'incelemesiyle yönetin.',
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.5,
+                color: Color(0xFF4C625D),
+              ),
+            ),
+            SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(
+                  Icons.visibility_outlined,
+                  size: 18,
+                  color: Color(0xFF0E6251),
+                ),
+                SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    'Güvenli, salt-okunur operasyon görünümü',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0E6251),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      return Container(
+        key: const ValueKey('risk-operations-intro-banner'),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 18 : 24,
+          vertical: compact ? 18 : 22,
+        ),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFF1F7F5), Color(0xFFF8FAFC)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFD3E3DE)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0D17342E),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: compact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [icon, const SizedBox(height: 16), content],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [icon, const SizedBox(width: 18), content],
+              ),
+      );
+    },
+  );
 }
 
 class _SummaryGrid extends StatelessWidget {
