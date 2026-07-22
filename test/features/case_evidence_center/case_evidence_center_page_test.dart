@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_center_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_detail_page.dart';
 
 class FakeRepository implements CaseEvidenceCenterRepository {
   FakeRepository(this.result);
@@ -152,44 +153,121 @@ void main() {
     );
   });
 
-  testWidgets('case code and existing case action open detail', (tester) async {
-    final opened = <String>[];
+  testWidgets('all case controls push the real detail route with internal id', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: CaseEvidenceCenterPage(
           repository: FakeRepository(
             CaseEvidenceCenterResult.fromMap(navigationResponseMap()),
           ),
-          detailOpener: (_, caseId) async => opened.add(caseId),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
+    final convertedCode = find.byKey(
+      const ValueKey('converted-case-code-signal-2'),
+    );
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('case-code-case-1')),
+      convertedCode,
       500,
       scrollable: find.byType(Scrollable),
     );
-    await tester.tap(find.byKey(const ValueKey('case-code-case-1')));
-    await tester.pump();
-    expect(opened, ['case-1']);
+    await tester.ensureVisible(convertedCode);
+    await tester.pumpAndSettle();
+    final convertedButton = find
+        .descendant(of: convertedCode, matching: find.byType(TextButton))
+        .hitTestable();
+    expect(convertedButton, findsOneWidget);
+    await tester.tap(convertedButton);
+    await tester.pumpAndSettle();
+    expect(find.byType(CaseEvidenceDetailPage), findsOneWidget);
+    var detail = tester.widget<CaseEvidenceDetailPage>(
+      find.byType(CaseEvidenceDetailPage),
+    );
+    expect(detail.caseId, 'case-1');
+    expect(detail.caseId, isNot('VK-2026-ABC12345'));
+    expect(detail.caseId, isNot('source-1'));
+    expect(
+      ModalRoute.of(
+        tester.element(find.byType(CaseEvidenceDetailPage)),
+      )!.settings.name,
+      '/case-evidence-center/case-detail',
+    );
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
       find.text('Vaka dosyası mevcut'),
-      -500,
+      500,
       scrollable: find.byType(Scrollable),
     );
-    await tester.tap(find.text('Vaka dosyası mevcut'));
-    await tester.pump();
-    expect(opened, ['case-1', 'case-1']);
+    await tester.ensureVisible(find.text('Vaka dosyası mevcut'));
+    await tester.pumpAndSettle();
+    final existingCaseButton = find
+        .widgetWithText(FilledButton, 'Vaka dosyası mevcut')
+        .hitTestable();
+    expect(existingCaseButton, findsOneWidget);
+    await tester.tap(existingCaseButton);
+    await tester.pumpAndSettle();
+    detail = tester.widget<CaseEvidenceDetailPage>(
+      find.byType(CaseEvidenceDetailPage),
+    );
+    expect(detail.caseId, 'case-1');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    final listedCode = find.byKey(const ValueKey('case-code-case-1'));
+    await tester.scrollUntilVisible(
+      listedCode,
+      500,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.ensureVisible(listedCode);
+    await tester.pumpAndSettle();
+    final listedButton = listedCode.hitTestable();
+    expect(listedButton, findsOneWidget);
+    await tester.tap(listedButton);
+    await tester.pumpAndSettle();
+    detail = tester.widget<CaseEvidenceDetailPage>(
+      find.byType(CaseEvidenceDetailPage),
+    );
+    expect(detail.caseId, 'case-1');
   });
 
-  testWidgets('workspace scrolls and active and converted risks are separate', (
+  testWidgets('missing existing case id shows a safe message', (tester) async {
+    final response = navigationResponseMap();
+    final candidates = response['caseCandidates']! as List<dynamic>;
+    (candidates.last as Map<String, dynamic>)['existingCaseId'] = null;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceCenterPage(
+          repository: FakeRepository(
+            CaseEvidenceCenterResult.fromMap(response),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final code = find.byKey(const ValueKey('converted-case-code-signal-2'));
+    await tester.scrollUntilVisible(
+      code,
+      500,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.ensureVisible(code);
+    await tester.pumpAndSettle();
+    await tester.tap(code);
+    await tester.pump();
+    expect(find.text('Vaka ayrıntısı şu anda açılamıyor.'), findsOneWidget);
+    expect(find.byType(CaseEvidenceDetailPage), findsNothing);
+  });
+
+  testWidgets('workspace reaches a lazy case section and gives feedback', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 3000));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
         home: CaseEvidenceCenterPage(
@@ -200,12 +278,23 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('case-files-workspace')));
+    final scrollable = find.byType(Scrollable);
+    final workspace = find.byKey(const ValueKey('case-files-workspace'));
+    await tester.scrollUntilVisible(workspace, 200, scrollable: scrollable);
+    await tester.ensureVisible(workspace);
     await tester.pumpAndSettle();
+    final workspaceTap = tester.widget<InkWell>(workspace).onTap!;
+    final before = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(find.text('Vakaya Dönüştürülen Riskler'), findsNothing);
+    await tester.tap(workspace);
+    await tester.pumpAndSettle();
+    final after = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(after, greaterThan(before));
     expect(find.text('Vaka Dosyaları'), findsWidgets);
-    expect(find.text('İnceleme Gerektiren Riskler'), findsOneWidget);
-    expect(find.text('Vakaya Dönüştürülen Riskler'), findsOneWidget);
-    expect(find.text('repeat_scan_observed'), findsNothing);
-    expect(find.text('Tekrarlanan tarama gözlendi'), findsOneWidget);
+    expect(find.text('Vaka dosyaları bölümüne ulaşıldı.'), findsOneWidget);
+
+    workspaceTap();
+    await tester.pumpAndSettle();
+    expect(find.text('Vaka dosyaları bölümüne ulaşıldı.'), findsOneWidget);
   });
 }

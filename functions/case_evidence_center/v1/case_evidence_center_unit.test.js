@@ -98,6 +98,35 @@ test("read model returns review candidate with zero writes", async () => {
   assert.equal(result.contractVersion, "case-evidence-center-read-v1"); assert.equal(result.caseCandidates.length, 1); assert.equal(result.cases.length, 0); assert.equal(result.writesPerformed, 0); assert.equal(db.writes, 0);
 });
 
+test("list returns internal case id and user case number together", async () => {
+  const withCase = structuredClone(collections);
+  withCase.case_files = [{
+    id: "internal-case-123",
+    data: {
+      tenantId: "tenant-1",
+      canonicalBrandId: "brand-1",
+      caseNumber: "VK-2026-EA953C48",
+      title: "Şüpheli pazar yeri ilanı",
+      summary: "Güvenli vaka özeti.",
+      status: "open",
+      stage: "initial_review",
+      priority: "high",
+      updatedAt: "2026-07-22T11:00:00.000Z",
+      sourceBinding: {sourceSystem: "monitoring", sourceRecordId: "monitoring-1"},
+    },
+  }];
+  const db = new FakeDb(withCase);
+  const result = await createService({db, clock}).list({}, {uid: "user-1"});
+  assert.equal(result.cases[0].caseId, "internal-case-123");
+  assert.equal(result.cases[0].caseNumber, "VK-2026-EA953C48");
+  assert.notEqual(result.cases[0].caseId, result.cases[0].caseNumber);
+  assert.notEqual(result.cases[0].caseId, "monitoring-1");
+  assert.equal(result.caseCandidates[0].existingCaseId, "internal-case-123");
+  assert.equal(result.caseCandidates[0].existingCaseNumber, "VK-2026-EA953C48");
+  assert.equal(result.writesPerformed, 0);
+  assert.equal(db.writes, 0);
+});
+
 test("dry-run validates source and writes nothing", async () => {
   const db = new FakeDb(collections); const service = createService({db, clock}); const item = await candidate(service);
   const result = await service.create({sourceSystem: item.sourceSystem, sourceRecordId: item.sourceRecordId, expectedSourceRecordVersion: item.sourceRecordVersion, expectedProjectionFingerprint: item.projectionFingerprint, correlationId: "correlation-0001", dryRun: true}, {uid: "user-1"});

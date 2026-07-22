@@ -227,22 +227,56 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
   bool _loading = true;
   String? _processing;
   final GlobalKey _caseFilesKey = GlobalKey();
+  final ScrollController _scrollController = ScrollController();
 
   Future<void> _openDetail(String? caseId) async {
-    if (caseId == null || caseId.isEmpty) return;
+    if (caseId == null || caseId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vaka ayrıntısı şu anda açılamıyor.')),
+      );
+      return;
+    }
     final opener = widget.detailOpener;
     if (opener != null) return opener(context, caseId);
     return AppRouter.openCaseEvidenceDetail(context, caseId: caseId);
   }
 
   Future<void> _scrollToCases() async {
+    if (_caseFilesKey.currentContext == null && _scrollController.hasClients) {
+      final position = _scrollController.position;
+      final destination = position.maxScrollExtent
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      await _scrollController.animateTo(
+        destination,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+    if (!mounted) return;
     final target = _caseFilesKey.currentContext;
-    if (target != null) {
+    if (target != null && target.mounted) {
       await Scrollable.ensureVisible(
         target,
         duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vaka dosyaları bölümüne ulaşıldı.')),
       );
     }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -353,6 +387,7 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
     body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(24),
         children: [
           const _Hero(),
@@ -800,7 +835,11 @@ class _CandidateCard extends StatelessWidget {
               _Pill(label: _severityLabel(candidate.severity)),
               _Pill(label: _evidenceLabel(candidate.evidenceQuality)),
               if (candidate.hasCase)
-                _Pill(label: candidate.existingCaseNumber!, emphasized: true),
+                _CaseLinkPill(
+                  key: ValueKey('converted-case-code-${candidate.signalId}'),
+                  label: candidate.existingCaseNumber!,
+                  onPressed: onOpenCase,
+                ),
             ],
           ),
           const SizedBox(height: 13),
@@ -943,25 +982,55 @@ class _CaseCard extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({required this.label, this.emphasized = false});
+  const _Pill({required this.label});
 
   final String label;
-  final bool emphasized;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: emphasized ? const Color(0xFFE4F7EF) : const Color(0xFFF1F4F6),
+      color: const Color(0xFFF1F4F6),
       borderRadius: BorderRadius.circular(999),
     ),
     child: Text(
       label,
       style: TextStyle(
-        color: emphasized ? const Color(0xFF116149) : const Color(0xFF52616B),
+        color: const Color(0xFF52616B),
         fontSize: 12,
         fontWeight: FontWeight.w700,
       ),
+    ),
+  );
+}
+
+class _CaseLinkPill extends StatelessWidget {
+  const _CaseLinkPill({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    link: true,
+    label: '$label vaka ayrıntısını aç',
+    child: TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF116149),
+        backgroundColor: const Color(0xFFE4F7EF),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: const StadiumBorder(),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+      child: Text(label),
     ),
   );
 }
