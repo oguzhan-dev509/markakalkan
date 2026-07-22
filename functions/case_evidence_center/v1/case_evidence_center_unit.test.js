@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {HttpsError} = require("firebase-functions/v2/https");
-const {createListHandler, createService, createWriteHandler, listRequest} = require("./index");
+const {createDetailHandler, createListHandler, createService, createWriteHandler, detailRequest, listRequest} = require("./index");
 
 class Snapshot {
   constructor(id, data, path, exists = true, version = "2026-07-22T10:00:00.000Z") {
@@ -118,4 +118,55 @@ test("callables require auth and App Check for real write", async () => {
   const write = createWriteHandler({db, clock, log}); const request = {sourceSystem: item.sourceSystem, sourceRecordId: item.sourceRecordId, expectedSourceRecordVersion: item.sourceRecordVersion, expectedProjectionFingerprint: item.projectionFingerprint, correlationId: "correlation-0003", dryRun: false};
   await assert.rejects(() => write({auth: {uid: "user-1"}, data: request}), (error) => error instanceof HttpsError && error.code === "failed-precondition");
   assert.equal((await write({auth: {uid: "user-1"}, app: {appId: "verified"}, data: request})).outcome, "created");
+});
+
+function detailCollections() {
+  return {
+    ...collections,
+    "case_files": [{id: "case-1", data: {tenantId: "tenant-1", canonicalBrandId: "brand-1", caseNumber: "VK-2026-ABC12345", title: "Şüpheli ilan", summary: "Güvenli vaka özeti.", status: "open", priority: "high", sourceBinding: {sourceSystem: "monitoring", sourceRecordId: "secret-source", sourceRecordPath: "monitoring_signals/secret-source", projectionFingerprint: "secret-fingerprint"}, openedAt: "2026-07-22T10:00:00.000Z", updatedAt: "2026-07-22T11:00:00.000Z", idempotencyKey: "secret-key"}}],
+    "case_evidence_refs": [
+      {id: "evidence-2", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", title: "İkinci delil", sourceSystem: "monitoring", reviewStatus: "pending", integrityStatus: "reference_only", createdAt: "2026-07-22T10:02:00.000Z", projectionFingerprint: "secret"}},
+      {id: "evidence-1", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", title: "İlk delil", sourceSystem: "monitoring", reviewStatus: "pending", integrityStatus: "reference_only", createdAt: "2026-07-22T10:01:00.000Z"}},
+      {id: "other", data: {caseId: "case-other", tenantId: "tenant-1", canonicalBrandId: "brand-1", title: "Başka vaka"}},
+    ],
+    "case_events": [
+      {id: "event-2", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "reviewed", summary: "İkinci olay", occurredAt: "2026-07-22T10:04:00.000Z"}},
+      {id: "event-1", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "opened", summary: "İlk olay", occurredAt: "2026-07-22T10:03:00.000Z"}},
+    ],
+    "case_audit_events": [{id: "audit-1", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.created_from_risk", occurredAt: "2026-07-22T10:05:00.000Z", correlationHash: "secret"}}],
+  };
+}
+
+test("detail request contract is strict", () => {
+  assert.equal(detailRequest({contractVersion: "case-evidence-detail-request-v1", caseId: "case-1"}).caseId, "case-1");
+  assert.throws(() => detailRequest({caseId: "case-1"}), /detail request/);
+  assert.throws(() => detailRequest({contractVersion: "case-evidence-detail-request-v1", caseId: "case-1", extra: true}), /detail request/);
+});
+
+test("detail reads tenant and brand scoped records in safe chronological contract with zero writes", async () => {
+  const db = new FakeDb(detailCollections());
+  const result = await createService({db, clock}).detail({contractVersion: "case-evidence-detail-request-v1", caseId: "case-1"}, {uid: "user-1"});
+  assert.equal(result.contractVersion, "case-evidence-detail-v1");
+  assert.equal(result.case.caseCode, "VK-2026-ABC12345");
+  assert.deepEqual(result.evidenceReferences.map((item) => item.title), ["İlk delil", "İkinci delil"]);
+  assert.deepEqual(result.timelineEvents.map((item) => item.summary), ["İlk olay", "İkinci olay"]);
+  assert.equal(result.auditSummary.length, 1);
+  assert.equal(result.writesPerformed, 0); assert.equal(db.writes, 0);
+  const serialized = JSON.stringify(result);
+  for (const forbidden of ["secret-source", "secret-fingerprint", "secret-key", "correlationHash", "sourceRecordPath", "projectionFingerprint"]) assert.equal(serialized.includes(forbidden), false);
+});
+
+test("detail denies unauthenticated, foreign and missing cases safely", async () => {
+  const db = new FakeDb(detailCollections()); const service = createService({db, clock});
+  const request = {contractVersion: "case-evidence-detail-request-v1", caseId: "case-1"};
+  await assert.rejects(() => service.detail(request, {}), /authentication required/);
+  db.collections.case_files[0].data.tenantId = "tenant-other";
+  await assert.rejects(() => service.detail(request, {uid: "user-1"}), (error) => error.code === "case.not_found");
+  await assert.rejects(() => service.detail({...request, caseId: "missing"}, {uid: "user-1"}), (error) => error.code === "case.not_found");
+});
+
+test("detail callable requires auth and maps missing case", async () => {
+  const handler = createDetailHandler({db: new FakeDb(detailCollections()), clock, log: {info: () => {}}});
+  await assert.rejects(() => handler({data: {}}), (error) => error instanceof HttpsError && error.code === "unauthenticated");
+  await assert.rejects(() => handler({auth: {uid: "user-1"}, data: {contractVersion: "case-evidence-detail-request-v1", caseId: "missing"}}), (error) => error instanceof HttpsError && error.code === "not-found");
 });

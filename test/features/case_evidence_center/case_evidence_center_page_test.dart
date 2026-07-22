@@ -56,6 +56,7 @@ Map<String, dynamic> responseMap() => {
   ],
   'cases': [
     {
+      'caseId': 'case-1',
       'caseNumber': 'VK-2026-ABC12345',
       'title': 'Şüpheli pazar yeri ilanı',
       'summary': 'Vaka özeti.',
@@ -78,6 +79,20 @@ Map<String, dynamic> responseMap() => {
     },
   ],
 };
+
+Map<String, dynamic> navigationResponseMap() {
+  final map = responseMap();
+  final candidates = map['caseCandidates']! as List<dynamic>;
+  (candidates.first as Map<String, dynamic>)['title'] = 'repeat_scan_observed';
+  candidates.add({
+    ...(candidates.first as Map<String, dynamic>),
+    'signalId': 'signal-2',
+    'existingCaseId': 'case-1',
+    'existingCaseNumber': 'VK-2026-ABC12345',
+    'title': 'rapid_repeat_scan',
+  });
+  return map;
+}
 
 void main() {
   testWidgets('renders approved navy identity and five workspaces', (
@@ -135,5 +150,62 @@ void main() {
       find.text('Yazısız doğrulama başarılı. Vaka dosyası oluşturulmadı.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('case code and existing case action open detail', (tester) async {
+    final opened = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceCenterPage(
+          repository: FakeRepository(
+            CaseEvidenceCenterResult.fromMap(navigationResponseMap()),
+          ),
+          detailOpener: (_, caseId) async => opened.add(caseId),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('case-code-case-1')),
+      500,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.tap(find.byKey(const ValueKey('case-code-case-1')));
+    await tester.pump();
+    expect(opened, ['case-1']);
+
+    await tester.scrollUntilVisible(
+      find.text('Vaka dosyası mevcut'),
+      -500,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.tap(find.text('Vaka dosyası mevcut'));
+    await tester.pump();
+    expect(opened, ['case-1', 'case-1']);
+  });
+
+  testWidgets('workspace scrolls and active and converted risks are separate', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceCenterPage(
+          repository: FakeRepository(
+            CaseEvidenceCenterResult.fromMap(navigationResponseMap()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('case-files-workspace')));
+    await tester.pumpAndSettle();
+    expect(find.text('Vaka Dosyaları'), findsWidgets);
+    expect(find.text('İnceleme Gerektiren Riskler'), findsOneWidget);
+    expect(find.text('Vakaya Dönüştürülen Riskler'), findsOneWidget);
+    expect(find.text('repeat_scan_observed'), findsNothing);
+    expect(find.text('Tekrarlanan tarama gözlendi'), findsOneWidget);
   });
 }

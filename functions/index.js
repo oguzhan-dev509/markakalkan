@@ -95,6 +95,7 @@ const {
 const {
   buildCreateCaseFromRiskOperation,
   buildListCaseEvidenceCenter,
+  buildGetCaseEvidenceDetail,
 } = require("./case_evidence_center/v1");
 
 setGlobalOptions({
@@ -227,5 +228,7 @@ exports.promoteRiskOperationToSharedRisk =
     buildPromoteRiskOperationToSharedRisk({db});
 exports.listCaseEvidenceCenter =
     buildListCaseEvidenceCenter({db});
+exports.getCaseEvidenceDetail =
+    buildGetCaseEvidenceDetail({db});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});

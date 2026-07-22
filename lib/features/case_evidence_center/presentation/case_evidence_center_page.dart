@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/app/router.dart';
 
 abstract interface class CaseEvidenceCenterRepository {
   Future<CaseEvidenceCenterResult> load();
@@ -118,6 +119,7 @@ class CaseEvidenceCandidate {
     required this.severity,
     required this.evidenceQuality,
     this.existingCaseNumber,
+    this.existingCaseId,
   });
 
   final String signalId;
@@ -130,6 +132,7 @@ class CaseEvidenceCandidate {
   final String severity;
   final String evidenceQuality;
   final String? existingCaseNumber;
+  final String? existingCaseId;
 
   bool get hasCase => existingCaseNumber != null;
 
@@ -145,12 +148,14 @@ class CaseEvidenceCandidate {
         severity: _string(map, 'severity'),
         evidenceQuality: _string(_map(map['evidenceQuality']), 'level'),
         existingCaseNumber: _nullableString(map['existingCaseNumber']),
+        existingCaseId: _nullableString(map['existingCaseId']),
       );
 }
 
 class CaseFileItem {
   const CaseFileItem({
     required this.caseNumber,
+    required this.id,
     required this.title,
     required this.summary,
     required this.status,
@@ -161,6 +166,7 @@ class CaseFileItem {
   });
 
   final String caseNumber;
+  final String id;
   final String title;
   final String summary;
   final String status;
@@ -170,6 +176,7 @@ class CaseFileItem {
   final List<Map<String, dynamic>> evidenceRefs;
 
   factory CaseFileItem.fromMap(Map<String, dynamic> map) => CaseFileItem(
+    id: _string(map, 'caseId'),
     caseNumber: _string(map, 'caseNumber'),
     title: _string(map, 'title'),
     summary: _string(map, 'summary'),
@@ -201,9 +208,11 @@ class CaseCreationResult {
 }
 
 class CaseEvidenceCenterPage extends StatefulWidget {
-  const CaseEvidenceCenterPage({super.key, this.repository});
+  const CaseEvidenceCenterPage({super.key, this.repository, this.detailOpener});
 
   final CaseEvidenceCenterRepository? repository;
+  final Future<void> Function(BuildContext context, String caseId)?
+  detailOpener;
 
   @override
   State<CaseEvidenceCenterPage> createState() => _CaseEvidenceCenterPageState();
@@ -217,6 +226,24 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
   Object? _error;
   bool _loading = true;
   String? _processing;
+  final GlobalKey _caseFilesKey = GlobalKey();
+
+  Future<void> _openDetail(String? caseId) async {
+    if (caseId == null || caseId.isEmpty) return;
+    final opener = widget.detailOpener;
+    if (opener != null) return opener(context, caseId);
+    return AppRouter.openCaseEvidenceDetail(context, caseId: caseId);
+  }
+
+  Future<void> _scrollToCases() async {
+    final target = _caseFilesKey.currentContext;
+    if (target != null) {
+      await Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 350),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -362,32 +389,56 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
     ],
     _SummaryGrid(summary: result.summary),
     const SizedBox(height: 22),
-    const _WorkspaceGrid(),
+    _WorkspaceGrid(onCaseFilesTap: _scrollToCases),
     const SizedBox(height: 26),
     _SectionTitle(
       title: 'İnceleme Gerektiren Riskler',
       subtitle:
           'Sinyalleri yazmadan doğrulayın veya kontrollü biçimde vaka '
           'dosyasına dönüştürün.',
-      count: result.summary.reviewCandidates,
+      count: result.candidates.where((item) => !item.hasCase).length,
     ),
     const SizedBox(height: 12),
-    if (result.candidates.isEmpty)
+    if (result.candidates.where((item) => !item.hasCase).isEmpty)
       const _StateCard(
         title: 'Vaka açılışı bekleyen risk sinyali bulunmuyor.',
         icon: Icons.fact_check_outlined,
       )
     else
-      ...result.candidates.map(
-        (candidate) => _CandidateCard(
-          candidate: candidate,
-          processing: _processing == candidate.signalId,
-          onDryRun: () => _create(candidate, dryRun: true),
-          onCreate: () => _create(candidate, dryRun: false),
-        ),
+      ...result.candidates
+          .where((item) => !item.hasCase)
+          .map(
+            (candidate) => _CandidateCard(
+              candidate: candidate,
+              processing: _processing == candidate.signalId,
+              onDryRun: () => _create(candidate, dryRun: true),
+              onCreate: () => _create(candidate, dryRun: false),
+              onOpenCase: () => _openDetail(candidate.existingCaseId),
+            ),
+          ),
+    if (result.candidates.any((item) => item.hasCase)) ...[
+      const SizedBox(height: 26),
+      _SectionTitle(
+        title: 'Vakaya Dönüştürülen Riskler',
+        subtitle: 'Vaka dosyasına bağlanan risk sinyalleri.',
+        count: result.candidates.where((item) => item.hasCase).length,
       ),
+      const SizedBox(height: 12),
+      ...result.candidates
+          .where((item) => item.hasCase)
+          .map(
+            (candidate) => _CandidateCard(
+              candidate: candidate,
+              processing: false,
+              onDryRun: () {},
+              onCreate: () {},
+              onOpenCase: () => _openDetail(candidate.existingCaseId),
+            ),
+          ),
+    ],
     const SizedBox(height: 26),
     _SectionTitle(
+      key: _caseFilesKey,
       title: 'Vaka Dosyaları',
       subtitle:
           'Kaynak risk, delil referansları ve olay zaman çizelgesiyle '
@@ -402,7 +453,9 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
         icon: Icons.folder_open_outlined,
       )
     else
-      ...result.cases.map((item) => _CaseCard(item: item)),
+      ...result.cases.map(
+        (item) => _CaseCard(item: item, onOpen: () => _openDetail(item.id)),
+      ),
   ];
 }
 
@@ -572,7 +625,8 @@ class _SummaryGrid extends StatelessWidget {
 }
 
 class _WorkspaceGrid extends StatelessWidget {
-  const _WorkspaceGrid();
+  const _WorkspaceGrid({required this.onCaseFilesTap});
+  final VoidCallback onCaseFilesTap;
 
   @override
   Widget build(BuildContext context) {
@@ -620,38 +674,45 @@ class _WorkspaceGrid extends StatelessWidget {
               .map(
                 (value) => SizedBox(
                   width: width,
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 168),
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFE1E7EC)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(value.$3, color: const Color(0xFF154E76)),
-                        const SizedBox(height: 13),
-                        Text(
-                          value.$1,
-                          style: const TextStyle(
-                            color: Color(0xFF17314D),
-                            fontSize: 15,
-                            height: 1.25,
-                            fontWeight: FontWeight.w800,
+                  child: InkWell(
+                    key: value.$1 == 'Vaka Dosyaları'
+                        ? const ValueKey('case-files-workspace')
+                        : null,
+                    onTap: value.$1 == 'Vaka Dosyaları' ? onCaseFilesTap : null,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 168),
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE1E7EC)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(value.$3, color: const Color(0xFF154E76)),
+                          const SizedBox(height: 13),
+                          Text(
+                            value.$1,
+                            style: const TextStyle(
+                              color: Color(0xFF17314D),
+                              fontSize: 15,
+                              height: 1.25,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          value.$2,
-                          style: const TextStyle(
-                            color: Color(0xFF687580),
-                            fontSize: 12.5,
-                            height: 1.4,
+                          const SizedBox(height: 8),
+                          Text(
+                            value.$2,
+                            style: const TextStyle(
+                              color: Color(0xFF687580),
+                              fontSize: 12.5,
+                              height: 1.4,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -665,6 +726,7 @@ class _WorkspaceGrid extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.count,
@@ -713,12 +775,14 @@ class _CandidateCard extends StatelessWidget {
     required this.processing,
     required this.onDryRun,
     required this.onCreate,
+    required this.onOpenCase,
   });
 
   final CaseEvidenceCandidate candidate;
   final bool processing;
   final VoidCallback onDryRun;
   final VoidCallback onCreate;
+  final VoidCallback onOpenCase;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -741,7 +805,7 @@ class _CandidateCard extends StatelessWidget {
           ),
           const SizedBox(height: 13),
           Text(
-            candidate.title,
+            _riskSignalLabel(candidate.title),
             style: const TextStyle(
               color: Color(0xFF17314D),
               fontSize: 17,
@@ -766,7 +830,11 @@ class _CandidateCard extends StatelessWidget {
                   label: const Text('Yazmadan doğrula'),
                 ),
                 FilledButton.icon(
-                  onPressed: processing || candidate.hasCase ? null : onCreate,
+                  onPressed: processing
+                      ? null
+                      : candidate.hasCase
+                      ? onOpenCase
+                      : onCreate,
                   icon: const Icon(Icons.create_new_folder_outlined),
                   label: Text(
                     candidate.hasCase
@@ -784,9 +852,10 @@ class _CandidateCard extends StatelessWidget {
 }
 
 class _CaseCard extends StatelessWidget {
-  const _CaseCard({required this.item});
+  const _CaseCard({required this.item, required this.onOpen});
 
   final CaseFileItem item;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -806,7 +875,11 @@ class _CaseCard extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _Pill(label: item.caseNumber, emphasized: true),
+            TextButton(
+              key: ValueKey('case-code-${item.id}'),
+              onPressed: onOpen,
+              child: Text(item.caseNumber),
+            ),
             _Pill(label: _statusLabel(item.status)),
             _Pill(label: _priorityLabel(item.priority)),
             _Pill(label: _sourceLabel(item.sourceSystem)),
@@ -928,6 +1001,11 @@ String _sourceLabel(String value) => switch (value) {
   'digital_detective' => 'Dijital Dedektif',
   'shared_risk' => 'Ortak Risk',
   _ => 'Diğer Kaynak',
+};
+String _riskSignalLabel(String value) => switch (value) {
+  'repeat_scan_observed' => 'Tekrarlanan tarama gözlendi',
+  'rapid_repeat_scan' => 'Kısa sürede tekrar tarandı',
+  _ => value.contains('_') ? 'İnceleme sinyali' : value,
 };
 String _severityLabel(String value) => switch (value) {
   'critical' => 'Kritik Risk',

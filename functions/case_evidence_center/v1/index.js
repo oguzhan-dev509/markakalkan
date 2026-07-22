@@ -76,6 +76,14 @@ function createRequest(raw) {
     dryRun: raw.dryRun,
   });
 }
+function detailRequest(raw) {
+  objectRequired(raw);
+  const allowed = ["contractVersion", "caseId"];
+  if (Object.keys(raw).some((key) => !allowed.includes(key)) || raw.contractVersion !== "case-evidence-detail-request-v1") {
+    throw new CaseEvidenceCenterError("invalid-argument", "detail request invalid");
+  }
+  return Object.freeze({contractVersion: raw.contractVersion, caseId: requiredString(raw.caseId, "caseId", 128)});
+}
 
 const versionOf = (snapshot) => snapshot.updateTime && snapshot.updateTime.toDate ?
   snapshot.updateTime.toDate().toISOString() :
@@ -170,6 +178,43 @@ async function readDetails(db, entry) {
 
 function createService({db, clock = {now: () => new Date().toISOString()}}) {
   return Object.freeze({
+    async detail(raw, invocation) {
+      const request = detailRequest(raw);
+      if (!invocation?.uid) throw new CaseEvidenceCenterError("unauthenticated", "authentication required");
+      const context = await resolveTenantContextV1({db, uid: invocation.uid, request: {}});
+      const snapshot = await db.collection("case_files").doc(request.caseId).get();
+      if (!snapshot.exists) throw new CaseEvidenceCenterError("case.not_found", "case not found");
+      const record = snapshot.data() || {};
+      if (record.tenantId !== context.tenantId || record.canonicalBrandId !== context.brandId) {
+        throw new CaseEvidenceCenterError("case.not_found", "case not found");
+      }
+      const [evidence, events, audits] = await Promise.all([
+        query(db, "case_evidence_refs", "caseId", request.caseId, 100),
+        query(db, "case_events", "caseId", request.caseId, 100),
+        query(db, "case_audit_events", "caseId", request.caseId, 100),
+      ]);
+      const belongs = (item) => item.data.tenantId === context.tenantId && item.data.canonicalBrandId === context.brandId;
+      return Object.freeze({
+        contractVersion: "case-evidence-detail-v1",
+        case: {
+          id: snapshot.id,
+          caseCode: record.caseNumber,
+          title: record.title,
+          summary: record.summary,
+          status: record.status,
+          priority: record.priority,
+          sourceType: record.sourceBinding?.sourceSystem,
+          sourceReference: "Kaynak risk kaydı",
+          createdAt: record.openedAt,
+          updatedAt: record.updatedAt,
+        },
+        evidenceReferences: evidence.filter(belongs).map((item) => ({title: item.data.title, sourceType: item.data.sourceSystem, reviewStatus: item.data.reviewStatus, integrityStatus: item.data.integrityStatus, capturedAt: item.data.capturedAt, createdAt: item.data.createdAt})).sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))),
+        timelineEvents: events.filter(belongs).map((item) => ({type: item.data.eventType, summary: item.data.summary, occurredAt: item.data.occurredAt})).sort((a, b) => String(a.occurredAt || "").localeCompare(String(b.occurredAt || ""))),
+        auditSummary: audits.filter(belongs).map((item) => ({action: item.data.action, occurredAt: item.data.occurredAt})).sort((a, b) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || ""))),
+        readOnly: true,
+        writesPerformed: 0,
+      });
+    },
     async list(raw, invocation) {
       const request = listRequest(raw);
       if (!invocation?.uid) throw new CaseEvidenceCenterError("unauthenticated", "authentication required");
@@ -261,8 +306,23 @@ function createService({db, clock = {now: () => new Date().toISOString()}}) {
 function mapError(error) {
   if (error.code === "unauthenticated") return new HttpsError("unauthenticated", "Oturum açmanız gerekir.");
   if (error.code === "source.not_found") return new HttpsError("not-found", "Kaynak risk kaydı bulunamadı.");
+  if (error.code === "case.not_found") return new HttpsError("not-found", "Vaka dosyası bulunamadı.");
   if (["authorization.denied", "source.denied"].includes(error.code)) return new HttpsError("permission-denied", "Bu işlem için yeterli yetkiniz bulunmuyor.");
   return new HttpsError("invalid-argument", "Geçersiz vaka isteği.");
+}
+function createDetailHandler({db, clock, log = logger}) {
+  const service = createService({db, clock});
+  return async (invocation) => {
+    if (!invocation.auth?.uid) throw new HttpsError("unauthenticated", "Oturum açmanız gerekir.");
+    try {
+      const result = await service.detail(invocation.data || {}, {uid: invocation.auth.uid});
+      log.info("Case evidence detail read completed", {event: "case_evidence_detail_read_completed", evidenceCount: result.evidenceReferences.length, eventCount: result.timelineEvents.length, auditCount: result.auditSummary.length, transactionCommitted: false, writeAttempted: false});
+      return result;
+    } catch (error) {
+      if (error instanceof CaseEvidenceCenterError) throw mapError(error);
+      throw new HttpsError("internal", "Vaka ayrıntısı güvenli biçimde hazırlanamadı.");
+    }
+  };
 }
 function createListHandler({db, clock, log = logger}) {
   const service = createService({db, clock});
@@ -308,5 +368,8 @@ function buildListCaseEvidenceCenter({db}) {
 function buildCreateCaseFromRiskOperation({db}) {
   return onCall({region: "europe-west3", enforceAppCheck: false, maxInstances: 1}, createWriteHandler({db, clock: {now: () => new Date().toISOString()}}));
 }
+function buildGetCaseEvidenceDetail({db}) {
+  return onCall({region: "europe-west3", enforceAppCheck: false, maxInstances: 3}, createDetailHandler({db, clock: {now: () => new Date().toISOString()}}));
+}
 
-module.exports = {CaseEvidenceCenterError, buildCreateCaseFromRiskOperation, buildListCaseEvidenceCenter, createListHandler, createRequest, createService, createWriteHandler, listRequest, priority};
+module.exports = {CaseEvidenceCenterError, buildCreateCaseFromRiskOperation, buildGetCaseEvidenceDetail, buildListCaseEvidenceCenter, createDetailHandler, createListHandler, createRequest, createService, createWriteHandler, detailRequest, listRequest, priority};

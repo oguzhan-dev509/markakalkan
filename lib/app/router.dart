@@ -18,6 +18,7 @@ import 'package:markakalkan/features/traceability/presentation/suspicious_verifi
 import 'package:markakalkan/features/traceability/presentation/traceability_cases_page.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_center_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_detail_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -411,6 +412,20 @@ abstract final class AppRouter {
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/case-evidence-center'),
         builder: (_) => const CaseEvidenceCenterPage(),
+      ),
+    );
+  }
+
+  static Future<void> openCaseEvidenceDetail(
+    BuildContext context, {
+    required String caseId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/case-detail',
+        ),
+        builder: (_) => CaseEvidenceDetailPage(caseId: caseId),
       ),
     );
   }
