@@ -71,14 +71,26 @@ test("projection fingerprint is deterministic and signal safe", () => {
   assert.equal(Object.hasOwn(signal, "sourcePayload"), false);
 });
 
-test("callable requires App Check and Auth before application", async () => {
-  const handler = createPromotionCallableHandlerV1({db: {runTransaction() {}},
-    clock: {now: () => "2026-07-21T00:00:00.000Z"},
-    projectIdProvider: () => "markakalkan-app",
-    policyProvider: () => ({mode: MODES.dryRunOnly, allowlist: []}),
-    log: {info() {}}});
-  await assert.rejects(handler({auth: {uid: "user-1"}, data: request()}),
-      (error) => error.code === "failed-precondition");
+test("callable requires Auth, allows dry-run recovery and protects writes", async () => {
+  const logs = [];
+  const handler = createPromotionCallableHandlerV1({db: {runTransaction() {
+    throw new Error("transaction must not start");
+  }},
+  clock: {now: () => "2026-07-21T00:00:00.000Z"},
+  projectIdProvider: () => "markakalkan-app",
+  policyProvider: () => ({mode: MODES.disabled, allowlist: []}),
+  log: {info(_message, fields) {
+    logs.push(fields);
+  }}});
+  const dryRun = await handler({auth: {uid: "user-1"}, data: request()});
+  assert.equal(dryRun.outcome, "blocked");
+  assert.equal(dryRun.transactionCommitted, false);
+  assert.equal(dryRun.writeAttempted, false);
+  assert.equal(logs[0].appCheckPresent, false);
+  assert.equal(logs[0].appCheckRequired, false);
+  await assert.rejects(handler({auth: {uid: "user-1"},
+    data: request({dryRun: false})}),
+  (error) => error.code === "failed-precondition");
   await assert.rejects(handler({app: {appId: "app"}, data: request()}),
       (error) => error.code === "unauthenticated");
 });
@@ -98,6 +110,8 @@ test("callable blocks writes before Firestore and logs hashes only", async () =>
   assert.equal(result.outcome, "blocked");
   assert.equal(result.transactionCommitted, false);
   assert.equal(result.writeAttempted, false);
+  assert.equal(logs[0].appCheckPresent, true);
+  assert.equal(logs[0].appCheckRequired, true);
   const serialized = JSON.stringify(logs);
   assert.equal(serialized.includes("user-1"), false);
   assert.equal(serialized.includes("scan-1"), false);

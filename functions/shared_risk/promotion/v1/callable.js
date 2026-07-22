@@ -34,10 +34,6 @@ function createPromotionCallableHandlerV1({db, clock, projectIdProvider,
   const service = createPromotionServiceV1({db, clock, projectIdProvider,
     persistenceStore: createFirestorePersistenceStoreV1(db)});
   return async (invocation) => {
-    if (!invocation.app) {
-      throw new HttpsError("failed-precondition",
-          "Uygulama doğrulaması gerekli.");
-    }
     if (!invocation.auth || !invocation.auth.uid) {
       throw new HttpsError("unauthenticated", "Oturum açmanız gerekir.");
     }
@@ -48,12 +44,18 @@ function createPromotionCallableHandlerV1({db, clock, projectIdProvider,
       if (error instanceof PromotionError) throw errorFor(error);
       throw error;
     }
+    const appCheckPresent = Boolean(invocation.app?.appId);
+    if (!request.dryRun && !appCheckPresent) {
+      throw new HttpsError("failed-precondition",
+          "Uygulama doğrulaması gerekli.");
+    }
     const policy = evaluateRolloutV1({...policyProvider(), request,
       projectId: projectIdProvider(), expectedProjectId: EXPECTED_PROJECT_ID});
     const logBase = {callableName: CALLABLE_NAME,
       correlationHash: opaque(request.correlationId),
       sourceIdentityHash: opaque(`${request.sourceSystem}:${request.sourceRecordId}`),
       dryRun: request.dryRun, rolloutMode: policy.mode,
+      appCheckPresent, appCheckRequired: !request.dryRun,
       contractVersion: "shared-risk-promotion-command-v1"};
     log.info("Shared risk promotion started", {event:
       "shared_risk_promotion_started", ...logBase});
@@ -86,7 +88,7 @@ function createPromotionCallableHandlerV1({db, clock, projectIdProvider,
 
 function buildPromoteRiskOperationToSharedRisk({db}) {
   const clock = {now: () => new Date().toISOString()};
-  return onCall({region: "europe-west3", enforceAppCheck: true,
+  return onCall({region: "europe-west3", enforceAppCheck: false,
     maxInstances: 1}, createPromotionCallableHandlerV1({db, clock,
     projectIdProvider: () => process.env.GCLOUD_PROJECT || "",
     policyProvider: () => ({mode: rolloutMode.value(),
