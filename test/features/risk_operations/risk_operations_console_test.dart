@@ -548,6 +548,8 @@ void main() {
     await tester.pumpAndSettle();
     final dropdowns = find.byType(DropdownButtonFormField<String>);
     expect(dropdowns, findsNWidgets(5));
+    await tester.ensureVisible(dropdowns.at(1));
+    await tester.pumpAndSettle();
     await tester.tap(dropdowns.at(1));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sahtecilik').last);
@@ -600,6 +602,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       final dropdowns = find.byType(DropdownButtonFormField<String>);
+      await tester.ensureVisible(dropdowns.at(entry.key));
+      await tester.pumpAndSettle();
       await tester.tap(dropdowns.at(entry.key));
       await tester.pumpAndSettle();
       for (final label in entry.value) {
@@ -617,12 +621,16 @@ void main() {
     await tester.pumpWidget(app(repository));
     await tester.pumpAndSettle();
     var dropdowns = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(dropdowns.at(2));
+    await tester.pumpAndSettle();
     await tester.tap(dropdowns.at(2));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Orta').last);
     await tester.pumpAndSettle();
     expect(repository.queries.last.severity, 'medium');
     dropdowns = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(dropdowns.at(4));
+    await tester.pumpAndSettle();
     await tester.tap(dropdowns.at(4));
     await tester.pumpAndSettle();
     await tester.tap(find.text('İnceleme Adayı').last);
@@ -772,11 +780,15 @@ void main() {
     await tester.pumpWidget(app(repository));
     await tester.pumpAndSettle();
     final dropdowns = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(dropdowns.first);
+    await tester.pumpAndSettle();
     await tester.tap(dropdowns.first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Tümü').last);
     await tester.pumpAndSettle();
     expect(repository.diagnostics, hasLength(1));
+    await tester.ensureVisible(dropdowns.at(1));
+    await tester.pumpAndSettle();
     await tester.tap(dropdowns.at(1));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sahtecilik').last);
@@ -820,7 +832,10 @@ void main() {
     final repository = RecordingRepository();
     await tester.pumpWidget(app(repository));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('risk-operations-date-from')));
+    final dateFrom = find.byKey(const ValueKey('risk-operations-date-from'));
+    await tester.ensureVisible(dateFrom);
+    await tester.pumpAndSettle();
+    await tester.tap(dateFrom);
     await tester.pumpAndSettle();
     await tester.tap(find.text('20').last);
     await tester.tap(find.text('OK'));
