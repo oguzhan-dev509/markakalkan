@@ -5831,6 +5831,25 @@ allow delete: if request.auth != null
       allow read, write: if false;
     }
 
+
+    // Vaka ve Delil Merkezi V1 is server-only. Tenant isolation, lifecycle,
+    // idempotency and append-only policy remain in trusted callable handlers.
+    match /case_files/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /case_events/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /case_evidence_refs/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /case_audit_events/{documentId} {
+      allow read, write: if false;
+    }
+
     // Canonical tenant/brand provisioning V1 is server-only. Contract,
     // authorization, lifecycle and idempotency policy stay in the server core.
     match /tenants/{documentId} {

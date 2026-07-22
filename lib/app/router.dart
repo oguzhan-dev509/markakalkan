@@ -17,6 +17,7 @@ import 'package:markakalkan/features/verification/presentation/qr_scanner_page.d
 import 'package:markakalkan/features/traceability/presentation/suspicious_verification_scans_page.dart';
 import 'package:markakalkan/features/traceability/presentation/traceability_cases_page.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_center_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -402,6 +403,15 @@ abstract final class AppRouter {
   static Future<void> openTraceabilityCases(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const TraceabilityCasesPage()),
+    );
+  }
+
+  static Future<void> openCaseEvidenceCenter(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/case-evidence-center'),
+        builder: (_) => const CaseEvidenceCenterPage(),
+      ),
     );
   }
 

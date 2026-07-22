@@ -92,6 +92,10 @@ const {
 const {
   buildPromoteRiskOperationToSharedRisk,
 } = require("./shared_risk/promotion/v1");
+const {
+  buildCreateCaseFromRiskOperation,
+  buildListCaseEvidenceCenter,
+} = require("./case_evidence_center/v1");
 
 setGlobalOptions({
   region: "europe-west3",
@@ -221,3 +225,7 @@ exports.listRiskOperationsReadModel =
     buildListRiskOperationsReadModel({db});
 exports.promoteRiskOperationToSharedRisk =
     buildPromoteRiskOperationToSharedRisk({db});
+exports.listCaseEvidenceCenter =
+    buildListCaseEvidenceCenter({db});
+exports.createCaseFromRiskOperation =
+    buildCreateCaseFromRiskOperation({db});

@@ -140,7 +140,7 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
           'görev ve vaka bazında güvenli biçimde yönetin; delil '
           'bütünlüğünü ve işlem geçmişini koruyun.',
       icon: Icons.folder_copy_outlined,
-      status: _ModuleStatus.soon,
+      status: _ModuleStatus.active,
     ),
     _CorporateModule(
       id: 'legal',
@@ -467,11 +467,32 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                           .map(
                             (module) => SizedBox(
                               width: cardWidth,
-                              child: _CorporateModuleCard(
-                                module: module,
-                                riskOperationsRouteOpener:
-                                    widget.riskOperationsRouteOpener,
-                              ),
+                              child: module.id == 'cases'
+                                  ? Semantics(
+                                      button: true,
+                                      child: GestureDetector(
+                                        key: const ValueKey(
+                                          'case-evidence-center-action',
+                                        ),
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () =>
+                                            AppRouter.openCaseEvidenceCenter(
+                                              context,
+                                            ),
+                                        child: IgnorePointer(
+                                          child: _CorporateModuleCard(
+                                            module: module,
+                                            riskOperationsRouteOpener: widget
+                                                .riskOperationsRouteOpener,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : _CorporateModuleCard(
+                                      module: module,
+                                      riskOperationsRouteOpener:
+                                          widget.riskOperationsRouteOpener,
+                                    ),
                             ),
                           )
                           .toList(),
