@@ -138,6 +138,17 @@ class _RiskOperationsConsolePageState extends State<RiskOperationsConsolePage> {
             ? RiskOperationsLoadState.noActiveTenant
             : RiskOperationsLoadState.error;
       });
+    } on RiskOperationsRepositoryException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _state =
+            error.firebaseCode == 'permission-denied' ||
+                error.firebaseCode == 'unauthenticated'
+            ? RiskOperationsLoadState.permissionDenied
+            : error.firebaseCode == 'failed-precondition'
+            ? RiskOperationsLoadState.noActiveTenant
+            : RiskOperationsLoadState.error;
+      });
     } catch (_) {
       if (mounted) setState(() => _state = RiskOperationsLoadState.error);
     }

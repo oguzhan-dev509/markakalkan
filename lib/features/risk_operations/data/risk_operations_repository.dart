@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:developer' as developer;
+
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:crypto/crypto.dart';
 
 import 'risk_operations_lifecycle.dart';
 import 'risk_operations_models.dart';
@@ -117,21 +121,167 @@ abstract interface class RiskOperationsRepository {
   );
 }
 
+typedef RiskOperationsCallableTransport =
+    Future<Object?> Function(Map<String, dynamic> request);
+typedef RiskOperationsFailureLogger =
+    void Function(Map<String, Object?> safeFields);
+
+enum RiskOperationsRepositoryFailureStage {
+  callableResultReceived('callable_result_received'),
+  rootResponseNormalization('root_response_normalization'),
+  pageResultParsing('page_result_parsing');
+
+  const RiskOperationsRepositoryFailureStage(this.wireValue);
+  final String wireValue;
+}
+
+class RiskOperationsRepositoryException implements Exception {
+  const RiskOperationsRepositoryException({
+    required this.failureStage,
+    required this.exceptionType,
+    this.firebaseCode,
+  });
+
+  final RiskOperationsRepositoryFailureStage failureStage;
+  final String exceptionType;
+  final String? firebaseCode;
+}
+
+class RiskOperationsResponseNormalizationException implements Exception {
+  const RiskOperationsResponseNormalizationException();
+}
+
+Map<String, dynamic> normalizeRiskOperationsResponse(Object? value) {
+  final normalized = _normalizeCallableValue(value);
+  if (normalized is! Map<String, dynamic>) {
+    throw const RiskOperationsResponseNormalizationException();
+  }
+  return normalized;
+}
+
+Object? _normalizeCallableValue(Object? value) {
+  if (value == null || value is String || value is bool || value is num) {
+    return value;
+  }
+  if (value is List) {
+    return value.map(_normalizeCallableValue).toList(growable: false);
+  }
+  if (value is Map) {
+    final normalized = <String, dynamic>{};
+    for (final entry in value.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw const RiskOperationsResponseNormalizationException();
+      }
+      normalized[key] = _normalizeCallableValue(entry.value);
+    }
+    return normalized;
+  }
+  throw const RiskOperationsResponseNormalizationException();
+}
+
 class CallableRiskOperationsRepository implements RiskOperationsRepository {
-  CallableRiskOperationsRepository({FirebaseFunctions? functions})
-    : _functions =
-          functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3');
-  final FirebaseFunctions _functions;
+  CallableRiskOperationsRepository({
+    FirebaseFunctions? functions,
+    RiskOperationsCallableTransport? transport,
+    RiskOperationsFailureLogger? failureLogger,
+  }) : _transport = transport ?? _firebaseTransport(functions),
+       _failureLogger = failureLogger ?? _logFailure;
+
+  final RiskOperationsCallableTransport _transport;
+  final RiskOperationsFailureLogger _failureLogger;
+
   @override
   Future<RiskOperationsPageResult> list(
     RiskOperationsQuery query,
     RiskOperationsReadDiagnostics diagnostics,
   ) async {
-    final response = await _functions
-        .httpsCallable('listRiskOperationsReadModel')
-        .call<Map<String, dynamic>>({...query.toMap(), ...diagnostics.toMap()});
-    return RiskOperationsPageResult.fromMap(
-      Map<String, dynamic>.from(response.data),
+    Object? responseRoot;
+    try {
+      responseRoot = await _transport({
+        ...query.toMap(),
+        ...diagnostics.toMap(),
+      });
+    } catch (error) {
+      throw _failure(
+        RiskOperationsRepositoryFailureStage.callableResultReceived,
+        error,
+        diagnostics,
+      );
+    }
+
+    late final Map<String, dynamic> normalized;
+    try {
+      normalized = normalizeRiskOperationsResponse(responseRoot);
+    } catch (error) {
+      throw _failure(
+        RiskOperationsRepositoryFailureStage.rootResponseNormalization,
+        error,
+        diagnostics,
+        responseRoot: responseRoot,
+      );
+    }
+
+    try {
+      return RiskOperationsPageResult.fromMap(normalized);
+    } catch (error) {
+      throw _failure(
+        RiskOperationsRepositoryFailureStage.pageResultParsing,
+        error,
+        diagnostics,
+        responseRoot: responseRoot,
+      );
+    }
+  }
+
+  RiskOperationsRepositoryException _failure(
+    RiskOperationsRepositoryFailureStage stage,
+    Object error,
+    RiskOperationsReadDiagnostics diagnostics, {
+    Object? responseRoot,
+  }) {
+    final exception = RiskOperationsRepositoryException(
+      failureStage: stage,
+      exceptionType: error.runtimeType.toString(),
+      firebaseCode: error is FirebaseFunctionsException ? error.code : null,
     );
+    _failureLogger(<String, Object?>{
+      'event': 'risk_operations_repository_failed',
+      'failureStage': stage.wireValue,
+      'exceptionType': exception.exceptionType,
+      'lifecycleCorrelationHash': _correlationHash(diagnostics),
+      'routeEntryCause': diagnostics.routeEntryCause.wireValue,
+      'responseRootType': responseRoot?.runtimeType.toString() ?? 'null',
+      'transactionCommitted': false,
+      'writeAttempted': false,
+    });
+    return exception;
+  }
+
+  static String _correlationHash(RiskOperationsReadDiagnostics diagnostics) =>
+      sha256
+          .convert(
+            utf8.encode(
+              '${diagnostics.appBootId}:${diagnostics.navigationRequestId}:'
+              '${diagnostics.routeEntryId}:${diagnostics.loadAttemptId}',
+            ),
+          )
+          .toString();
+
+  static void _logFailure(Map<String, Object?> safeFields) {
+    developer.log(jsonEncode(safeFields), name: 'risk_operations_repository');
+  }
+
+  static RiskOperationsCallableTransport _firebaseTransport(
+    FirebaseFunctions? value,
+  ) {
+    final functions =
+        value ?? FirebaseFunctions.instanceFor(region: 'europe-west3');
+    return (request) async {
+      final response = await functions
+          .httpsCallable('listRiskOperationsReadModel')
+          .call<Object?>(request);
+      return response.data;
+    };
   }
 }

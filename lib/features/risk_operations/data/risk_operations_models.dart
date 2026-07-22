@@ -224,6 +224,7 @@ class RiskOperationsPageResult {
   final String? nextPageToken;
   final bool partialSourceUnavailable;
   factory RiskOperationsPageResult.fromMap(Map<String, dynamic> map) {
+    _validatePageResult(map);
     if (map['contractVersion'] != 'risk-operations-read-v1' ||
         map['readOnly'] != true ||
         map['writesPerformed'] != 0) {
@@ -240,6 +241,153 @@ class RiskOperationsPageResult {
         (item) => item['status'] == 'unavailable',
       ),
     );
+  }
+}
+
+void _validatePageResult(Map<String, dynamic> map) {
+  _requireType<String>(map, 'contractVersion');
+  _requireType<bool>(map, 'readOnly');
+  _requireNum(map, 'writesPerformed');
+  final summary = _requireMap(map, 'summary');
+  for (final field in const [
+    'totalVisibleSignals',
+    'highOrCriticalRisk',
+    'awaitingHumanReview',
+    'strongCaseCandidates',
+    'insufficientEvidence',
+  ]) {
+    _requireNum(summary, field);
+  }
+  _optionalType<String>(map, 'nextPageToken');
+  final availability = _requireMapList(map, 'sourceAvailability');
+  for (final source in availability) {
+    _requireType<String>(source, 'sourceSystem');
+    _requireType<String>(source, 'status');
+  }
+  final items = _requireMapList(map, 'items');
+  for (final item in items) {
+    _validateItem(item);
+  }
+}
+
+void _validateItem(Map<String, dynamic> item) {
+  for (final field in const [
+    'signalId',
+    'sourceSystem',
+    'sourceRecordId',
+    'sourceRecordVersion',
+    'tenantId',
+    'canonicalBrandId',
+    'canonicalSubjectId',
+    'subjectType',
+    'title',
+    'summary',
+    'currentStatus',
+    'riskClass',
+    'severity',
+    'adapterVersion',
+    'projectionFingerprint',
+  ]) {
+    _requireType<String>(item, field);
+  }
+  _optionalType<String>(item, 'occurredAt');
+  _optionalType<String>(item, 'observedAt');
+  _optionalType<String>(item, 'ingestedAt');
+  _optionalNum(item, 'confidence');
+
+  final evidence = _requireMap(item, 'evidenceQuality');
+  _requireType<String>(evidence, 'level');
+  _requireStringList(evidence, 'reasonCodes');
+  _requireType<String>(evidence, 'evaluatorVersion');
+
+  final candidacy = _requireMap(item, 'caseCandidacy');
+  _requireType<String>(candidacy, 'status');
+  _requireStringList(candidacy, 'reasonCodes');
+  _optionalType<String>(candidacy, 'evaluatedAt');
+  _requireType<String>(candidacy, 'evaluatorVersion');
+  _requireType<bool>(candidacy, 'requiresHumanReview');
+
+  for (final event in _requireMapList(item, 'timeline')) {
+    for (final field in const [
+      'eventId',
+      'eventType',
+      'occurredAtStatus',
+      'sourceSystem',
+      'summary',
+    ]) {
+      _requireType<String>(event, field);
+    }
+    _optionalType<String>(event, 'occurredAt');
+    _requireNum(event, 'evidenceReferenceCount');
+  }
+
+  final graph = _requireMap(item, 'relationshipGraph');
+  for (final node in _requireMapList(graph, 'nodes')) {
+    for (final field in const [
+      'canonicalId',
+      'type',
+      'maskedLabel',
+      'sourceSystem',
+      'evidenceQuality',
+    ]) {
+      _requireType<String>(node, field);
+    }
+    _requireNum(node, 'confidence');
+    _optionalType<String>(node, 'firstObservedAt');
+    _optionalType<String>(node, 'lastObservedAt');
+  }
+  _requireMapList(graph, 'edges');
+}
+
+T _requireType<T>(Map<String, dynamic> map, String field) {
+  final value = map[field];
+  if (value is! T) throw FormatException('$field has invalid type');
+  return value;
+}
+
+void _optionalType<T>(Map<String, dynamic> map, String field) {
+  final value = map[field];
+  if (value != null && value is! T) {
+    throw FormatException('$field has invalid type');
+  }
+}
+
+num _requireNum(Map<String, dynamic> map, String field) {
+  final value = map[field];
+  if (value is! num) throw FormatException('$field has invalid type');
+  return value;
+}
+
+void _optionalNum(Map<String, dynamic> map, String field) {
+  final value = map[field];
+  if (value != null && value is! num) {
+    throw FormatException('$field has invalid type');
+  }
+}
+
+Map<String, dynamic> _requireMap(Map<String, dynamic> map, String field) {
+  final value = map[field];
+  if (value is! Map<String, dynamic>) {
+    throw FormatException('$field has invalid type');
+  }
+  return value;
+}
+
+List<Map<String, dynamic>> _requireMapList(
+  Map<String, dynamic> map,
+  String field,
+) {
+  final value = map[field];
+  if (value is! List || value.any((item) => item is! Map<String, dynamic>)) {
+    throw FormatException('$field has invalid type');
+  }
+  return value.cast<Map<String, dynamic>>();
+}
+
+void _requireStringList(Map<String, dynamic> map, String field) {
+  final value = map[field];
+  if (value is! List || value.any((item) => item is! String)) {
+    throw FormatException('$field has invalid type');
   }
 }
 
