@@ -382,7 +382,8 @@ class _CasePartiesRelationshipsPageState
         : _caseId;
     var partyType = 'person';
     final caseRoles = <String>[];
-    var sending = false;
+    final requestId = _uuid();
+    var submitting = false;
     String? message;
     await showDialog<void>(
       context: context,
@@ -424,7 +425,7 @@ class _CasePartiesRelationshipsPageState
                         ),
                       )
                       .toList(),
-                  onChanged: sending
+                  onChanged: submitting
                       ? null
                       : (value) => setDialogState(
                           () => partyType = value ?? partyType,
@@ -447,7 +448,7 @@ class _CasePartiesRelationshipsPageState
                           label: Text(casePartyRoleLabel(role)),
                           selected: caseRoles.contains(role),
                           onSelected:
-                              sending ||
+                              submitting ||
                                   (!caseRoles.contains(role) &&
                                       caseRoles.length >= 5)
                               ? null
@@ -502,14 +503,15 @@ class _CasePartiesRelationshipsPageState
           ),
           actions: [
             TextButton(
-              onPressed: sending ? null : () => Navigator.pop(dialogContext),
+              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
               child: const Text('Vazgeç'),
             ),
             FilledButton(
               key: const ValueKey('submit-party'),
-              onPressed: sending
+              onPressed: submitting
                   ? null
                   : () async {
+                      if (submitting) return;
                       final normalizedCountry = countryCode.text
                           .trim()
                           .toUpperCase();
@@ -531,7 +533,7 @@ class _CasePartiesRelationshipsPageState
                         return;
                       }
                       setDialogState(() {
-                        sending = true;
+                        submitting = true;
                         message = null;
                       });
                       final request = <String, dynamic>{
@@ -549,27 +551,39 @@ class _CasePartiesRelationshipsPageState
                         if (city.text.trim().isNotEmpty)
                           'city': city.text.trim(),
                         'description': description.text.trim(),
-                        'requestId': _uuid(),
+                        'requestId': requestId,
                       };
-                      final result = await _repository.createParty(request);
-                      if (!dialogContext.mounted) return;
-                      if (result['duplicate'] == true) {
+                      Map<String, dynamic> result;
+                      try {
+                        result = await _repository.createParty(request);
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
                         setDialogState(() {
-                          sending = false;
-                          message = 'Bu işlem daha önce kaydedildi.';
+                          submitting = false;
+                          message =
+                              'İşlem sonucu doğrulanamadı. Aynı istekle yeniden deneyin.';
                         });
+                        return;
+                      }
+                      if (!dialogContext.mounted) return;
+                      final duplicate = result['duplicate'] == true;
+                      Navigator.pop(dialogContext);
+                      if (!mounted) return;
+                      if (duplicate) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Bu işlem daha önce kaydedildi.'),
+                          ),
+                        );
+                      }
+                      final partyId = _string(result, 'partyId');
+                      if (widget.partyDetailOpener != null) {
+                        await widget.partyDetailOpener!(context, partyId);
                       } else {
-                        Navigator.pop(dialogContext);
-                        if (!mounted) return;
-                        final partyId = _string(result, 'partyId');
-                        if (widget.partyDetailOpener != null) {
-                          await widget.partyDetailOpener!(context, partyId);
-                        } else {
-                          await AppRouter.openCasePartyDetail(
-                            context,
-                            partyId: partyId,
-                          );
-                        }
+                        await AppRouter.openCasePartyDetail(
+                          context,
+                          partyId: partyId,
+                        );
                       }
                     },
               child: const Text('Kaydet'),

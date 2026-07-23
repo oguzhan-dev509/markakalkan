@@ -189,6 +189,10 @@ class _CasePartyDetailPageState extends State<CasePartyDetailPage> {
 
   Future<void> _act(String action) async {
     final note = TextEditingController();
+    final requestId = _uuid();
+    var submitting = false;
+    var completed = false;
+    String? message;
     final event = {
       'start_review': 'party_review_started',
       'verify': 'party_verified',
@@ -198,42 +202,72 @@ class _CasePartyDetailPageState extends State<CasePartyDetailPage> {
     }[action]!;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(caseGraphActionLabel(action)),
-        content: TextField(
-          key: const ValueKey('graph-event-note'),
-          controller: note,
-          decoration: const InputDecoration(labelText: 'İşlem notu'),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () async {
-              if (note.text.trim().length < 3) return;
-              final result = await _repository.append({
-                'contractVersion': 'case-graph-event-request-v1',
-                'targetType': 'party',
-                'targetId': widget.partyId,
-                'eventType': event,
-                'note': note.text,
-                'requestId': _uuid(),
-              });
-              if (!dialogContext.mounted) return;
-              Navigator.pop(dialogContext);
-              if (result['duplicate'] == true && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Bu işlem daha önce kaydedildi.'),
-                  ),
-                );
-              }
-            },
-            child: const Text('Kaydet'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(caseGraphActionLabel(action)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                key: const ValueKey('graph-event-note'),
+                controller: note,
+                decoration: const InputDecoration(labelText: 'İşlem notu'),
+              ),
+              if (message != null) Text(message!),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('submit-graph-event'),
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      if (submitting || note.text.trim().length < 3) return;
+                      setDialogState(() {
+                        submitting = true;
+                        message = null;
+                      });
+                      Map<String, dynamic> result;
+                      try {
+                        result = await _repository.append({
+                          'contractVersion': 'case-graph-event-request-v1',
+                          'targetType': 'party',
+                          'targetId': widget.partyId,
+                          'eventType': event,
+                          'note': note.text.trim(),
+                          'requestId': requestId,
+                        });
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() {
+                          submitting = false;
+                          message =
+                              'İşlem sonucu doğrulanamadı. Aynı istekle yeniden deneyin.';
+                        });
+                        return;
+                      }
+                      if (!dialogContext.mounted) return;
+                      completed = true;
+                      Navigator.pop(dialogContext);
+                      if (result['duplicate'] == true && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Bu işlem daha önce kaydedildi.'),
+                          ),
+                        );
+                      }
+                    },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
       ),
     );
-    note.dispose();
-    await _load();
+    if (completed) await _load();
   }
 }
 

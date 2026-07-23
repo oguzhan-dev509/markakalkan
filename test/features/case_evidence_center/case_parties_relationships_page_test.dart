@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_parties_relationships_page.dart';
@@ -6,6 +8,9 @@ class _Repository implements CasePartyRepository {
   _Repository(this.value);
   final Map<String, dynamic> value;
   final List<Map<String, dynamic>> createRequests = [];
+  Completer<Map<String, dynamic>>? pendingCreate;
+  bool failNextCreate = false;
+  bool duplicate = false;
   @override
   Future<Map<String, dynamic>> workspace() async => value;
   @override
@@ -15,7 +20,12 @@ class _Repository implements CasePartyRepository {
   @override
   Future<Map<String, dynamic>> createParty(Map<String, dynamic> request) async {
     createRequests.add(request);
-    return {'partyId': 'party-internal', 'duplicate': false};
+    if (failNextCreate) {
+      failNextCreate = false;
+      throw TimeoutException('uncertain transport result');
+    }
+    if (pendingCreate != null) return pendingCreate!.future;
+    return {'partyId': 'party-internal', 'duplicate': duplicate};
   }
 
   @override
@@ -76,6 +86,25 @@ Map<String, dynamic> _fixture() => {
   'readOnly': true,
   'writesPerformed': 0,
 };
+
+Future<void> _openAndFillPartyForm(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('create-party')));
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.byKey(const ValueKey('party-name')),
+    'Örnek Satıcı',
+  );
+  await tester.ensureVisible(
+    find.byKey(const ValueKey('party-role-related_party')),
+  );
+  await tester.tap(find.byKey(const ValueKey('party-role-related_party')));
+  await tester.ensureVisible(find.byKey(const ValueKey('party-description')));
+  await tester.enterText(
+    find.byKey(const ValueKey('party-description')),
+    'Kontrollü taraf inceleme açıklaması.',
+  );
+  await tester.ensureVisible(find.byKey(const ValueKey('submit-party')));
+}
 
 void main() {
   testWidgets('workspace renders Turkish safe party and relationship content', (
@@ -206,4 +235,72 @@ void main() {
     expect(request['description'], 'Kontrollü taraf inceleme açıklaması.');
     expect(opened, 'party-internal');
   });
+
+  testWidgets(
+    'rapid party double submit invokes callable and navigation once',
+    (tester) async {
+      final repository = _Repository(_fixture())
+        ..pendingCreate = Completer<Map<String, dynamic>>();
+      var navigationCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CasePartiesRelationshipsPage(
+            repository: repository,
+            partyDetailOpener: (_, _) async => navigationCount++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openAndFillPartyForm(tester);
+      final submit = find.byKey(const ValueKey('submit-party'));
+      await tester.tap(submit);
+      await tester.tap(submit);
+      expect(repository.createRequests, hasLength(1));
+      final stableRequestId = repository.createRequests.single['requestId'];
+      await tester.pump();
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      repository.pendingCreate!.complete({
+        'partyId': 'party-internal',
+        'duplicate': false,
+      });
+      await tester.pumpAndSettle();
+      expect(repository.createRequests.single['requestId'], stableRequestId);
+      expect(navigationCount, 1);
+    },
+  );
+
+  testWidgets(
+    'uncertain party retry reuses requestId and duplicate opens detail',
+    (tester) async {
+      final repository = _Repository(_fixture())
+        ..failNextCreate = true
+        ..duplicate = true;
+      var navigationCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CasePartiesRelationshipsPage(
+            repository: repository,
+            partyDetailOpener: (_, _) async => navigationCount++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openAndFillPartyForm(tester);
+      final submit = find.byKey(const ValueKey('submit-party'));
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Aynı istekle yeniden deneyin'),
+        findsOneWidget,
+      );
+      final firstId = repository.createRequests.single['requestId'];
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(repository.createRequests, hasLength(2));
+      expect(repository.createRequests.last['requestId'], firstId);
+      expect(navigationCount, 1);
+      expect(find.text('Bu işlem daha önce kaydedildi.'), findsOneWidget);
+      expect(find.text('party-internal'), findsNothing);
+    },
+  );
 }
