@@ -474,12 +474,14 @@ test("graph event transitions are idempotent and inactive is terminal", async ()
 
 test("unified timeline reads only case_events, classifies and normalizes timestamps", async () => {
   const db = new FakeDb(graphCollections()); db.collections.case_events.push(
-      {id: "case-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "case_opened", summary: "Vaka açıldı", occurredAt: "2026-07-23T10:00:00.000Z"}},
+      {id: "case-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "case_opened_from_risk", summary: "Vaka açıldı", occurredAt: "2026-07-23T10:00:00.000Z"}},
+      {id: "evidence-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "evidence_chain_started", summary: "Delil zinciri başlatıldı", occurredAt: "2026-07-23T10:30:00.000Z"}},
       {id: "task-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "review_task_created", summary: "Görev oluşturuldu", occurredAt: new Date("2026-07-23T11:00:00.000Z")}},
-      {id: "party-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "party_created", summary: "Taraf oluşturuldu", occurredAt: {toDate: () => new Date("2026-07-23T12:00:00.000Z")}}},
+      {id: "due-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "review_task_due_date_changed", summary: "Son tarih değiştirildi", occurredAt: {toDate: () => new Date("2026-07-23T12:00:00.000Z")}}},
+      {id: "unknown-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "unknown_internal_event", summary: "Güvenli özet", occurredAt: "2026-07-23T09:00:00.000Z"}},
   ); db.collections.case_review_task_events.push({id: "must-not-appear", data: {caseId: "case-1", summary: "Çoğaltılmamalı"}});
   const result = await createCaseGraphService({db, clock: graphClock}).timeline({contractVersion: "case-unified-timeline-request-v1", caseId: "case-1"}, {uid: "user-1"});
-  assert.equal(result.events.length, 3); assert.deepEqual(result.events.map((item) => item.category), ["party", "task", "case"]); assert.equal(result.events[0].occurredAt, "2026-07-23T12:00:00.000Z"); assert.equal(JSON.stringify(result).includes("Çoğaltılmamalı"), false); assert.equal(db.writes, 0);
+  assert.equal(result.events.length, 5); assert.deepEqual(result.events.map((item) => item.eventLabel), ["Görev son tarihi değiştirildi", "İnceleme görevi oluşturuldu", "Delil zinciri başlatıldı", "Vaka dosyası açıldı", "Vaka olayı"]); assert.deepEqual(result.events.map((item) => item.category), ["task", "task", "evidence", "case", "case"]); assert.equal(result.events[0].occurredAt, "2026-07-23T12:00:00.000Z"); assert.equal(JSON.stringify(result).includes("Çoğaltılmamalı"), false); assert.equal(db.writes, 0);
 });
 
 test("graph write handlers require auth and App Check", async () => {

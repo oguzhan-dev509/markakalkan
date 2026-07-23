@@ -5,6 +5,44 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_party_relationship_presentation_labels.dart';
 
+const _partyTypes = [
+  'person',
+  'organization',
+  'seller_account',
+  'marketplace_store',
+  'marketplace_operator',
+  'website',
+  'social_media_account',
+  'manufacturer',
+  'supplier',
+  'logistics_provider',
+  'payment_intermediary',
+  'laboratory',
+  'expert',
+  'public_authority',
+  'legal_representative',
+  'address',
+  'other',
+];
+const _partyRoles = [
+  'suspected_seller',
+  'suspected_operator',
+  'manufacturer',
+  'supplier',
+  'marketplace',
+  'payment_recipient',
+  'logistics_provider',
+  'complainant',
+  'reporter',
+  'witness',
+  'expert',
+  'laboratory',
+  'authority',
+  'legal_representative',
+  'related_party',
+  'other',
+];
+
 abstract interface class CasePartyRepository {
   Future<Map<String, dynamic>> workspace();
   Future<Map<String, dynamic>> partyDetail(String partyId);
@@ -334,10 +372,17 @@ class _CasePartiesRelationshipsPageState
   Future<void> _showCreateParty() async {
     if (_cases.isEmpty) return;
     final name = TextEditingController();
+    final publicAlias = TextEditingController();
+    final organizationName = TextEditingController();
+    final countryCode = TextEditingController();
+    final city = TextEditingController();
     final description = TextEditingController();
     var selectedCase = _caseId.isEmpty
         ? _string(_cases.first, 'caseId')
         : _caseId;
+    var partyType = 'person';
+    final caseRoles = <String>[];
+    var sending = false;
     String? message;
     await showDialog<void>(
       context: context,
@@ -366,6 +411,86 @@ class _CasePartiesRelationshipsPageState
                   controller: name,
                   decoration: const InputDecoration(labelText: 'Taraf adı'),
                 ),
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('party-type'),
+                  initialValue: partyType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Taraf türü'),
+                  items: _partyTypes
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(casePartyTypeLabel(value)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: sending
+                      ? null
+                      : (value) => setDialogState(
+                          () => partyType = value ?? partyType,
+                        ),
+                ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Text('Vaka rolleri (1–5)'),
+                  ),
+                ),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: _partyRoles
+                      .map(
+                        (role) => FilterChip(
+                          key: ValueKey('party-role-$role'),
+                          label: Text(casePartyRoleLabel(role)),
+                          selected: caseRoles.contains(role),
+                          onSelected:
+                              sending ||
+                                  (!caseRoles.contains(role) &&
+                                      caseRoles.length >= 5)
+                              ? null
+                              : (selected) => setDialogState(() {
+                                  if (selected) {
+                                    if (!caseRoles.contains(role)) {
+                                      caseRoles.add(role);
+                                    }
+                                  } else {
+                                    caseRoles.remove(role);
+                                  }
+                                }),
+                        ),
+                      )
+                      .toList(),
+                ),
+                TextField(
+                  key: const ValueKey('party-public-alias'),
+                  controller: publicAlias,
+                  decoration: const InputDecoration(
+                    labelText: 'Kamuya açık ad veya kullanıcı adı',
+                  ),
+                ),
+                TextField(
+                  key: const ValueKey('party-organization'),
+                  controller: organizationName,
+                  decoration: const InputDecoration(labelText: 'Kuruluş'),
+                ),
+                TextField(
+                  key: const ValueKey('party-country-code'),
+                  controller: countryCode,
+                  textCapitalization: TextCapitalization.characters,
+                  maxLength: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Ülke kodu',
+                    hintText: 'TR',
+                  ),
+                ),
+                TextField(
+                  key: const ValueKey('party-city'),
+                  controller: city,
+                  decoration: const InputDecoration(labelText: 'Şehir'),
+                ),
                 TextField(
                   key: const ValueKey('party-description'),
                   controller: description,
@@ -377,49 +502,82 @@ class _CasePartiesRelationshipsPageState
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: sending ? null : () => Navigator.pop(dialogContext),
               child: const Text('Vazgeç'),
             ),
             FilledButton(
-              onPressed: () async {
-                if (name.text.trim().length < 3 ||
-                    description.text.trim().length < 10) {
-                  setDialogState(
-                    () => message = 'Taraf bilgilerini eksiksiz girin.',
-                  );
-                  return;
-                }
-                final result = await _repository.createParty({
-                  'contractVersion': 'case-party-create-request-v1',
-                  'caseId': selectedCase,
-                  'displayName': name.text,
-                  'partyType': 'other',
-                  'caseRoles': ['related_party'],
-                  'description': description.text,
-                  'requestId': _uuid(),
-                });
-                if (!dialogContext.mounted) return;
-                if (result['duplicate'] == true) {
-                  setDialogState(
-                    () => message = 'Bu işlem daha önce kaydedildi.',
-                  );
-                } else {
-                  Navigator.pop(dialogContext);
-                  if (!mounted) return;
-                  await AppRouter.openCasePartyDetail(
-                    context,
-                    partyId: _string(result, 'partyId'),
-                  );
-                }
-              },
+              key: const ValueKey('submit-party'),
+              onPressed: sending
+                  ? null
+                  : () async {
+                      final normalizedCountry = countryCode.text
+                          .trim()
+                          .toUpperCase();
+                      if (name.text.trim().length < 3 ||
+                          description.text.trim().length < 10 ||
+                          caseRoles.isEmpty) {
+                        setDialogState(
+                          () => message =
+                              'Taraf adı, açıklama ve en az bir vaka rolü zorunludur.',
+                        );
+                        return;
+                      }
+                      if (normalizedCountry.isNotEmpty &&
+                          !RegExp(r'^[A-Z]{2}$').hasMatch(normalizedCountry)) {
+                        setDialogState(
+                          () => message =
+                              'Ülke kodu iki harften oluşmalıdır (ör. TR).',
+                        );
+                        return;
+                      }
+                      setDialogState(() {
+                        sending = true;
+                        message = null;
+                      });
+                      final request = <String, dynamic>{
+                        'contractVersion': 'case-party-create-request-v1',
+                        'caseId': selectedCase,
+                        'displayName': name.text.trim(),
+                        'partyType': partyType,
+                        'caseRoles': List<String>.of(caseRoles),
+                        if (publicAlias.text.trim().isNotEmpty)
+                          'publicAlias': publicAlias.text.trim(),
+                        if (organizationName.text.trim().isNotEmpty)
+                          'organizationName': organizationName.text.trim(),
+                        if (normalizedCountry.isNotEmpty)
+                          'countryCode': normalizedCountry,
+                        if (city.text.trim().isNotEmpty)
+                          'city': city.text.trim(),
+                        'description': description.text.trim(),
+                        'requestId': _uuid(),
+                      };
+                      final result = await _repository.createParty(request);
+                      if (!dialogContext.mounted) return;
+                      if (result['duplicate'] == true) {
+                        setDialogState(() {
+                          sending = false;
+                          message = 'Bu işlem daha önce kaydedildi.';
+                        });
+                      } else {
+                        Navigator.pop(dialogContext);
+                        if (!mounted) return;
+                        final partyId = _string(result, 'partyId');
+                        if (widget.partyDetailOpener != null) {
+                          await widget.partyDetailOpener!(context, partyId);
+                        } else {
+                          await AppRouter.openCasePartyDetail(
+                            context,
+                            partyId: partyId,
+                          );
+                        }
+                      }
+                    },
               child: const Text('Kaydet'),
             ),
           ],
         ),
       ),
     );
-    name.dispose();
-    description.dispose();
     await _load();
   }
 }

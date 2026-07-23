@@ -86,6 +86,15 @@ function graphEventRequest(raw) {
   return {targetType, targetId: text(raw.targetId, "targetId", 1, 128), eventType, note: text(raw.note, "note", 3, 1000), requestId: requestId(raw.requestId)};
 }
 const eventLabel = (value) => ({party_created: "Taraf kaydı oluşturuldu", party_review_started: "Taraf incelemesi başlatıldı", party_verified: "Taraf doğrulandı", party_disputed: "Taraf ihtilaflı olarak işaretlendi", party_note_added: "Taraf notu eklendi", party_deactivated: "Taraf pasife alındı", relationship_created: "İlişki kaydı oluşturuldu", relationship_review_started: "İlişki incelemesi başlatıldı", relationship_confirmed: "İlişki doğrulandı", relationship_disputed: "İlişki ihtilaflı olarak işaretlendi", relationship_note_added: "İlişki notu eklendi", relationship_deactivated: "İlişki pasife alındı"})[value] || "Vaka bağlantısı işlemi";
+const timelineEventLabel = (value) => ({
+  case_opened_from_risk: "Vaka dosyası açıldı",
+  evidence_chain_started: "Delil zinciri başlatıldı",
+  review_task_created: "İnceleme görevi oluşturuldu",
+  review_task_due_date_changed: "Görev son tarihi değiştirildi",
+  party_created: "Taraf kaydı oluşturuldu",
+  relationship_created: "İlişki kaydı oluşturuldu",
+  ...Object.fromEntries([...PARTY_EVENTS, ...RELATIONSHIP_EVENTS].map((item) => [item, eventLabel(item)])),
+})[value] || "Vaka olayı";
 const allowedActions = (type, status) => {
   const shared = status === "inactive" ? [] : ["add_note", "deactivate"];
   if (status === "observed") return ["start_review", type === "party" ? "verify" : "confirm", "dispute", ...shared];
@@ -173,7 +182,7 @@ function createCaseGraphService({db, clock = {now: () => new Date(), timestamp: 
       const context = await resolveTenantContextV1({db, uid: invocation.uid, request: {}}); const linkedCase = await scopedCase(db, null, caseId, context);
       const snapshot = await db.collection("case_events").where("caseId", "==", caseId).limit(500).get();
       const events = snapshot.docs.map((doc) => doc.data() || {}).filter((item) => item.tenantId === context.tenantId && item.canonicalBrandId === context.brandId).map((item) => {
-        const eventCategory = category(item.eventType || "", item.category); return {eventType: item.eventType, eventLabel: item.eventLabel || eventLabel(item.eventType) || "Vaka olayı", category: eventCategory, categoryLabel: categoryLabel(eventCategory), summary: item.summary || "Vaka olayı", occurredAt: iso(item.occurredAt)};
+        const eventCategory = category(item.eventType || "", item.category); return {eventType: item.eventType, eventLabel: timelineEventLabel(item.eventType), category: eventCategory, categoryLabel: categoryLabel(eventCategory), summary: item.summary || "Vaka olayı", occurredAt: iso(item.occurredAt)};
       }).sort((a, b) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || "")));
       const count = (value) => events.filter((item) => item.category === value).length;
       return {contractVersion: "case-unified-timeline-v1", case: {caseId, caseNumber: linkedCase.data.caseNumber, caseTitle: linkedCase.data.title, status: linkedCase.data.status}, stats: {totalEvents: events.length, caseEvents: count("case"), evidenceEvents: count("evidence"), taskEvents: count("task"), partyEvents: count("party"), relationshipEvents: count("relationship")}, events, readOnly: true, writesPerformed: 0};

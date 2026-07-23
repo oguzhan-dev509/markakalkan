@@ -5,6 +5,7 @@ import 'package:markakalkan/features/case_evidence_center/presentation/case_part
 class _Repository implements CasePartyRepository {
   _Repository(this.value);
   final Map<String, dynamic> value;
+  final List<Map<String, dynamic>> createRequests = [];
   @override
   Future<Map<String, dynamic>> workspace() async => value;
   @override
@@ -12,9 +13,11 @@ class _Repository implements CasePartyRepository {
   @override
   Future<Map<String, dynamic>> timeline(String caseId) async => {};
   @override
-  Future<Map<String, dynamic>> createParty(
-    Map<String, dynamic> request,
-  ) async => {'partyId': 'party-internal', 'duplicate': false};
+  Future<Map<String, dynamic>> createParty(Map<String, dynamic> request) async {
+    createRequests.add(request);
+    return {'partyId': 'party-internal', 'duplicate': false};
+  }
+
   @override
   Future<Map<String, dynamic>> createRelationship(
     Map<String, dynamic> request,
@@ -112,5 +115,95 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Henüz taraf kaydı bulunmuyor.'), findsOneWidget);
+  });
+
+  testWidgets('party form validates and sends the complete canonical payload', (
+    tester,
+  ) async {
+    final repository = _Repository(_fixture());
+    String? opened;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CasePartiesRelationshipsPage(
+          repository: repository,
+          partyDetailOpener: (_, id) async => opened = id,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('create-party')));
+    await tester.pumpAndSettle();
+    for (final label in [
+      'Bağlı vaka',
+      'Taraf türü',
+      'Vaka rolleri (1–5)',
+      'Kamuya açık ad veya kullanıcı adı',
+      'Kuruluş',
+      'Ülke kodu',
+      'Şehir',
+      'Açıklama',
+    ]) {
+      expect(find.text(label), findsAtLeastNWidgets(1));
+    }
+    expect(find.text('case-internal'), findsNothing);
+    await tester.enterText(
+      find.byKey(const ValueKey('party-name')),
+      'Örnek Satıcı',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('party-description')));
+    await tester.enterText(
+      find.byKey(const ValueKey('party-description')),
+      'Kontrollü taraf inceleme açıklaması.',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('submit-party')));
+    await tester.tap(find.byKey(const ValueKey('submit-party')));
+    await tester.pump();
+    expect(repository.createRequests, isEmpty);
+    expect(find.textContaining('en az bir vaka rolü'), findsOneWidget);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('party-role-suspected_seller')),
+    );
+    await tester.tap(find.byKey(const ValueKey('party-role-suspected_seller')));
+    await tester.ensureVisible(find.byKey(const ValueKey('party-type')));
+    await tester.tap(find.byKey(const ValueKey('party-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Satıcı hesabı').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('party-public-alias')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('party-public-alias')),
+      'dejure_store',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('party-organization')),
+      'Dejure',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('party-country-code')),
+      'tr',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('party-city')),
+      'İstanbul',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('submit-party')));
+    await tester.tap(find.byKey(const ValueKey('submit-party')));
+    await tester.pumpAndSettle();
+
+    expect(repository.createRequests, hasLength(1));
+    final request = repository.createRequests.single;
+    expect(request['caseId'], 'case-internal');
+    expect(request['displayName'], 'Örnek Satıcı');
+    expect(request['partyType'], 'seller_account');
+    expect(request['caseRoles'], ['suspected_seller']);
+    expect(request['publicAlias'], 'dejure_store');
+    expect(request['organizationName'], 'Dejure');
+    expect(request['countryCode'], 'TR');
+    expect(request['city'], 'İstanbul');
+    expect(request['description'], 'Kontrollü taraf inceleme açıklaması.');
+    expect(opened, 'party-internal');
   });
 }
