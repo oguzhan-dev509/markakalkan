@@ -21,6 +21,7 @@ const {
   buildGetCasePartyDetail,
   buildGetCaseUnifiedTimeline,
   buildListCasePartyWorkspace,
+  buildUpdateCasePartyProfile,
 } = require("./case_evidence_center/v1/party_relationships");
 
 const {
@@ -262,5 +263,6 @@ exports.getCaseUnifiedTimeline = buildGetCaseUnifiedTimeline({db, admin});
 exports.createCaseParty = buildCreateCaseParty({db, admin});
 exports.createCaseRelationship = buildCreateCaseRelationship({db, admin});
 exports.appendCaseGraphEvent = buildAppendCaseGraphEvent({db, admin});
+exports.updateCasePartyProfile = buildUpdateCasePartyProfile({db, admin});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});

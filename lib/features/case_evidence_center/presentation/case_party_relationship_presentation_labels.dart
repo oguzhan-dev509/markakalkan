@@ -101,6 +101,7 @@ String caseGraphEventLabel(String value) =>
       'party_verified': 'Taraf doğrulandı',
       'party_disputed': 'Taraf ihtilaflı olarak işaretlendi',
       'party_note_added': 'Taraf notu eklendi',
+      'party_profile_updated': 'Taraf bilgileri güncellendi',
       'party_deactivated': 'Taraf pasife alındı',
       'relationship_created': 'İlişki kaydı oluşturuldu',
       'relationship_review_started': 'İlişki incelemesi başlatıldı',
@@ -129,6 +130,7 @@ String caseGraphActionLabel(String value) =>
       'dispute': 'İhtilaflı olarak işaretle',
       'add_note': 'Not ekle',
       'deactivate': 'Pasife al',
+      'edit_profile': 'Taraf bilgilerini düzenle',
     }[value] ??
     'İşlem';
 

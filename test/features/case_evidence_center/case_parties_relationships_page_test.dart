@@ -33,6 +33,10 @@ class _Repository implements CasePartyRepository {
     Map<String, dynamic> request,
   ) async => {};
   @override
+  Future<Map<String, dynamic>> updatePartyProfile(
+    Map<String, dynamic> request,
+  ) async => {};
+  @override
   Future<Map<String, dynamic>> append(Map<String, dynamic> request) async => {};
 }
 

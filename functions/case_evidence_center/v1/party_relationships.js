@@ -68,6 +68,15 @@ function partyCreateRequest(raw) {
   if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) fail("countryCode invalid");
   return {caseId: text(raw.caseId, "caseId", 1, 128), displayName: text(raw.displayName, "displayName", 3, 160), partyType: canonical(raw.partyType, PARTY_TYPES, "partyType"), caseRoles, publicAlias: text(raw.publicAlias, "publicAlias", 1, 160, true), organizationName: text(raw.organizationName, "organizationName", 1, 160, true), countryCode, city: text(raw.city, "city", 1, 120, true), description: text(raw.description, "description", 10, 3000), requestId: requestId(raw.requestId)};
 }
+function partyProfileUpdateRequest(raw) {
+  strict(raw, "case-party-profile-update-request-v1", ["partyId", "displayName", "partyType", "caseRoles", "publicAlias", "organizationName", "countryCode", "city", "description", "note", "requestId"]);
+  if (!Array.isArray(raw.caseRoles)) fail("caseRoles invalid");
+  const caseRoles = [...new Set(raw.caseRoles.map((value) => canonical(value, PARTY_ROLES, "caseRoles")))];
+  if (caseRoles.length < 1 || caseRoles.length > 5) fail("caseRoles invalid");
+  const countryCode = text(raw.countryCode, "countryCode", 2, 2, true)?.toUpperCase() || null;
+  if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) fail("countryCode invalid");
+  return {partyId: text(raw.partyId, "partyId", 1, 128), displayName: text(raw.displayName, "displayName", 3, 160), partyType: canonical(raw.partyType, PARTY_TYPES, "partyType"), caseRoles, publicAlias: text(raw.publicAlias, "publicAlias", 1, 160, true), organizationName: text(raw.organizationName, "organizationName", 1, 160, true), countryCode, city: text(raw.city, "city", 1, 120, true), description: text(raw.description, "description", 10, 3000), note: text(raw.note, "note", 3, 1000), requestId: requestId(raw.requestId)};
+}
 function endpoint(raw, name) {
   object(raw, name); if (Object.keys(raw).some((key) => !["entityType", "entityId"].includes(key))) fail(`${name} invalid`);
   return {entityType: canonical(raw.entityType, ENDPOINT_TYPES, `${name}.entityType`), entityId: text(raw.entityId, `${name}.entityId`, 1, 128)};
@@ -85,22 +94,24 @@ function graphEventRequest(raw) {
   const eventType = canonical(raw.eventType, targetType === "party" ? PARTY_EVENTS : RELATIONSHIP_EVENTS, "eventType");
   return {targetType, targetId: text(raw.targetId, "targetId", 1, 128), eventType, note: text(raw.note, "note", 3, 1000), requestId: requestId(raw.requestId)};
 }
-const eventLabel = (value) => ({party_created: "Taraf kaydı oluşturuldu", party_review_started: "Taraf incelemesi başlatıldı", party_verified: "Taraf doğrulandı", party_disputed: "Taraf ihtilaflı olarak işaretlendi", party_note_added: "Taraf notu eklendi", party_deactivated: "Taraf pasife alındı", relationship_created: "İlişki kaydı oluşturuldu", relationship_review_started: "İlişki incelemesi başlatıldı", relationship_confirmed: "İlişki doğrulandı", relationship_disputed: "İlişki ihtilaflı olarak işaretlendi", relationship_note_added: "İlişki notu eklendi", relationship_deactivated: "İlişki pasife alındı"})[value] || "Vaka bağlantısı işlemi";
+const eventLabel = (value) => ({party_created: "Taraf kaydı oluşturuldu", party_review_started: "Taraf incelemesi başlatıldı", party_verified: "Taraf doğrulandı", party_disputed: "Taraf ihtilaflı olarak işaretlendi", party_note_added: "Taraf notu eklendi", party_profile_updated: "Taraf bilgileri güncellendi", party_deactivated: "Taraf pasife alındı", relationship_created: "İlişki kaydı oluşturuldu", relationship_review_started: "İlişki incelemesi başlatıldı", relationship_confirmed: "İlişki doğrulandı", relationship_disputed: "İlişki ihtilaflı olarak işaretlendi", relationship_note_added: "İlişki notu eklendi", relationship_deactivated: "İlişki pasife alındı"})[value] || "Vaka bağlantısı işlemi";
 const timelineEventLabel = (value) => ({
   case_opened_from_risk: "Vaka dosyası açıldı",
   evidence_chain_started: "Delil zinciri başlatıldı",
   review_task_created: "İnceleme görevi oluşturuldu",
   review_task_due_date_changed: "Görev son tarihi değiştirildi",
   party_created: "Taraf kaydı oluşturuldu",
+  party_profile_updated: "Taraf bilgileri güncellendi",
   relationship_created: "İlişki kaydı oluşturuldu",
   ...Object.fromEntries([...PARTY_EVENTS, ...RELATIONSHIP_EVENTS].map((item) => [item, eventLabel(item)])),
 })[value] || "Vaka olayı";
 const allowedActions = (type, status) => {
   const shared = status === "inactive" ? [] : ["add_note", "deactivate"];
-  if (status === "observed") return ["start_review", type === "party" ? "verify" : "confirm", "dispute", ...shared];
-  if (status === "under_review") return [type === "party" ? "verify" : "confirm", "dispute", ...shared];
-  if (status === (type === "party" ? "verified" : "confirmed")) return ["dispute", ...shared];
-  if (status === "disputed") return ["start_review", ...shared];
+  const edit = type === "party" && status !== "inactive" ? ["edit_profile"] : [];
+  if (status === "observed") return ["start_review", type === "party" ? "verify" : "confirm", "dispute", ...edit, ...shared];
+  if (status === "under_review") return [type === "party" ? "verify" : "confirm", "dispute", ...edit, ...shared];
+  if (status === (type === "party" ? "verified" : "confirmed")) return ["dispute", ...edit, ...shared];
+  if (status === "disputed") return ["start_review", ...edit, ...shared];
   return [];
 };
 const eventAction = (type, value) => ({
@@ -147,6 +158,13 @@ function safeParty(id, item, caseData, relationshipCount = 0) {
 }
 function safeRelationship(id, item, caseData, evidenceLabel = null) {
   return optionalFields({relationshipId: id, relationshipNumber: item.relationshipNumber, caseId: item.caseId, caseNumber: caseData.caseNumber, sourceEntityType: item.sourceEntityType, sourceEntityId: item.sourceEntityId, sourceLabel: item.sourceLabelSnapshot, targetEntityType: item.targetEntityType, targetEntityId: item.targetEntityId, targetLabel: item.targetLabelSnapshot, relationshipType: item.relationshipType, status: item.status, confidence: item.confidence, summary: item.summary, createdAt: iso(item.createdAt), updatedAt: iso(item.updatedAt), lastEventAt: iso(item.lastEventAt)}, {supportingEvidenceRefId: item.supportingEvidenceRefId, supportingEvidenceLabel: evidenceLabel});
+}
+const PROFILE_FIELDS = Object.freeze(["displayName", "partyType", "caseRoles", "publicAlias", "organizationName", "countryCode", "city", "description"]);
+function profileOf(value) {
+  return Object.fromEntries(PROFILE_FIELDS.map((field) => [field, field === "caseRoles" ? [...(value[field] || [])] : (value[field] ?? null)]));
+}
+function sameProfile(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function createCaseGraphService({db, clock = {now: () => new Date(), timestamp: (date) => date.toISOString()}}) {
@@ -217,6 +235,27 @@ function createCaseGraphService({db, clock = {now: () => new Date(), timestamp: 
         return {contractVersion: "case-relationship-create-result-v1", ok: true, duplicate: false, relationshipId, relationshipNumber, status: "observed", confidence: request.confidence, eventCount: 1};
       });
     },
+    async updatePartyProfile(raw, invocation) {
+      if (!invocation?.uid) fail("authentication required", "unauthenticated"); const request = partyProfileUpdateRequest(raw); const context = await resolveTenantContextV1({db, uid: invocation.uid, request: {}}); const now = nowDate(); const recordedAt = stamp(now); const partyRef = db.collection("case_parties").doc(request.partyId); const eventId = sha256(`${context.tenantId}|party|${request.partyId}|${request.requestId}`); const eventRef = db.collection("case_graph_events").doc(eventId);
+      return db.runTransaction(async (transaction) => {
+        const partySnapshot = await transaction.get(partyRef); const party = partySnapshot.data() || {};
+        if (!partySnapshot.exists || party.tenantId !== context.tenantId || party.canonicalBrandId !== context.brandId) fail("party not found", "not-found");
+        const linkedCase = await scopedCase(db, transaction, party.caseId, context); if (closed(linkedCase.data.status)) fail("case closed", "failed-precondition"); if (party.status === "inactive") fail("party inactive", "failed-precondition");
+        const existing = await transaction.get(eventRef); if (existing.exists) return {contractVersion: "case-party-profile-update-result-v1", ok: true, duplicate: true, noChange: false, partyId: request.partyId, partyNumber: party.partyNumber, status: party.status, eventCount: party.eventCount, changedFields: existing.data().payloadSummary?.changedFields || []};
+        const beforeSnapshot = profileOf(party); const afterSnapshot = profileOf(request); const changedFields = PROFILE_FIELDS.filter((field) => !sameProfile(beforeSnapshot[field], afterSnapshot[field]));
+        if (!changedFields.length) return {contractVersion: "case-party-profile-update-result-v1", ok: true, duplicate: false, noChange: true, partyId: request.partyId, partyNumber: party.partyNumber, status: party.status, eventCount: party.eventCount, changedFields: [], transactionCommitted: false};
+        const sequence = Number(party.eventCount || 0) + 1; const update = {displayName: request.displayName, partyType: request.partyType, caseRoles: request.caseRoles, description: request.description, updatedAt: recordedAt, lastEventType: "party_profile_updated", lastEventAt: recordedAt, lastEventId: eventId, eventCount: sequence};
+        for (const field of ["publicAlias", "organizationName", "countryCode", "city"]) {
+          if (request[field] != null) update[field] = request[field];
+          else if (party[field] != null) update[field] = clock.deleteValue ? clock.deleteValue() : null;
+        }
+        transaction.update(partyRef, update);
+        transaction.create(eventRef, {contractVersion: "case-graph-event-v1", tenantId: context.tenantId, canonicalBrandId: context.brandId, caseId: party.caseId, targetType: "party", targetId: request.partyId, targetKey: `party:${request.partyId}`, sequence, eventType: "party_profile_updated", note: request.note, actorUid: invocation.uid, actorLabel: "Yetkili kullanıcı", recordedAt, previousEventId: party.lastEventId, payloadSummary: {changedFields, beforeSnapshot, afterSnapshot}});
+        transaction.create(db.collection("case_events").doc(sha256(`${eventId}|case`)), {contractVersion: "case-event-v1", caseId: party.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, eventType: "party_profile_updated", category: "party", summary: `${party.partyNumber} taraf bilgileri güncellendi.`, occurredAt: now.toISOString(), actorUid: invocation.uid, appendOnly: true});
+        transaction.create(db.collection("case_audit_events").doc(sha256(`${eventId}|audit`)), {contractVersion: "case-audit-event-v1", caseId: party.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, action: "party.profile_updated", actorUid: invocation.uid, occurredAt: recordedAt, appendOnly: true});
+        return {contractVersion: "case-party-profile-update-result-v1", ok: true, duplicate: false, noChange: false, partyId: request.partyId, partyNumber: party.partyNumber, status: party.status, eventCount: sequence, changedFields};
+      });
+    },
     async append(raw, invocation) {
       if (!invocation?.uid) fail("authentication required", "unauthenticated"); const request = graphEventRequest(raw); const context = await resolveTenantContextV1({db, uid: invocation.uid, request: {}}); const now = nowDate(); const recordedAt = stamp(now); const collection = request.targetType === "party" ? "case_parties" : "case_relationships"; const targetRef = db.collection(collection).doc(request.targetId); const eventId = sha256(`${context.tenantId}|${request.targetType}|${request.targetId}|${request.requestId}`); const eventRef = db.collection("case_graph_events").doc(eventId);
       return db.runTransaction(async (transaction) => {
@@ -251,7 +290,7 @@ function handler(method, {db, clock, appCheck = false, log = logger}) {
     }
   };
 }
-const productionClock = (admin) => ({now: () => new Date(), timestamp: (date) => admin.firestore.Timestamp.fromDate(date)});
+const productionClock = (admin) => ({now: () => new Date(), timestamp: (date) => admin.firestore.Timestamp.fromDate(date), deleteValue: () => admin.firestore.FieldValue.delete()});
 const read = (method) => ({db, admin}) => onCall({region: "europe-west3", enforceAppCheck: false, maxInstances: 3}, handler(method, {db, clock: productionClock(admin)}));
 const write = (method) => ({db, admin}) => onCall({region: "europe-west3", enforceAppCheck: true, maxInstances: 1}, handler(method, {db, clock: productionClock(admin), appCheck: true}));
 
@@ -264,9 +303,11 @@ module.exports = {
   buildGetCasePartyDetail: read("partyDetail"),
   buildGetCaseUnifiedTimeline: read("timeline"),
   buildListCasePartyWorkspace: read("workspace"),
+  buildUpdateCasePartyProfile: write("updatePartyProfile"),
   createCaseGraphService,
   graphEventRequest,
   handler,
   partyCreateRequest,
+  partyProfileUpdateRequest,
   relationshipCreateRequest,
 };

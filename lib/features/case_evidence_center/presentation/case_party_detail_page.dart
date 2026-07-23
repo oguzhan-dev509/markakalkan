@@ -163,7 +163,9 @@ class _CasePartyDetailPageState extends State<CasePartyDetailPage> {
           children: actions
               .map(
                 (action) => OutlinedButton(
-                  onPressed: () => _act(action),
+                  onPressed: () => action == 'edit_profile'
+                      ? _editProfile(party)
+                      : _act(action),
                   child: Text(caseGraphActionLabel(action)),
                 ),
               )
@@ -267,6 +269,223 @@ class _CasePartyDetailPageState extends State<CasePartyDetailPage> {
         ),
       ),
     );
+    if (completed) await _load();
+  }
+
+  Future<void> _editProfile(Map<String, dynamic> party) async {
+    final displayName = TextEditingController(
+      text: _string(party, 'displayName'),
+    );
+    final publicAlias = TextEditingController(
+      text: _string(party, 'publicAlias'),
+    );
+    final organization = TextEditingController(
+      text: _string(party, 'organizationName'),
+    );
+    final country = TextEditingController(text: _string(party, 'countryCode'));
+    final city = TextEditingController(text: _string(party, 'city'));
+    final description = TextEditingController(
+      text: _string(party, 'description'),
+    );
+    final note = TextEditingController();
+    var partyType = _string(party, 'partyType');
+    if (!casePartyTypes.contains(partyType)) partyType = 'other';
+    final roles = _strings(
+      party['caseRoles'],
+    ).where(casePartyRoles.contains).take(5).toList();
+    final requestId = _uuid();
+    var submitting = false;
+    var completed = false;
+    String? message;
+    String? outcomeMessage;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Taraf bilgilerini düzenle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  key: const ValueKey('edit-party-name'),
+                  controller: displayName,
+                  decoration: const InputDecoration(labelText: 'Taraf adı'),
+                ),
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('edit-party-type'),
+                  initialValue: partyType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Taraf türü'),
+                  items: casePartyTypes
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(casePartyTypeLabel(value)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: submitting
+                      ? null
+                      : (value) => setDialogState(
+                          () => partyType = value ?? partyType,
+                        ),
+                ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Text('Vaka rolleri (1–5)'),
+                  ),
+                ),
+                Wrap(
+                  spacing: 6,
+                  children: casePartyRoles
+                      .map(
+                        (role) => FilterChip(
+                          key: ValueKey('edit-party-role-$role'),
+                          label: Text(casePartyRoleLabel(role)),
+                          selected: roles.contains(role),
+                          onSelected:
+                              submitting ||
+                                  (!roles.contains(role) && roles.length >= 5)
+                              ? null
+                              : (selected) => setDialogState(() {
+                                  if (selected && !roles.contains(role)) {
+                                    roles.add(role);
+                                  } else if (!selected) {
+                                    roles.remove(role);
+                                  }
+                                }),
+                        ),
+                      )
+                      .toList(),
+                ),
+                TextField(
+                  key: const ValueKey('edit-party-public-alias'),
+                  controller: publicAlias,
+                  decoration: const InputDecoration(
+                    labelText: 'Kamuya açık ad veya kullanıcı adı',
+                  ),
+                ),
+                TextField(
+                  key: const ValueKey('edit-party-organization'),
+                  controller: organization,
+                  decoration: const InputDecoration(labelText: 'Kuruluş'),
+                ),
+                TextField(
+                  key: const ValueKey('edit-party-country'),
+                  controller: country,
+                  maxLength: 2,
+                  decoration: const InputDecoration(labelText: 'Ülke kodu'),
+                ),
+                TextField(
+                  key: const ValueKey('edit-party-city'),
+                  controller: city,
+                  decoration: const InputDecoration(labelText: 'Şehir'),
+                ),
+                TextField(
+                  key: const ValueKey('edit-party-description'),
+                  controller: description,
+                  decoration: const InputDecoration(labelText: 'Açıklama'),
+                ),
+                TextField(
+                  key: const ValueKey('edit-party-note'),
+                  controller: note,
+                  decoration: const InputDecoration(
+                    labelText: 'Güncelleme gerekçesi',
+                  ),
+                ),
+                if (message != null) Text(message!),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('submit-party-profile'),
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      if (submitting) return;
+                      final normalizedCountry = country.text
+                          .trim()
+                          .toUpperCase();
+                      if (displayName.text.trim().length < 3 ||
+                          description.text.trim().length < 10 ||
+                          note.text.trim().length < 3 ||
+                          roles.isEmpty) {
+                        setDialogState(
+                          () => message =
+                              'Ad, açıklama, en az bir rol ve güncelleme gerekçesi zorunludur.',
+                        );
+                        return;
+                      }
+                      if (normalizedCountry.isNotEmpty &&
+                          !RegExp(r'^[A-Z]{2}$').hasMatch(normalizedCountry)) {
+                        setDialogState(
+                          () => message =
+                              'Ülke kodu iki harften oluşmalıdır (ör. TR).',
+                        );
+                        return;
+                      }
+                      setDialogState(() {
+                        submitting = true;
+                        message = null;
+                      });
+                      final request = <String, dynamic>{
+                        'contractVersion':
+                            'case-party-profile-update-request-v1',
+                        'partyId': widget.partyId,
+                        'displayName': displayName.text.trim(),
+                        'partyType': partyType,
+                        'caseRoles': List<String>.of(roles),
+                        if (publicAlias.text.trim().isNotEmpty)
+                          'publicAlias': publicAlias.text.trim(),
+                        if (organization.text.trim().isNotEmpty)
+                          'organizationName': organization.text.trim(),
+                        if (normalizedCountry.isNotEmpty)
+                          'countryCode': normalizedCountry,
+                        if (city.text.trim().isNotEmpty)
+                          'city': city.text.trim(),
+                        'description': description.text.trim(),
+                        'note': note.text.trim(),
+                        'requestId': requestId,
+                      };
+                      Map<String, dynamic> result;
+                      try {
+                        result = await _repository.updatePartyProfile(request);
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() {
+                          submitting = false;
+                          message =
+                              'İşlem sonucu doğrulanamadı. Aynı istekle yeniden deneyin.';
+                        });
+                        return;
+                      }
+                      if (!dialogContext.mounted) return;
+                      completed = result['noChange'] != true;
+                      outcomeMessage = result['duplicate'] == true
+                          ? 'Bu işlem daha önce kaydedildi.'
+                          : result['noChange'] == true
+                          ? 'Taraf bilgilerinde değişiklik bulunmadı.'
+                          : 'Taraf bilgileri güncellendi.';
+                      Navigator.pop(dialogContext);
+                    },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || outcomeMessage == null) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(outcomeMessage!)));
     if (completed) await _load();
   }
 }

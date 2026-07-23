@@ -4,7 +4,7 @@ const test = require("node:test");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {createAppendChainEventHandler, createDetailHandler, createListHandler, createService, createWriteHandler, detailRequest, listRequest} = require("./index");
 const {createRequest: createReviewTaskRequest, createReviewTaskService, eventRequest: reviewTaskEventRequest, handler: reviewTaskHandler} = require("./review_tasks");
-const {createCaseGraphService, graphEventRequest, handler: graphHandler, partyCreateRequest, relationshipCreateRequest} = require("./party_relationships");
+const {allowedActions: graphAllowedActions, createCaseGraphService, graphEventRequest, handler: graphHandler, partyCreateRequest, partyProfileUpdateRequest, relationshipCreateRequest} = require("./party_relationships");
 
 class Snapshot {
   constructor(id, data, path, exists = true, version = "2026-07-22T10:00:00.000Z") {
@@ -63,7 +63,11 @@ class Transaction {
       const parts = entry.path.split("/"); const id = parts.pop(); const name = parts.join("/");
       this.store.collections[name] ||= [];
       if (entry.type === "update") {
-        const current = this.store.collections[name].find((item) => item.id === id); current.data = {...current.data, ...entry.data}; current.version = entry.data.updatedAt || current.version;
+        const current = this.store.collections[name].find((item) => item.id === id); const next = {...current.data};
+        for (const [key, value] of Object.entries(entry.data)) {
+          if (value?.__delete === true) delete next[key]; else next[key] = value;
+        }
+        current.data = next; current.version = entry.data.updatedAt || current.version;
       } else this.store.collections[name].push({id, data: entry.data, version: entry.data.updatedAt || entry.data.occurredAt});
       this.store.writes++;
     }
@@ -416,7 +420,7 @@ test("review task case events expose server ISO occurredAt while task and audit 
 });
 
 const graphUuid = "123e4567-e89b-42d3-a456-426614174101";
-const graphClock = {now: () => new Date("2026-07-23T14:47:00.000Z"), timestamp: (date) => ({kind: "server-timestamp", value: date.toISOString(), toDate: () => date})};
+const graphClock = {now: () => new Date("2026-07-23T14:47:00.000Z"), timestamp: (date) => ({kind: "server-timestamp", value: date.toISOString(), toDate: () => date}), deleteValue: () => ({__delete: true})};
 function graphCollections() {
   const value = structuredClone(collections);
   value.case_files = [{id: "case-1", data: {tenantId: "tenant-1", canonicalBrandId: "brand-1", caseNumber: "VK-2026-EA953C48", title: "Dejure Spor Ayakkabı", status: "open", openedAt: "2026-07-22T10:00:00.000Z"}}];
@@ -460,7 +464,7 @@ test("party detail resolves relationships, event order and safe allowed actions"
   const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const party = await service.createParty(partyRequest, {uid: "user-1"});
   await service.append({contractVersion: "case-graph-event-request-v1", targetType: "party", targetId: party.partyId, eventType: "party_review_started", note: "Kontrollü inceleme başlatıldı.", requestId: "123e4567-e89b-42d3-a456-426614174104"}, {uid: "user-1"});
   const detail = await service.partyDetail({contractVersion: "case-party-detail-request-v1", partyId: party.partyId}, {uid: "user-1"});
-  assert.deepEqual(detail.timelineEvents.map((item) => item.sequence), [1, 2]); assert.deepEqual(detail.allowedActions, ["verify", "dispute", "add_note", "deactivate"]); assert.equal(detail.writesPerformed, 0);
+  assert.deepEqual(detail.timelineEvents.map((item) => item.sequence), [1, 2]); assert.deepEqual(detail.allowedActions, ["verify", "dispute", "edit_profile", "add_note", "deactivate"]); assert.equal(detail.writesPerformed, 0);
   for (const forbidden of ["tenantId", "canonicalBrandId", "actorUid", "previousEventId", "payloadSummary"]) assert.equal(JSON.stringify(detail).includes(forbidden), false);
 });
 
@@ -478,10 +482,11 @@ test("unified timeline reads only case_events, classifies and normalizes timesta
       {id: "evidence-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "evidence_chain_started", summary: "Delil zinciri başlatıldı", occurredAt: "2026-07-23T10:30:00.000Z"}},
       {id: "task-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "review_task_created", summary: "Görev oluşturuldu", occurredAt: new Date("2026-07-23T11:00:00.000Z")}},
       {id: "due-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "review_task_due_date_changed", summary: "Son tarih değiştirildi", occurredAt: {toDate: () => new Date("2026-07-23T12:00:00.000Z")}}},
+      {id: "profile-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "party_profile_updated", category: "party", summary: "TRF-2026-7A91C4D2 taraf bilgileri güncellendi.", occurredAt: "2026-07-23T11:30:00.000Z"}},
       {id: "unknown-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "unknown_internal_event", summary: "Güvenli özet", occurredAt: "2026-07-23T09:00:00.000Z"}},
   ); db.collections.case_review_task_events.push({id: "must-not-appear", data: {caseId: "case-1", summary: "Çoğaltılmamalı"}});
   const result = await createCaseGraphService({db, clock: graphClock}).timeline({contractVersion: "case-unified-timeline-request-v1", caseId: "case-1"}, {uid: "user-1"});
-  assert.equal(result.events.length, 5); assert.deepEqual(result.events.map((item) => item.eventLabel), ["Görev son tarihi değiştirildi", "İnceleme görevi oluşturuldu", "Delil zinciri başlatıldı", "Vaka dosyası açıldı", "Vaka olayı"]); assert.deepEqual(result.events.map((item) => item.category), ["task", "task", "evidence", "case", "case"]); assert.equal(result.events[0].occurredAt, "2026-07-23T12:00:00.000Z"); assert.equal(JSON.stringify(result).includes("Çoğaltılmamalı"), false); assert.equal(db.writes, 0);
+  assert.equal(result.events.length, 6); assert.deepEqual(result.events.map((item) => item.eventLabel), ["Görev son tarihi değiştirildi", "Taraf bilgileri güncellendi", "İnceleme görevi oluşturuldu", "Delil zinciri başlatıldı", "Vaka dosyası açıldı", "Vaka olayı"]); assert.deepEqual(result.events.map((item) => item.category), ["task", "party", "task", "evidence", "case", "case"]); assert.equal(result.events[0].occurredAt, "2026-07-23T12:00:00.000Z"); assert.equal(JSON.stringify(result).includes("Çoğaltılmamalı"), false); assert.equal(db.writes, 0);
 });
 
 test("graph write handlers require auth and App Check", async () => {
@@ -494,4 +499,34 @@ test("graph transaction failure leaves no partial writes", async () => {
   const db = new FakeDb(graphCollections(), {transactionFailure: true}); const service = createCaseGraphService({db, clock: graphClock});
   await assert.rejects(() => service.createParty(partyRequest, {uid: "user-1"}), /simulated transaction failure/);
   assert.equal(db.collections.case_parties.length, 0); assert.equal(db.collections.case_graph_events.length, 0); assert.equal(db.collections.case_events.length, 0); assert.equal(db.collections.case_audit_events.length, 0);
+});
+
+test("party profile update contract is strict and normalizes roles and country", () => {
+  const request = {contractVersion: "case-party-profile-update-request-v1", partyId: "party-1", displayName: "Dejure Marka", partyType: "organization", caseRoles: ["manufacturer", "manufacturer"], publicAlias: "dejure", countryCode: "tr", city: "İstanbul", description: "Doğrulanmış kuruluş profili.", note: "Kimlik sınıflandırması güncellendi.", requestId: graphUuid};
+  const parsed = partyProfileUpdateRequest(request); assert.deepEqual(parsed.caseRoles, ["manufacturer"]); assert.equal(parsed.countryCode, "TR");
+  for (const field of ["partyNumber", "caseId", "tenantId", "status", "eventCount"]) assert.throws(() => partyProfileUpdateRequest({...request, [field]: "forbidden"}), /contract/);
+  assert.throws(() => partyProfileUpdateRequest({...request, requestId: "bad"}), /requestId/);
+});
+
+test("party profile update is atomic idempotent auditable and removes optional fields", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const created = await service.createParty({...partyRequest, publicAlias: "old-alias", organizationName: "Old Org", city: "Ankara"}, {uid: "user-1"});
+  const request = {contractVersion: "case-party-profile-update-request-v1", partyId: created.partyId, displayName: "Dejure Marka", partyType: "organization", caseRoles: ["manufacturer", "manufacturer"], countryCode: "tr", description: "Doğrulanmış kuruluş profili.", note: "Kimlik sınıflandırması güncellendi.", requestId: "123e4567-e89b-42d3-a456-426614174107"};
+  const result = await service.updatePartyProfile(request, {uid: "user-1"}); const duplicate = await service.updatePartyProfile(request, {uid: "user-1"}); const party = db.collections.case_parties[0].data;
+  assert.equal(result.noChange, false); assert.equal(duplicate.duplicate, true); assert.equal(result.partyId, created.partyId); assert.equal(result.partyNumber, created.partyNumber); assert.equal(party.caseId, "case-1"); assert.equal(party.partyNumber, created.partyNumber); assert.equal(party.displayName, "Dejure Marka"); assert.equal(party.countryCode, "TR"); assert.equal("publicAlias" in party, false); assert.equal("organizationName" in party, false); assert.equal("city" in party, false); assert.equal(party.eventCount, 2);
+  const event = db.collections.case_graph_events.find((item) => item.data.eventType === "party_profile_updated").data; assert.deepEqual(event.payloadSummary.changedFields.sort(), ["caseRoles", "city", "description", "displayName", "organizationName", "partyType", "publicAlias"].sort()); assert.equal("tenantId" in event.payloadSummary.beforeSnapshot, false); assert.equal(db.collections.case_events.at(-1).data.occurredAt, "2026-07-23T14:47:00.000Z"); assert.equal(db.collections.case_audit_events.at(-1).data.occurredAt.kind, "server-timestamp");
+  const detail = await service.partyDetail({contractVersion: "case-party-detail-request-v1", partyId: created.partyId}, {uid: "user-1"}); assert.equal(detail.timelineEvents.at(-1).eventLabel, "Taraf bilgileri güncellendi"); assert.equal(JSON.stringify(detail).includes("beforeSnapshot"), false);
+});
+
+test("party profile noChange is zero-write and inactive party is denied", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const created = await service.createParty(partyRequest, {uid: "user-1"}); const party = db.collections.case_parties[0].data; const beforeWrites = db.writes;
+  const request = {contractVersion: "case-party-profile-update-request-v1", partyId: created.partyId, displayName: party.displayName, partyType: party.partyType, caseRoles: party.caseRoles, countryCode: party.countryCode, city: party.city, description: party.description, note: "Profil yeniden kontrol edildi.", requestId: "123e4567-e89b-42d3-a456-426614174108"};
+  const result = await service.updatePartyProfile(request, {uid: "user-1"}); assert.equal(result.noChange, true); assert.equal(db.writes, beforeWrites);
+  party.status = "inactive"; await assert.rejects(() => service.updatePartyProfile({...request, displayName: "Yeni ad", requestId: "123e4567-e89b-42d3-a456-426614174109"}, {uid: "user-1"}), /inactive/); assert.deepEqual(graphAllowedActions("party", "inactive"), []);
+});
+
+test("party profile handler requires auth and App Check and transaction failure is atomic", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const created = await service.createParty(partyRequest, {uid: "user-1"});
+  const request = {contractVersion: "case-party-profile-update-request-v1", partyId: created.partyId, displayName: "Dejure Marka", partyType: "organization", caseRoles: ["manufacturer"], description: "Doğrulanmış kuruluş profili.", note: "Kimlik güncellendi.", requestId: "123e4567-e89b-42d3-a456-426614174110"};
+  const callable = graphHandler("updatePartyProfile", {db, clock: graphClock, appCheck: true, log: {info: () => {}}}); await assert.rejects(() => callable({data: request}), (error) => error.code === "unauthenticated"); await assert.rejects(() => callable({auth: {uid: "user-1"}, data: request}), (error) => error.code === "failed-precondition");
+  const failingCollections = graphCollections(); failingCollections.case_parties = [{id: created.partyId, data: {...db.collections.case_parties[0].data, createdAt: "2026-07-23T14:47:00.000Z", updatedAt: "2026-07-23T14:47:00.000Z", lastEventAt: "2026-07-23T14:47:00.000Z"}}]; const failingDb = new FakeDb(failingCollections, {transactionFailure: true}); const before = structuredClone(failingDb.collections); await assert.rejects(() => createCaseGraphService({db: failingDb, clock: graphClock}).updatePartyProfile(request, {uid: "user-1"}), /simulated transaction failure/); assert.deepEqual(failingDb.collections, before);
 });

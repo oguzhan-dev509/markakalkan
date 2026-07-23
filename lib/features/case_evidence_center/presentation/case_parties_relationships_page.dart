@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_party_relationship_presentation_labels.dart';
 
-const _partyTypes = [
+const casePartyTypes = [
   'person',
   'organization',
   'seller_account',
@@ -24,7 +24,7 @@ const _partyTypes = [
   'address',
   'other',
 ];
-const _partyRoles = [
+const casePartyRoles = [
   'suspected_seller',
   'suspected_operator',
   'manufacturer',
@@ -49,6 +49,7 @@ abstract interface class CasePartyRepository {
   Future<Map<String, dynamic>> timeline(String caseId);
   Future<Map<String, dynamic>> createParty(Map<String, dynamic> request);
   Future<Map<String, dynamic>> createRelationship(Map<String, dynamic> request);
+  Future<Map<String, dynamic>> updatePartyProfile(Map<String, dynamic> request);
   Future<Map<String, dynamic>> append(Map<String, dynamic> request);
 }
 
@@ -83,6 +84,10 @@ class CallableCasePartyRepository implements CasePartyRepository {
   Future<Map<String, dynamic>> createRelationship(
     Map<String, dynamic> request,
   ) => _call('createCaseRelationship', request);
+  @override
+  Future<Map<String, dynamic>> updatePartyProfile(
+    Map<String, dynamic> request,
+  ) => _call('updateCasePartyProfile', request);
   @override
   Future<Map<String, dynamic>> append(Map<String, dynamic> request) =>
       _call('appendCaseGraphEvent', request);
@@ -417,7 +422,7 @@ class _CasePartiesRelationshipsPageState
                   initialValue: partyType,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Taraf türü'),
-                  items: _partyTypes
+                  items: casePartyTypes
                       .map(
                         (value) => DropdownMenuItem(
                           value: value,
@@ -441,7 +446,7 @@ class _CasePartiesRelationshipsPageState
                 Wrap(
                   spacing: 6,
                   runSpacing: 4,
-                  children: _partyRoles
+                  children: casePartyRoles
                       .map(
                         (role) => FilterChip(
                           key: ValueKey('party-role-$role'),

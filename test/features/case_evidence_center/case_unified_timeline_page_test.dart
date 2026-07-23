@@ -14,11 +14,11 @@ class _Repository implements CasePartyRepository {
       'status': 'open',
     },
     'stats': {
-      'totalEvents': 5,
+      'totalEvents': 6,
       'caseEvents': 2,
       'evidenceEvents': 1,
       'taskEvents': 2,
-      'partyEvents': 0,
+      'partyEvents': 1,
       'relationshipEvents': 0,
     },
     'events': [
@@ -37,6 +37,14 @@ class _Repository implements CasePartyRepository {
         'categoryLabel': 'Görev',
         'summary': 'GV-2026-43A9D932 inceleme görevi oluşturuldu.',
         'occurredAt': '2026-07-23T13:00:00.000Z',
+      },
+      {
+        'eventType': 'party_profile_updated',
+        'eventLabel': 'Taraf bilgileri güncellendi',
+        'category': 'party',
+        'categoryLabel': 'Taraf',
+        'summary': 'TRF-2026-7A91C4D2 taraf bilgileri güncellendi.',
+        'occurredAt': '2026-07-23T12:30:00.000Z',
       },
       {
         'eventType': 'evidence_chain_started',
@@ -79,6 +87,10 @@ class _Repository implements CasePartyRepository {
     Map<String, dynamic> request,
   ) async => {};
   @override
+  Future<Map<String, dynamic>> updatePartyProfile(
+    Map<String, dynamic> request,
+  ) async => {};
+  @override
   Future<Map<String, dynamic>> append(Map<String, dynamic> request) async => {};
 }
 
@@ -106,6 +118,7 @@ void main() {
     for (final label in [
       'Görev son tarihi değiştirildi',
       'İnceleme görevi oluşturuldu',
+      'Taraf bilgileri güncellendi',
       'Delil zinciri başlatıldı',
       'Vaka dosyası açıldı',
       'Vaka olayı',
