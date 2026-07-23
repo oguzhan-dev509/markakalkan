@@ -171,7 +171,12 @@ function detailCollections() {
       {id: "event-2", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "reviewed", summary: "İkinci olay", occurredAt: "2026-07-22T10:04:00.000Z"}},
       {id: "event-1", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "opened", summary: "İlk olay", occurredAt: "2026-07-22T10:03:00.000Z"}},
     ],
-    "case_audit_events": [{id: "audit-1", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.created_from_risk", occurredAt: "2026-07-22T10:05:00.000Z", correlationHash: "secret"}}],
+    "case_audit_events": [
+      {id: "audit-invalid", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.invalid", occurredAt: "not-a-date", actorUid: "secret-actor"}},
+      {id: "audit-null", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.null", occurredAt: null}},
+      {id: "audit-string", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.created_from_risk", occurredAt: "2026-07-22T10:05:00.000Z", correlationHash: "secret"}},
+      {id: "audit-date", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.date", occurredAt: new Date("2026-07-22T10:06:00.000Z")}},
+    ],
   };
 }
 
@@ -183,15 +188,22 @@ test("detail request contract is strict", () => {
 
 test("detail reads tenant and brand scoped records in safe chronological contract with zero writes", async () => {
   const db = new FakeDb(detailCollections());
+  db.collections.case_audit_events.push({id: "audit-timestamp", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.timestamp", occurredAt: {toDate: () => new Date("2026-07-22T10:07:00.000Z")}}});
   const result = await createService({db, clock}).detail({contractVersion: "case-evidence-detail-request-v1", caseId: "case-1"}, {uid: "user-1"});
   assert.equal(result.contractVersion, "case-evidence-detail-v1");
   assert.equal(result.case.caseCode, "VK-2026-ABC12345");
   assert.deepEqual(result.evidenceReferences.map((item) => item.title), ["İlk delil", "İkinci delil"]);
   assert.deepEqual(result.timelineEvents.map((item) => item.summary), ["İlk olay", "İkinci olay"]);
-  assert.equal(result.auditSummary.length, 1);
+  assert.deepEqual(result.auditSummary, [
+    {action: "case.timestamp", occurredAt: "2026-07-22T10:07:00.000Z"},
+    {action: "case.date", occurredAt: "2026-07-22T10:06:00.000Z"},
+    {action: "case.created_from_risk", occurredAt: "2026-07-22T10:05:00.000Z"},
+    {action: "case.invalid", occurredAt: null},
+    {action: "case.null", occurredAt: null},
+  ]);
   assert.equal(result.writesPerformed, 0); assert.equal(db.writes, 0);
   const serialized = JSON.stringify(result);
-  for (const forbidden of ["secret-source", "secret-fingerprint", "secret-key", "correlationHash", "sourceRecordPath", "projectionFingerprint"]) assert.equal(serialized.includes(forbidden), false);
+  for (const forbidden of ["secret-source", "secret-fingerprint", "secret-key", "secret-actor", "audit-timestamp", "correlationHash", "sourceRecordPath", "projectionFingerprint", "actorUid"]) assert.equal(serialized.includes(forbidden), false);
 });
 
 test("detail denies unauthenticated, foreign and missing cases safely", async () => {

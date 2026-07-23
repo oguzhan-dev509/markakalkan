@@ -153,6 +153,18 @@ const versionOf = (snapshot) => snapshot.updateTime && snapshot.updateTime.toDat
   snapshot.updateTime.toDate().toISOString() :
   ((snapshot.data() || {}).sourceRecordVersion || (snapshot.data() || {}).contractVersion || "v1");
 const dataOf = (snapshot) => ({id: snapshot.id, data: snapshot.data() || {}, reference: snapshot.ref, version: versionOf(snapshot)});
+function isoTimestamp(value) {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    return value.trim() && !Number.isNaN(Date.parse(value)) ? value : null;
+  }
+  try {
+    const date = value instanceof Date ? value : value.toDate?.();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+  } catch {
+    return null;
+  }
+}
 async function query(db, name, field, value, limit = 200) {
   return (await db.collection(name).where(field, "==", value).limit(limit).get()).docs.map(dataOf);
 }
@@ -295,7 +307,7 @@ function createService({db, clock = {now: () => new Date().toISOString()}}) {
         },
         evidenceReferences: evidence.filter(belongs).map((item) => ({evidenceRefId: item.id, title: item.data.title, sourceType: item.data.sourceSystem, reviewStatus: item.data.reviewStatus, integrityStatus: item.data.integrityStatus, capturedAt: item.data.capturedAt, createdAt: item.data.createdAt})).sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))),
         timelineEvents: events.filter(belongs).map((item) => ({type: item.data.eventType, summary: item.data.summary, occurredAt: item.data.occurredAt})).sort((a, b) => String(a.occurredAt || "").localeCompare(String(b.occurredAt || ""))),
-        auditSummary: audits.filter(belongs).map((item) => ({action: item.data.action, occurredAt: item.data.occurredAt})).sort((a, b) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || ""))),
+        auditSummary: audits.filter(belongs).map((item) => ({action: item.data.action, occurredAt: isoTimestamp(item.data.occurredAt)})).sort((a, b) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || ""))),
         readOnly: true,
         writesPerformed: 0,
       });
