@@ -92,6 +92,7 @@ Map<String, dynamic> navigationResponseMap() {
     'existingCaseId': 'case-1',
     'existingCaseNumber': 'VK-2026-ABC12345',
     'title': 'rapid_repeat_scan',
+    'summary': 'repeat_scan_observed, rapid_repeat_scan',
   });
   return map;
 }
@@ -221,6 +222,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final convertedSection = find.text('Vakaya Dönüştürülen Riskler');
+    await tester.scrollUntilVisible(
+      convertedSection,
+      500,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.ensureVisible(convertedSection);
+    await tester.pumpAndSettle();
+    expect(convertedSection, findsOneWidget);
+
     final convertedCode = find.byKey(
       const ValueKey('converted-case-code-signal-2'),
     );
@@ -231,6 +242,12 @@ void main() {
     );
     await tester.ensureVisible(convertedCode);
     await tester.pumpAndSettle();
+    expect(
+      find.text('Tekrarlanan tarama gözlendi, Kısa sürede tekrar tarandı'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('repeat_scan_observed'), findsNothing);
+    expect(find.textContaining('rapid_repeat_scan'), findsNothing);
     final convertedButton = find
         .descendant(of: convertedCode, matching: find.byType(TextButton))
         .hitTestable();

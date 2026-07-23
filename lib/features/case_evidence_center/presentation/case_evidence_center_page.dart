@@ -854,7 +854,7 @@ class _CandidateCard extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            candidate.summary,
+            caseEvidenceSignalLabel(candidate.summary),
             style: const TextStyle(color: Color(0xFF596873), height: 1.45),
           ),
           const SizedBox(height: 16),
