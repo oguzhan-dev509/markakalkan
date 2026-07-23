@@ -214,12 +214,14 @@ class CaseEvidenceCenterPage extends StatefulWidget {
     this.repository,
     this.detailOpener,
     this.vaultOpener,
+    this.reviewTasksOpener,
   });
 
   final CaseEvidenceCenterRepository? repository;
   final Future<void> Function(BuildContext context, String caseId)?
   detailOpener;
   final Future<void> Function(BuildContext context)? vaultOpener;
+  final Future<void> Function(BuildContext context)? reviewTasksOpener;
 
   @override
   State<CaseEvidenceCenterPage> createState() => _CaseEvidenceCenterPageState();
@@ -253,6 +255,12 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
     final opener = widget.vaultOpener;
     if (opener != null) return opener(context);
     return AppRouter.openCaseEvidenceVault(context);
+  }
+
+  Future<void> _openReviewTasks() {
+    final opener = widget.reviewTasksOpener;
+    if (opener != null) return opener(context);
+    return AppRouter.openCaseReviewTasks(context);
   }
 
   Future<void> _scrollToCases() async {
@@ -440,6 +448,7 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
     _WorkspaceGrid(
       onCaseFilesTap: _scrollToCases,
       onEvidenceVaultTap: _openVault,
+      onReviewTasksTap: _openReviewTasks,
     ),
     const SizedBox(height: 26),
     _SectionTitle(
@@ -679,9 +688,11 @@ class _WorkspaceGrid extends StatelessWidget {
   const _WorkspaceGrid({
     required this.onCaseFilesTap,
     required this.onEvidenceVaultTap,
+    required this.onReviewTasksTap,
   });
   final VoidCallback onCaseFilesTap;
   final VoidCallback onEvidenceVaultTap;
+  final VoidCallback onReviewTasksTap;
 
   @override
   Widget build(BuildContext context) {
@@ -737,11 +748,15 @@ class _WorkspaceGrid extends StatelessWidget {
                       'Delil Kasası ve Delil Zinciri' => const ValueKey(
                         'evidence-vault-workspace',
                       ),
+                      'Görevler, Uzmanlar ve İncelemeler' => const ValueKey(
+                        'review-tasks-workspace',
+                      ),
                       _ => null,
                     },
                     onTap: switch (value.$1) {
                       'Vaka Dosyaları' => onCaseFilesTap,
                       'Delil Kasası ve Delil Zinciri' => onEvidenceVaultTap,
+                      'Görevler, Uzmanlar ve İncelemeler' => onReviewTasksTap,
                       _ => null,
                     },
                     borderRadius: BorderRadius.circular(18),

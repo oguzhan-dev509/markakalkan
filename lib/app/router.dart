@@ -21,6 +21,8 @@ import 'package:markakalkan/features/case_evidence_center/presentation/case_evid
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_detail_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_item_detail_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_vault_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_review_task_detail_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_review_tasks_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -454,6 +456,31 @@ abstract final class AppRouter {
         ),
         builder: (_) =>
             CaseEvidenceItemDetailPage(evidenceRefId: evidenceRefId),
+      ),
+    );
+  }
+
+  static Future<void> openCaseReviewTasks(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/review-tasks',
+        ),
+        builder: (_) => const CaseReviewTasksPage(),
+      ),
+    );
+  }
+
+  static Future<void> openCaseReviewTaskDetail(
+    BuildContext context, {
+    required String taskId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/review-task-detail',
+        ),
+        builder: (_) => CaseReviewTaskDetailPage(taskId: taskId),
       ),
     );
   }

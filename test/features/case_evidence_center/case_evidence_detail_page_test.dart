@@ -80,6 +80,11 @@ void main() {
     expect(find.text('VK-2026-ABC12345'), findsOneWidget);
     expect(find.text('Delil Referansları'), findsOneWidget);
     expect(find.text('Olay Zaman Çizelgesi'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Denetim Özeti'),
+      300,
+      scrollable: find.byType(Scrollable),
+    );
     expect(find.text('Denetim Özeti'), findsOneWidget);
     expect(find.text('internal-case-id'), findsNothing);
     expect(find.textContaining('fingerprint'), findsNothing);
@@ -155,6 +160,25 @@ void main() {
     await tester.pump();
     expect(openedId, 'internal-evidence-ref-id');
     expect(find.textContaining('internal-evidence-ref-id'), findsNothing);
+  });
+
+  testWidgets('case detail opens review task form with internal case id', (
+    tester,
+  ) async {
+    String? openedCaseId;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceDetailPage(
+          caseId: 'internal-case-id',
+          repository: FakeDetailRepository(() async => detail()),
+          reviewTaskFormOpener: (_, caseId) async => openedCaseId = caseId,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('create-case-review-task')));
+    await tester.pump();
+    expect(openedCaseId, 'internal-case-id');
   });
 
   for (final scenario in [

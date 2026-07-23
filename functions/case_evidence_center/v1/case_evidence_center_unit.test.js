@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {createAppendChainEventHandler, createDetailHandler, createListHandler, createService, createWriteHandler, detailRequest, listRequest} = require("./index");
+const {createRequest: createReviewTaskRequest, createReviewTaskService, eventRequest: reviewTaskEventRequest, handler: reviewTaskHandler} = require("./review_tasks");
 
 class Snapshot {
   constructor(id, data, path, exists = true, version = "2026-07-22T10:00:00.000Z") {
@@ -47,6 +48,7 @@ class Transaction {
     this.store = store; this.pending = [];
   }
   async get(ref) {
+    if (ref instanceof Query) return ref.get();
     return this.store.snapshot(ref.path);
   }
   create(ref, data) {
@@ -86,7 +88,7 @@ const collections = {
   "tenant_memberships": [{id: "membership-1", data: {uid: "user-1", tenantId: "tenant-1", status: "active", role: "owner"}}],
   "canonical_brands": [{id: "brand-1", data: {tenantId: "tenant-1", status: "active"}}],
   "monitoring_signals": [{id: "monitoring-1", version: "2026-07-22T10:00:00.000Z", data: {tenantId: "tenant-1", brandId: "brand-1", pageId: "page-1", signalLevel: "critical", status: "new", title: "Şüpheli pazar yeri ilanı", summary: "Birden fazla kaynakla desteklenen risk.", detectedAt: "2026-07-22T09:00:00.000Z", createdAt: "2026-07-22T09:00:00.000Z", evidenceVerified: true, confidence: .95}}],
-  "verificationScans": [], "shared_risk_signals": [], "brands/user-1/digitalDetectiveTasks": [], "case_files": [], "case_events": [], "case_evidence_refs": [], "case_audit_events": [],
+  "verificationScans": [], "shared_risk_signals": [], "brands/user-1/digitalDetectiveTasks": [], "case_files": [], "case_events": [], "case_evidence_refs": [], "case_audit_events": [], "case_review_tasks": [], "case_review_task_events": [],
 };
 const clock = {now: () => "2026-07-22T11:00:00.000Z"};
 
@@ -284,4 +286,102 @@ test("transaction failure leaves no partial chain, case or audit writes", async 
   const db = new FakeDb(vaultCollections(), {transactionFailure: true}); const service = createService({db, clock});
   await assert.rejects(() => service.appendChainEvent({contractVersion: "case-evidence-chain-event-request-v1", evidenceRefId: "evidence-1", eventType: "chain_started", note: "Zincir başlatıldı", requestId: "request-failure"}, {uid: "user-1"}), /simulated transaction failure/);
   assert.equal(db.writes, 0); assert.equal(db.collections.case_evidence_chain_events.length, 0); assert.equal(db.collections.case_events.length, 0); assert.equal(db.collections.case_audit_events.length, 0);
+});
+
+const reviewClock = {now: () => new Date("2026-07-23T05:00:00.000Z"), timestamp: (date) => date.toISOString()};
+const reviewUuid = "123e4567-e89b-42d3-a456-426614174000";
+function reviewCollections() {
+  const value = vaultCollections();
+  value.tenant_memberships[0].data.displayName = "Marka Uzmanı";
+  value.case_evidence_refs[0].data.reviewStatus = "awaiting_review";
+  value.case_evidence_refs[0].data.integrityStatus = "verified";
+  value.case_evidence_refs[0].data.custodyStatus = "registered";
+  value.case_evidence_refs[0].data.chainEventCount = 1;
+  value.case_review_tasks = [];
+  value.case_review_task_events = [];
+  return value;
+}
+const unassignedReviewRequest = (overrides = {}) => ({
+  contractVersion: "case-review-task-create-request-v1",
+  caseId: "case-1",
+  evidenceRefId: "evidence-1",
+  title: "Kaynak risk kaydı incelemesi",
+  description: "Kaynak risk kaydı uzman tarafından incelenecek.",
+  taskType: "evidence_review",
+  priority: "high",
+  assignee: {type: "unassigned"},
+  dueAt: "2026-07-24T05:00:00.000Z",
+  requestId: reviewUuid,
+  ...overrides,
+});
+
+test("review task contracts reject unknown fields, invalid UUID, text and due date", () => {
+  assert.equal(createReviewTaskRequest(unassignedReviewRequest(), reviewClock.now()).caseId, "case-1");
+  assert.throws(() => createReviewTaskRequest({...unassignedReviewRequest(), extra: true}, reviewClock.now()), /contract/);
+  assert.throws(() => createReviewTaskRequest(unassignedReviewRequest({requestId: "not-uuid"}), reviewClock.now()), /requestId/);
+  assert.throws(() => createReviewTaskRequest(unassignedReviewRequest({title: "x"}), reviewClock.now()), /title/);
+  assert.throws(() => createReviewTaskRequest(unassignedReviewRequest({dueAt: "2020-01-01T00:00:00Z"}), reviewClock.now()), /dueAt/);
+  assert.throws(() => reviewTaskEventRequest({contractVersion: "case-review-task-event-request-v1", taskId: "task-1", eventType: "note_added", note: "Not eklendi", requestId: reviewUuid, dueAt: "2026-07-24T00:00:00Z"}, reviewClock.now()), /contract/);
+});
+
+test("review task create is atomic, assigned or open, and deterministic idempotent", async () => {
+  const db = new FakeDb(reviewCollections()); const service = createReviewTaskService({db, clock: reviewClock});
+  const first = await service.create(unassignedReviewRequest(), {uid: "user-1"});
+  assert.equal(first.status, "open"); assert.equal(first.duplicate, false); assert.match(first.taskNumber, /^GV-2026-[A-F0-9]{8}$/); assert.notEqual(first.taskNumber, first.taskId); assert.equal(db.writes, 4);
+  const duplicate = await service.create(unassignedReviewRequest(), {uid: "user-1"});
+  assert.equal(duplicate.duplicate, true); assert.equal(db.writes, 4);
+  assert.equal(db.collections.case_review_tasks.length, 1); assert.equal(db.collections.case_review_task_events.length, 1); assert.equal(db.collections.case_events.length, 1); assert.equal(db.collections.case_audit_events.length, 1);
+  const assignedDb = new FakeDb(reviewCollections()); const assigned = await createReviewTaskService({db: assignedDb, clock: reviewClock}).create(unassignedReviewRequest({requestId: "223e4567-e89b-42d3-a456-426614174001", assignee: {type: "external_expert", displayLabel: "Ayşe Uzman", expertiseArea: "Ayakkabı analizi"}}), {uid: "user-1"});
+  assert.equal(assigned.status, "assigned"); assert.equal(assignedDb.collections.case_review_tasks[0].data.assigneeDisplayLabel, "Ayşe Uzman");
+});
+
+test("review task create validates auth App Check assignment evidence and case lifecycle", async () => {
+  const db = new FakeDb(reviewCollections()); const service = createReviewTaskService({db, clock: reviewClock});
+  await assert.rejects(() => service.create(unassignedReviewRequest(), {}), /authentication/);
+  const createHandler = reviewTaskHandler("create", {db, clock: reviewClock, appCheck: true, log: {info: () => {}}});
+  await assert.rejects(() => createHandler({auth: {uid: "user-1"}, data: unassignedReviewRequest()}), (error) => error instanceof HttpsError && error.code === "failed-precondition");
+  const mismatch = reviewCollections(); mismatch.case_evidence_refs[0].data.caseId = "other";
+  await assert.rejects(() => createReviewTaskService({db: new FakeDb(mismatch), clock: reviewClock}).create(unassignedReviewRequest(), {uid: "user-1"}), (error) => error.code === "not-found");
+  for (const status of ["closed", "archived"]) {
+    const closedValues = reviewCollections(); closedValues.case_files[0].data.status = status;
+    await assert.rejects(() => createReviewTaskService({db: new FakeDb(closedValues), clock: reviewClock}).create(unassignedReviewRequest(), {uid: "user-1"}), (error) => error.code === "failed-precondition");
+  }
+  const badMember = reviewCollections();
+  await assert.rejects(() => createReviewTaskService({db: new FakeDb(badMember), clock: reviewClock}).create(unassignedReviewRequest({requestId: "323e4567-e89b-42d3-a456-426614174002", assignee: {type: "internal_member", uid: "foreign-user"}}), {uid: "user-1"}), (error) => error.code === "not-found");
+  assert.throws(() => createReviewTaskRequest(unassignedReviewRequest({assignee: {type: "external_expert", displayLabel: "Uzman"}}), reviewClock.now()), /external expert/);
+  assert.throws(() => createReviewTaskRequest(unassignedReviewRequest({assignee: {type: "laboratory", displayLabel: "Lab"}}), reviewClock.now()), /laboratory/);
+});
+
+test("review task list/detail are scoped, sorted, overdue, safe and zero-write", async () => {
+  const db = new FakeDb(reviewCollections()); const service = createReviewTaskService({db, clock: reviewClock});
+  const created = await service.create(unassignedReviewRequest({dueAt: "2026-07-23T04:59:00.000Z"}), {uid: "user-1"}); const writes = db.writes;
+  db.collections.case_review_tasks.push({id: "foreign-brand", data: {...db.collections.case_review_tasks[0].data, canonicalBrandId: "foreign"}});
+  const list = await service.list({contractVersion: "case-review-task-list-request-v1"}, {uid: "user-1"});
+  assert.equal(list.items.length, 1); assert.equal(list.items[0].taskId, created.taskId); assert.equal(list.items[0].isOverdue, true); assert.equal(list.writesPerformed, 0); assert.equal(db.writes, writes);
+  const detail = await service.detail({contractVersion: "case-review-task-detail-request-v1", taskId: created.taskId}, {uid: "user-1"});
+  assert.deepEqual(detail.allowedActions, ["assign", "change_due_date", "cancel_task"]); assert.deepEqual(detail.timelineEvents.map((item) => item.sequence), [1]); assert.equal(detail.writesPerformed, 0);
+  const serialized = JSON.stringify(detail); for (const forbidden of ["tenantId", "canonicalBrandId", "actorUid", "previousEventId", "payloadSummary"]) assert.equal(serialized.includes(forbidden), false);
+  db.collections.case_review_tasks[0].data.tenantId = "foreign";
+  await assert.rejects(() => service.detail({contractVersion: "case-review-task-detail-request-v1", taskId: created.taskId}, {uid: "user-1"}), (error) => error.code === "not-found");
+});
+
+test("review task lifecycle, idempotency and terminal rules preserve evidence review state", async () => {
+  const db = new FakeDb(reviewCollections()); const service = createReviewTaskService({db, clock: reviewClock});
+  const created = await service.create(unassignedReviewRequest(), {uid: "user-1"}); const taskId = created.taskId; const base = {contractVersion: "case-review-task-event-request-v1", taskId, note: "Kontrollü görev işlemi"};
+  const assigned = await service.append({...base, eventType: "assignment_set", assignee: {type: "external_expert", displayLabel: "Ayşe Uzman", expertiseArea: "Ayakkabı analizi"}, requestId: "423e4567-e89b-42d3-a456-426614174003"}, {uid: "user-1"}); assert.equal(assigned.status, "assigned"); assert.equal(assigned.sequence, 2);
+  const startedRequest = {...base, eventType: "review_started", requestId: "523e4567-e89b-42d3-a456-426614174004"};
+  assert.equal((await service.append(startedRequest, {uid: "user-1"})).status, "in_review");
+  assert.equal((await service.append(startedRequest, {uid: "user-1"})).duplicate, true);
+  await assert.rejects(() => service.append({...base, eventType: "assignment_changed", assignee: {type: "external_expert", displayLabel: "Başka Uzman", expertiseArea: "Analiz"}, requestId: "623e4567-e89b-42d3-a456-426614174005"}, {uid: "user-1"}), (error) => error.code === "failed-precondition");
+  const reviewBefore = db.collections.case_evidence_refs[0].data.reviewStatus;
+  const completed = await service.append({...base, eventType: "review_completed", resultOutcome: "confirmed", resultSummary: "İnceleme bulguları güvenli biçimde doğrulandı.", requestId: "723e4567-e89b-42d3-a456-426614174006"}, {uid: "user-1"});
+  assert.equal(completed.status, "completed"); assert.equal(completed.eventCount, 4); assert.equal(db.collections.case_evidence_refs[0].data.reviewStatus, reviewBefore);
+  await assert.rejects(() => service.append({...base, eventType: "note_added", requestId: "823e4567-e89b-42d3-a456-426614174007"}, {uid: "user-1"}), (error) => error.code === "failed-precondition");
+  assert.equal(db.collections.case_review_task_events.length, 4); assert.equal(db.collections.case_events.length, 4); assert.equal(db.collections.case_audit_events.length, 4);
+});
+
+test("review task transaction failure leaves no partial writes", async () => {
+  const db = new FakeDb(reviewCollections(), {transactionFailure: true});
+  await assert.rejects(() => createReviewTaskService({db, clock: reviewClock}).create(unassignedReviewRequest(), {uid: "user-1"}), /simulated transaction failure/);
+  assert.equal(db.writes, 0); assert.equal(db.collections.case_review_tasks.length, 0); assert.equal(db.collections.case_review_task_events.length, 0);
 });

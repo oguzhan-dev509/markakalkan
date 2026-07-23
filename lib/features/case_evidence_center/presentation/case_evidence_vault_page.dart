@@ -85,6 +85,7 @@ class EvidenceVaultResult {
 class EvidenceItem {
   EvidenceItem({
     required this.id,
+    required this.caseId,
     required this.caseNumber,
     required this.caseTitle,
     required this.label,
@@ -97,6 +98,7 @@ class EvidenceItem {
     this.lastAt,
   });
   final String id,
+      caseId,
       caseNumber,
       caseTitle,
       label,
@@ -109,6 +111,7 @@ class EvidenceItem {
   final Object? lastAt;
   factory EvidenceItem.fromMap(Map<String, dynamic> m) => EvidenceItem(
     id: _s(m, 'evidenceRefId'),
+    caseId: _s(m, 'caseId'),
     caseNumber: _s(m, 'caseNumber'),
     caseTitle: _s(m, 'caseTitle'),
     label: _s(m, 'evidenceLabel'),

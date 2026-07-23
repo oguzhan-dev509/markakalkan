@@ -9,6 +9,13 @@ admin.initializeApp();
 const db = admin.firestore();
 
 const {
+  buildAppendCaseReviewTaskEvent,
+  buildCreateCaseReviewTask,
+  buildGetCaseReviewTaskDetail,
+  buildListCaseReviewTasks,
+} = require("./case_evidence_center/v1/review_tasks");
+
+const {
   buildCreateSupplyProtectionControl,
   buildUpdateSupplyProtectionControl,
 } = require("./supply_security/protection_controls");
@@ -236,5 +243,10 @@ exports.getCaseEvidenceDetail =
 exports.listCaseEvidenceVault = buildListCaseEvidenceVault({db});
 exports.getCaseEvidenceItemDetail = buildGetCaseEvidenceItemDetail({db});
 exports.appendCaseEvidenceChainEvent = buildAppendCaseEvidenceChainEvent({db});
+exports.listCaseReviewTasks = buildListCaseReviewTasks({db, admin});
+exports.getCaseReviewTaskDetail = buildGetCaseReviewTaskDetail({db, admin});
+exports.createCaseReviewTask = buildCreateCaseReviewTask({db, admin});
+exports.appendCaseReviewTaskEvent =
+    buildAppendCaseReviewTaskEvent({db, admin});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});

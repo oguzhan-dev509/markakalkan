@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_presentation_labels.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_review_tasks_page.dart';
 
 abstract interface class CaseEvidenceDetailRepository {
   Future<CaseEvidenceDetail> load(String caseId);
@@ -84,11 +85,14 @@ class CaseEvidenceDetailPage extends StatefulWidget {
     required this.caseId,
     this.repository,
     this.evidenceDetailOpener,
+    this.reviewTaskFormOpener,
   });
   final String caseId;
   final CaseEvidenceDetailRepository? repository;
   final Future<void> Function(BuildContext context, String evidenceRefId)?
   evidenceDetailOpener;
+  final Future<void> Function(BuildContext context, String caseId)?
+  reviewTaskFormOpener;
   @override
   State<CaseEvidenceDetailPage> createState() => _CaseEvidenceDetailPageState();
 }
@@ -160,6 +164,20 @@ class _CaseEvidenceDetailPageState extends State<CaseEvidenceDetailPage> {
     ),
     const SizedBox(height: 8),
     Text('Kaynak risk: ${detail.sourceReference}'),
+    const SizedBox(height: 16),
+    FilledButton.icon(
+      key: const ValueKey('create-case-review-task'),
+      onPressed: () {
+        final opener = widget.reviewTaskFormOpener;
+        if (opener != null) {
+          opener(context, widget.caseId);
+        } else {
+          showCaseReviewTaskForm(context, caseId: widget.caseId);
+        }
+      },
+      icon: const Icon(Icons.assignment_add),
+      label: const Text('İnceleme görevi oluştur'),
+    ),
     const SizedBox(height: 28),
     ..._section(
       'Delil Referansları',

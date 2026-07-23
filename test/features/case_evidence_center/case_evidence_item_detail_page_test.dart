@@ -158,6 +158,34 @@ void main() {
     expect(find.textContaining('chain_started'), findsNothing);
   });
 
+  testWidgets('evidence detail opens prefilled expert review form callback', (
+    tester,
+  ) async {
+    String? caseId;
+    String? evidenceId;
+    String? title;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceItemDetailPage(
+          evidenceRefId: 'internal-evidence-id',
+          repository: _Repository(_detail()),
+          reviewTaskFormOpener:
+              (_, openedCaseId, openedEvidenceId, initialTitle) async {
+                caseId = openedCaseId;
+                evidenceId = openedEvidenceId;
+                title = initialTitle;
+              },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('create-evidence-review-task')));
+    await tester.pump();
+    expect(caseId, 'internal-case-id');
+    expect(evidenceId, 'internal-evidence-id');
+    expect(title, 'Kaynak risk kaydı incelemesi');
+  });
+
   for (final scenario in [(null, 'null'), ('not-a-timestamp', 'invalid')]) {
     testWidgets('timeline uses fallback for ${scenario.$2} timestamp', (
       tester,

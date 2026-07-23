@@ -4,15 +4,24 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_chain_presentation_labels.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_vault_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_review_tasks_page.dart';
 
 class CaseEvidenceItemDetailPage extends StatefulWidget {
   const CaseEvidenceItemDetailPage({
     super.key,
     required this.evidenceRefId,
     this.repository,
+    this.reviewTaskFormOpener,
   });
   final String evidenceRefId;
   final CaseEvidenceVaultRepository? repository;
+  final Future<void> Function(
+    BuildContext context,
+    String caseId,
+    String evidenceRefId,
+    String initialTitle,
+  )?
+  reviewTaskFormOpener;
   @override
   State<CaseEvidenceItemDetailPage> createState() =>
       _CaseEvidenceItemDetailPageState();
@@ -173,6 +182,31 @@ class _CaseEvidenceItemDetailPageState
                 'Bütünlük: ${evidenceIntegrityLabel(detail!.evidence.integrity)}',
               ),
               Text('Zincir olay sayısı: ${detail!.evidence.count}'),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                key: const ValueKey('create-evidence-review-task'),
+                onPressed: () {
+                  final initialTitle = '${detail!.evidence.label} incelemesi';
+                  final opener = widget.reviewTaskFormOpener;
+                  if (opener != null) {
+                    opener(
+                      context,
+                      detail!.evidence.caseId,
+                      widget.evidenceRefId,
+                      initialTitle,
+                    );
+                  } else {
+                    showCaseReviewTaskForm(
+                      context,
+                      caseId: detail!.evidence.caseId,
+                      evidenceRefId: widget.evidenceRefId,
+                      initialTitle: initialTitle,
+                    );
+                  }
+                },
+                icon: const Icon(Icons.assignment_add),
+                label: const Text('Uzman incelemesi oluştur'),
+              ),
               const SizedBox(height: 20),
               const Text(
                 'Delil Zinciri',
