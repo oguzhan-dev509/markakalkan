@@ -96,6 +96,9 @@ const {
   buildCreateCaseFromRiskOperation,
   buildListCaseEvidenceCenter,
   buildGetCaseEvidenceDetail,
+  buildListCaseEvidenceVault,
+  buildGetCaseEvidenceItemDetail,
+  buildAppendCaseEvidenceChainEvent,
 } = require("./case_evidence_center/v1");
 
 setGlobalOptions({
@@ -230,5 +233,8 @@ exports.listCaseEvidenceCenter =
     buildListCaseEvidenceCenter({db});
 exports.getCaseEvidenceDetail =
     buildGetCaseEvidenceDetail({db});
+exports.listCaseEvidenceVault = buildListCaseEvidenceVault({db});
+exports.getCaseEvidenceItemDetail = buildGetCaseEvidenceItemDetail({db});
+exports.appendCaseEvidenceChainEvent = buildAppendCaseEvidenceChainEvent({db});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});

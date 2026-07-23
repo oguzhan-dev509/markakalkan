@@ -19,6 +19,8 @@ import 'package:markakalkan/features/traceability/presentation/traceability_case
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_center_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_detail_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_item_detail_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_vault_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -426,6 +428,32 @@ abstract final class AppRouter {
           name: '/case-evidence-center/case-detail',
         ),
         builder: (_) => CaseEvidenceDetailPage(caseId: caseId),
+      ),
+    );
+  }
+
+  static Future<void> openCaseEvidenceVault(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/evidence-vault',
+        ),
+        builder: (_) => const CaseEvidenceVaultPage(),
+      ),
+    );
+  }
+
+  static Future<void> openCaseEvidenceItemDetail(
+    BuildContext context, {
+    required String evidenceRefId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/evidence-detail',
+        ),
+        builder: (_) =>
+            CaseEvidenceItemDetailPage(evidenceRefId: evidenceRefId),
       ),
     );
   }

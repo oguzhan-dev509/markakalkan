@@ -35,6 +35,7 @@ CaseEvidenceDetail detail({
       ? []
       : [
           {
+            'evidenceRefId': 'internal-evidence-ref-id',
             'title': 'Kaynak risk kaydı',
             'sourceType': 'monitoring',
             'reviewStatus': 'pending',
@@ -132,6 +133,28 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text(summary), findsOneWidget);
+  });
+
+  testWidgets('evidence row opens item detail with internal evidence id', (
+    tester,
+  ) async {
+    String? openedId;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceDetailPage(
+          caseId: 'internal-case-id',
+          repository: FakeDetailRepository(() async => detail()),
+          evidenceDetailOpener: (_, id) async => openedId = id,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('case-evidence-internal-evidence-ref-id')),
+    );
+    await tester.pump();
+    expect(openedId, 'internal-evidence-ref-id');
+    expect(find.textContaining('internal-evidence-ref-id'), findsNothing);
   });
 
   for (final scenario in [

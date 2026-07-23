@@ -7,6 +7,7 @@ const {resolveTenantContextV1, sharedRiskProjection} = require("../../risk_opera
 
 const SOURCES = Object.freeze(["monitoring", "traceability", "digital_detective", "shared_risk"]);
 const CANDIDACY = Object.freeze(["review_candidate", "strong_candidate"]);
+const CHAIN_EVENTS = Object.freeze(["chain_started", "custody_received", "custody_transferred", "review_started", "review_completed", "sealed", "unsealed"]);
 const sha256 = (value) => createHash("sha256").update(String(value)).digest("hex");
 
 class CaseEvidenceCenterError extends Error {
@@ -83,6 +84,69 @@ function detailRequest(raw) {
     throw new CaseEvidenceCenterError("invalid-argument", "detail request invalid");
   }
   return Object.freeze({contractVersion: raw.contractVersion, caseId: requiredString(raw.caseId, "caseId", 128)});
+}
+function strictVersionRequest(raw, version, extra = []) {
+  objectRequired(raw); const allowed = ["contractVersion", ...extra];
+  if (Object.keys(raw).some((key) => !allowed.includes(key)) || raw.contractVersion !== version) throw new CaseEvidenceCenterError("invalid-argument", "request contract invalid");
+  return raw;
+}
+function vaultListRequest(raw) {
+  strictVersionRequest(raw, "case-evidence-vault-list-request-v1"); return Object.freeze({contractVersion: raw.contractVersion});
+}
+function evidenceDetailRequest(raw) {
+  strictVersionRequest(raw, "case-evidence-item-detail-request-v1", ["evidenceRefId"]);
+  return Object.freeze({contractVersion: raw.contractVersion, evidenceRefId: requiredString(raw.evidenceRefId, "evidenceRefId", 128)});
+}
+function chainEventRequest(raw) {
+  strictVersionRequest(raw, "case-evidence-chain-event-request-v1", ["evidenceRefId", "eventType", "note", "requestId"]);
+  const eventType = requiredString(raw.eventType, "eventType", 40); if (!CHAIN_EVENTS.includes(eventType)) throw new CaseEvidenceCenterError("invalid-argument", "eventType invalid");
+  const note = requiredString(raw.note, "note", 500); const forbiddenControl = [...note].some((character) => {
+    const code = character.charCodeAt(0); return code === 127 || (code < 32 && ![9, 10, 13].includes(code));
+  }); if (note.length < 3 || forbiddenControl) throw new CaseEvidenceCenterError("invalid-argument", "note invalid");
+  return Object.freeze({contractVersion: raw.contractVersion, evidenceRefId: requiredString(raw.evidenceRefId, "evidenceRefId", 128), eventType, note, requestId: requiredString(raw.requestId, "requestId", 128)});
+}
+const eventLabel = (value) => ({chain_started: "Delil zinciri başlatıldı", custody_received: "Delil teslim alındı", custody_transferred: "Delil teslim edildi", review_started: "İnceleme başlatıldı", review_completed: "İnceleme tamamlandı", sealed: "Delil mühürlendi", unsealed: "Delil mührü açıldı"})[value] || "Delil zinciri işlemi";
+const evidenceReview = (data) => data.reviewStatus === "pending" ? "awaiting_review" : (data.reviewStatus || "awaiting_review");
+const evidenceCustody = (data) => data.custodyStatus || (Number(data.chainEventCount || 0) > 0 ? "registered" : "not_started");
+function genesisHash(id, data) {
+  return sha256(JSON.stringify(["case-evidence-genesis-v1", id, data.tenantId || "", data.canonicalBrandId || "", data.caseId || "", data.referenceType || "", data.title || "", data.createdAt || ""]));
+}
+function chainHash(previousHash, payload) {
+  return sha256(previousHash + JSON.stringify([payload.sequence, payload.eventType, payload.note, payload.actorUid, payload.recordedAt]));
+}
+function allowedActions(data) {
+  const count = Number(data.chainEventCount || 0); if (count === 0) return ["chain_started"];
+  const review = evidenceReview(data); const custody = evidenceCustody(data); const actions = ["custody_received", "custody_transferred"];
+  if (review === "awaiting_review") actions.push("review_started");
+  if (review === "under_review") actions.push("review_completed");
+  if (custody === "sealed") actions.push("unsealed"); else actions.push("sealed");
+  return actions.filter((action) => action !== data.lastChainEventType);
+}
+function transition(data, type) {
+  if (!allowedActions(data).includes(type)) throw new CaseEvidenceCenterError("transition.denied", "transition denied");
+  let reviewStatus = evidenceReview(data); let custodyStatus = evidenceCustody(data);
+  if (type === "chain_started") {
+    reviewStatus = "awaiting_review"; custodyStatus = "registered";
+  }
+  if (type === "review_started") reviewStatus = "under_review";
+  if (type === "review_completed") reviewStatus = "verified";
+  if (type === "sealed") custodyStatus = "sealed";
+  if (type === "unsealed") custodyStatus = "registered";
+  return {reviewStatus, custodyStatus};
+}
+async function caseForEvidence(db, evidence) {
+  const snapshot = await db.collection("case_files").doc(evidence.caseId).get(); return snapshot.exists ? {id: snapshot.id, data: snapshot.data() || {}} : null;
+}
+function safeEvidence(id, data, caseData, integrityStatus) {
+  return {evidenceRefId: id, caseId: data.caseId, caseNumber: caseData.caseNumber, caseTitle: caseData.title, evidenceLabel: data.title || "Delil kaydı", evidenceType: data.referenceType || "evidence_record", sourceLabel: data.sourceSystem || "other", reviewStatus: evidenceReview(data), custodyStatus: evidenceCustody(data), integrityStatus, chainEventCount: Number(data.chainEventCount || 0), createdAt: data.createdAt || data.capturedAt || null, lastChainEventAt: data.lastChainEventAt || null};
+}
+function verifyChain(id, evidence, events) {
+  if (!events.length) return {status: "not_started", events: []}; let previous = genesisHash(id, evidence);
+  const sorted = [...events].sort((a, b) => Number(a.data.sequence) - Number(b.data.sequence));
+  for (let index = 0; index < sorted.length; index++) {
+    const item = sorted[index]; const expected = chainHash(previous, item.data); if (item.data.sequence !== index + 1 || item.data.previousHash !== previous || item.data.chainHash !== expected) return {status: "broken", events: sorted}; previous = item.data.chainHash;
+  }
+  if (evidence.chainHeadHash !== previous || Number(evidence.chainEventCount || 0) !== sorted.length) return {status: "broken", events: sorted}; return {status: "verified", events: sorted};
 }
 
 const versionOf = (snapshot) => snapshot.updateTime && snapshot.updateTime.toDate ?
@@ -178,6 +242,27 @@ async function readDetails(db, entry) {
 
 function createService({db, clock = {now: () => new Date().toISOString()}}) {
   return Object.freeze({
+    async vaultList(raw, invocation) {
+      vaultListRequest(raw); if (!invocation?.uid) throw new CaseEvidenceCenterError("unauthenticated", "authentication required");
+      const context = await resolveTenantContextV1({db, uid: invocation.uid, request: {}}); const snapshot = await db.collection("case_evidence_refs").where("tenantId", "==", context.tenantId).limit(100).get(); const items = [];
+      for (const doc of snapshot.docs.map(dataOf)) {
+        if (doc.data.canonicalBrandId !== context.brandId) continue; const linkedCase = await caseForEvidence(db, doc.data); if (!linkedCase || linkedCase.data.tenantId !== context.tenantId || linkedCase.data.canonicalBrandId !== context.brandId) continue; const events = await query(db, "case_evidence_chain_events", "evidenceRefId", doc.id, 100); items.push(safeEvidence(doc.id, doc.data, linkedCase.data, verifyChain(doc.id, doc.data, events).status));
+      }
+      return {contractVersion: "case-evidence-vault-list-v1", stats: {totalEvidence: items.length, awaitingReview: items.filter((i) => i.reviewStatus === "awaiting_review").length, underReview: items.filter((i) => i.reviewStatus === "under_review").length, verified: items.filter((i) => i.reviewStatus === "verified").length, sealed: items.filter((i) => i.custodyStatus === "sealed").length, chainNotStarted: items.filter((i) => i.integrityStatus === "not_started").length}, items, readOnly: true, writesPerformed: 0};
+    },
+    async evidenceDetail(raw, invocation) {
+      const request = evidenceDetailRequest(raw); if (!invocation?.uid) throw new CaseEvidenceCenterError("unauthenticated", "authentication required"); const context = await resolveTenantContextV1({db, uid: invocation.uid, request: {}}); const snapshot = await db.collection("case_evidence_refs").doc(request.evidenceRefId).get(); if (!snapshot.exists) throw new CaseEvidenceCenterError("evidence.not_found", "evidence not found"); const data = snapshot.data() || {}; if (data.tenantId !== context.tenantId || data.canonicalBrandId !== context.brandId) throw new CaseEvidenceCenterError("evidence.not_found", "evidence not found"); const linkedCase = await caseForEvidence(db, data); if (!linkedCase || linkedCase.data.tenantId !== context.tenantId || linkedCase.data.canonicalBrandId !== context.brandId) throw new CaseEvidenceCenterError("evidence.not_found", "evidence not found"); const events = await query(db, "case_evidence_chain_events", "evidenceRefId", snapshot.id, 100); const verified = verifyChain(snapshot.id, data, events);
+      return {contractVersion: "case-evidence-item-detail-v1", evidence: safeEvidence(snapshot.id, data, linkedCase.data, verified.status), chainEvents: verified.events.map((item) => ({sequence: item.data.sequence, eventType: item.data.eventType, eventLabel: eventLabel(item.data.eventType), note: item.data.note, actorLabel: item.data.actorDisplayLabel || "Yetkili kullanıcı", recordedAt: item.data.recordedAt})), allowedActions: allowedActions(data), readOnly: true, writesPerformed: 0};
+    },
+    async appendChainEvent(raw, invocation) {
+      const request = chainEventRequest(raw); if (!invocation?.uid) throw new CaseEvidenceCenterError("unauthenticated", "authentication required"); const context = await resolveTenantContextV1({db, uid: invocation.uid, request: {}}); const recordedAt = clock.now(); const evidenceRef = db.collection("case_evidence_refs").doc(request.evidenceRefId); const eventId = sha256([context.tenantId, request.evidenceRefId, request.requestId].join("|")); const eventRef = db.collection("case_evidence_chain_events").doc(eventId);
+      return db.runTransaction(async (transaction) => {
+        const evidenceSnapshot = await transaction.get(evidenceRef); if (!evidenceSnapshot.exists) throw new CaseEvidenceCenterError("evidence.not_found", "evidence not found"); const data = evidenceSnapshot.data() || {}; if (data.tenantId !== context.tenantId || data.canonicalBrandId !== context.brandId) throw new CaseEvidenceCenterError("evidence.not_found", "evidence not found"); const caseRef = db.collection("case_files").doc(data.caseId); const caseSnapshot = await transaction.get(caseRef); const caseData = caseSnapshot.data() || {}; if (!caseSnapshot.exists || caseData.tenantId !== context.tenantId || caseData.canonicalBrandId !== context.brandId) throw new CaseEvidenceCenterError("evidence.not_found", "evidence not found"); if (["closed", "archived"].includes(caseData.status)) throw new CaseEvidenceCenterError("transition.denied", "case closed"); const existing = await transaction.get(eventRef); if (existing.exists) {
+          const prior = existing.data() || {}; return {contractVersion: "case-evidence-chain-event-result-v1", ok: true, duplicate: true, evidenceRefId: request.evidenceRefId, sequence: prior.sequence, eventType: prior.eventType, eventLabel: eventLabel(prior.eventType), reviewStatus: evidenceReview(data), custodyStatus: evidenceCustody(data), integrityStatus: "verified", chainEventCount: Number(data.chainEventCount || 0)};
+        }
+        const state = transition(data, request.eventType); const sequence = Number(data.chainEventCount || 0) + 1; const previousHash = sequence === 1 ? genesisHash(evidenceSnapshot.id, data) : data.chainHeadHash; if (!previousHash) throw new CaseEvidenceCenterError("transition.denied", "chain head missing"); const payload = {sequence, eventType: request.eventType, note: request.note, actorUid: invocation.uid, recordedAt}; const nextHash = chainHash(previousHash, payload); const event = {contractVersion: "case-evidence-chain-event-v1", tenantId: context.tenantId, canonicalBrandId: context.brandId, caseId: data.caseId, evidenceRefId: request.evidenceRefId, ...payload, actorDisplayLabel: "Yetkili kullanıcı", previousHash, chainHash: nextHash}; transaction.create(eventRef, event); transaction.update(evidenceRef, {chainInitializedAt: data.chainInitializedAt || recordedAt, chainHeadHash: nextHash, chainEventCount: sequence, lastChainEventAt: recordedAt, lastChainEventType: request.eventType, reviewStatus: state.reviewStatus, custodyStatus: state.custodyStatus, updatedAt: recordedAt}); transaction.create(db.collection("case_events").doc(sha256(`${eventId}|case`)), {contractVersion: "case-event-v1", caseId: data.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, eventType: `evidence_${request.eventType}`, summary: eventLabel(request.eventType), occurredAt: recordedAt, actorUid: invocation.uid, appendOnly: true}); transaction.create(db.collection("case_audit_events").doc(sha256(`${eventId}|audit`)), {contractVersion: "case-audit-event-v1", caseId: data.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, action: `evidence.${request.eventType}`, actorUid: invocation.uid, occurredAt: recordedAt, appendOnly: true}); return {contractVersion: "case-evidence-chain-event-result-v1", ok: true, duplicate: false, evidenceRefId: request.evidenceRefId, sequence, eventType: request.eventType, eventLabel: eventLabel(request.eventType), reviewStatus: state.reviewStatus, custodyStatus: state.custodyStatus, integrityStatus: "verified", chainEventCount: sequence};
+      });
+    },
     async detail(raw, invocation) {
       const request = detailRequest(raw);
       if (!invocation?.uid) throw new CaseEvidenceCenterError("unauthenticated", "authentication required");
@@ -208,7 +293,7 @@ function createService({db, clock = {now: () => new Date().toISOString()}}) {
           createdAt: record.openedAt,
           updatedAt: record.updatedAt,
         },
-        evidenceReferences: evidence.filter(belongs).map((item) => ({title: item.data.title, sourceType: item.data.sourceSystem, reviewStatus: item.data.reviewStatus, integrityStatus: item.data.integrityStatus, capturedAt: item.data.capturedAt, createdAt: item.data.createdAt})).sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))),
+        evidenceReferences: evidence.filter(belongs).map((item) => ({evidenceRefId: item.id, title: item.data.title, sourceType: item.data.sourceSystem, reviewStatus: item.data.reviewStatus, integrityStatus: item.data.integrityStatus, capturedAt: item.data.capturedAt, createdAt: item.data.createdAt})).sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))),
         timelineEvents: events.filter(belongs).map((item) => ({type: item.data.eventType, summary: item.data.summary, occurredAt: item.data.occurredAt})).sort((a, b) => String(a.occurredAt || "").localeCompare(String(b.occurredAt || ""))),
         auditSummary: audits.filter(belongs).map((item) => ({action: item.data.action, occurredAt: item.data.occurredAt})).sort((a, b) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || ""))),
         readOnly: true,
@@ -307,6 +392,8 @@ function mapError(error) {
   if (error.code === "unauthenticated") return new HttpsError("unauthenticated", "Oturum açmanız gerekir.");
   if (error.code === "source.not_found") return new HttpsError("not-found", "Kaynak risk kaydı bulunamadı.");
   if (error.code === "case.not_found") return new HttpsError("not-found", "Vaka dosyası bulunamadı.");
+  if (error.code === "evidence.not_found") return new HttpsError("not-found", "Delil kaydı bulunamadı.");
+  if (error.code === "transition.denied") return new HttpsError("failed-precondition", "Bu delil zinciri işlemi mevcut durumda uygulanamaz.");
   if (["authorization.denied", "source.denied"].includes(error.code)) return new HttpsError("permission-denied", "Bu işlem için yeterli yetkiniz bulunmuyor.");
   return new HttpsError("invalid-argument", "Geçersiz vaka isteği.");
 }
@@ -321,6 +408,33 @@ function createDetailHandler({db, clock, log = logger}) {
     } catch (error) {
       if (error instanceof CaseEvidenceCenterError) throw mapError(error);
       throw new HttpsError("internal", "Vaka ayrıntısı güvenli biçimde hazırlanamadı.");
+    }
+  };
+}
+function createVaultListHandler({db, clock, log = logger}) {
+  const service = createService({db, clock}); return async (invocation) => {
+    if (!invocation.auth?.uid) throw new HttpsError("unauthenticated", "Oturum açmanız gerekir."); try {
+      const result = await service.vaultList(invocation.data || {}, {uid: invocation.auth.uid}); log.info("Evidence vault read completed", {event: "case_evidence_vault_read_completed", itemCount: result.items.length, transactionCommitted: false, writeAttempted: false}); return result;
+    } catch (error) {
+      if (error instanceof CaseEvidenceCenterError) throw mapError(error); throw new HttpsError("internal", "Delil kasası güvenli biçimde hazırlanamadı.");
+    }
+  };
+}
+function createEvidenceItemDetailHandler({db, clock, log = logger}) {
+  const service = createService({db, clock}); return async (invocation) => {
+    if (!invocation.auth?.uid) throw new HttpsError("unauthenticated", "Oturum açmanız gerekir."); try {
+      return await service.evidenceDetail(invocation.data || {}, {uid: invocation.auth.uid});
+    } catch (error) {
+      if (error instanceof CaseEvidenceCenterError) throw mapError(error); log.error("Evidence detail failed", {event: "case_evidence_item_detail_failed"}); throw new HttpsError("internal", "Delil ayrıntısı güvenli biçimde hazırlanamadı.");
+    }
+  };
+}
+function createAppendChainEventHandler({db, clock, log = logger}) {
+  const service = createService({db, clock}); return async (invocation) => {
+    if (!invocation.auth?.uid) throw new HttpsError("unauthenticated", "Oturum açmanız gerekir."); if (!invocation.app?.appId) throw new HttpsError("failed-precondition", "Delil zinciri işlemi için uygulama doğrulaması gereklidir."); try {
+      const result = await service.appendChainEvent(invocation.data || {}, {uid: invocation.auth.uid}); log.info("Evidence chain event completed", {event: "case_evidence_chain_event_completed", eventType: result.eventType, sequence: result.sequence, duplicate: result.duplicate, transactionCommitted: !result.duplicate, writeAttempted: !result.duplicate}); return result;
+    } catch (error) {
+      if (error instanceof CaseEvidenceCenterError) throw mapError(error); throw new HttpsError("internal", "Delil zinciri işlemi tamamlanamadı.");
     }
   };
 }
@@ -371,5 +485,14 @@ function buildCreateCaseFromRiskOperation({db}) {
 function buildGetCaseEvidenceDetail({db}) {
   return onCall({region: "europe-west3", enforceAppCheck: false, maxInstances: 3}, createDetailHandler({db, clock: {now: () => new Date().toISOString()}}));
 }
+function buildListCaseEvidenceVault({db}) {
+  return onCall({region: "europe-west3", enforceAppCheck: false, maxInstances: 3}, createVaultListHandler({db, clock: {now: () => new Date().toISOString()}}));
+}
+function buildGetCaseEvidenceItemDetail({db}) {
+  return onCall({region: "europe-west3", enforceAppCheck: false, maxInstances: 3}, createEvidenceItemDetailHandler({db, clock: {now: () => new Date().toISOString()}}));
+}
+function buildAppendCaseEvidenceChainEvent({db}) {
+  return onCall({region: "europe-west3", enforceAppCheck: true, maxInstances: 1}, createAppendChainEventHandler({db, clock: {now: () => new Date().toISOString()}}));
+}
 
-module.exports = {CaseEvidenceCenterError, buildCreateCaseFromRiskOperation, buildGetCaseEvidenceDetail, buildListCaseEvidenceCenter, createDetailHandler, createListHandler, createRequest, createService, createWriteHandler, detailRequest, listRequest, priority};
+module.exports = {CaseEvidenceCenterError, buildAppendCaseEvidenceChainEvent, buildCreateCaseFromRiskOperation, buildGetCaseEvidenceDetail, buildGetCaseEvidenceItemDetail, buildListCaseEvidenceCenter, buildListCaseEvidenceVault, chainEventRequest, createAppendChainEventHandler, createDetailHandler, createEvidenceItemDetailHandler, createListHandler, createRequest, createService, createVaultListHandler, createWriteHandler, detailRequest, evidenceDetailRequest, listRequest, priority, vaultListRequest};

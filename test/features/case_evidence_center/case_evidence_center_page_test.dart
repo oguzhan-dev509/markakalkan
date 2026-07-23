@@ -368,4 +368,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Vaka dosyaları bölümüne ulaşıldı.'), findsOneWidget);
   });
+
+  testWidgets('evidence vault workspace opens the vault route callback', (
+    tester,
+  ) async {
+    var opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceCenterPage(
+          repository: FakeRepository(
+            CaseEvidenceCenterResult.fromMap(responseMap()),
+          ),
+          vaultOpener: (_) async => opened = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final vault = find.byKey(const ValueKey('evidence-vault-workspace'));
+    await tester.scrollUntilVisible(
+      vault,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.ensureVisible(vault);
+    await tester.pumpAndSettle();
+    await tester.tap(vault);
+    await tester.pump();
+    expect(opened, isTrue);
+  });
 }

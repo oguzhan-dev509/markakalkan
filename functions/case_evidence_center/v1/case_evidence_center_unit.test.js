@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {HttpsError} = require("firebase-functions/v2/https");
-const {createDetailHandler, createListHandler, createService, createWriteHandler, detailRequest, listRequest} = require("./index");
+const {createAppendChainEventHandler, createDetailHandler, createListHandler, createService, createWriteHandler, detailRequest, listRequest} = require("./index");
 
 class Snapshot {
   constructor(id, data, path, exists = true, version = "2026-07-22T10:00:00.000Z") {
@@ -50,18 +50,25 @@ class Transaction {
     return this.store.snapshot(ref.path);
   }
   create(ref, data) {
-    this.pending.push({path: ref.path, data});
+    this.pending.push({type: "create", path: ref.path, data});
+  }
+  update(ref, data) {
+    this.pending.push({type: "update", path: ref.path, data});
   }
   commit() {
     for (const entry of this.pending) {
       const parts = entry.path.split("/"); const id = parts.pop(); const name = parts.join("/");
-      this.store.collections[name] ||= []; this.store.collections[name].push({id, data: entry.data, version: entry.data.updatedAt || entry.data.occurredAt}); this.store.writes++;
+      this.store.collections[name] ||= [];
+      if (entry.type === "update") {
+        const current = this.store.collections[name].find((item) => item.id === id); current.data = {...current.data, ...entry.data}; current.version = entry.data.updatedAt || current.version;
+      } else this.store.collections[name].push({id, data: entry.data, version: entry.data.updatedAt || entry.data.occurredAt});
+      this.store.writes++;
     }
   }
 }
 class FakeDb {
-  constructor(collections) {
-    this.collections = structuredClone(collections); this.writes = 0;
+  constructor(collections, {transactionFailure = false} = {}) {
+    this.collections = structuredClone(collections); this.writes = 0; this.transactionFailure = transactionFailure;
   }
   collection(name) {
     return new Collection(this, name);
@@ -71,7 +78,7 @@ class FakeDb {
     return item ? new Snapshot(id, item.data, path, true, item.version) : new Snapshot(id, {}, path, false);
   }
   async runTransaction(callback) {
-    const transaction = new Transaction(this); const result = await callback(transaction); if (result.transactionCommitted !== false) transaction.commit(); return result;
+    const transaction = new Transaction(this); const result = await callback(transaction); if (this.transactionFailure) throw new Error("simulated transaction failure"); if (result.transactionCommitted !== false) transaction.commit(); return result;
   }
 }
 
@@ -198,4 +205,83 @@ test("detail callable requires auth and maps missing case", async () => {
   const handler = createDetailHandler({db: new FakeDb(detailCollections()), clock, log: {info: () => {}}});
   await assert.rejects(() => handler({data: {}}), (error) => error instanceof HttpsError && error.code === "unauthenticated");
   await assert.rejects(() => handler({auth: {uid: "user-1"}, data: {contractVersion: "case-evidence-detail-request-v1", caseId: "missing"}}), (error) => error instanceof HttpsError && error.code === "not-found");
+});
+
+function vaultCollections() {
+  const value = structuredClone(collections);
+  value.case_files = [{id: "case-1", data: {tenantId: "tenant-1", canonicalBrandId: "brand-1", caseNumber: "VK-2026-EA953C48", title: "Şüpheli tarama", status: "open"}}];
+  value.case_evidence_refs = [{id: "evidence-1", data: {contractVersion: "case-evidence-reference-v1", caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", referenceType: "source_record", title: "Kaynak risk kaydı", sourceSystem: "monitoring", reviewStatus: "pending", integrityStatus: "reference_only", createdAt: "2026-07-22T11:00:00.000Z"}}];
+  value.case_evidence_chain_events = [];
+  return value;
+}
+
+test("vault contracts are strict and list is tenant scoped zero-write", async () => {
+  const values = vaultCollections();
+  values.case_evidence_refs.push(
+      {id: "foreign-tenant", data: {...values.case_evidence_refs[0].data, tenantId: "tenant-other"}},
+      {id: "foreign-brand", data: {...values.case_evidence_refs[0].data, canonicalBrandId: "brand-other"}},
+  );
+  const db = new FakeDb(values); const service = createService({db, clock});
+  await assert.rejects(() => service.vaultList({}, {uid: "user-1"}), /contract/);
+  const result = await service.vaultList({contractVersion: "case-evidence-vault-list-request-v1"}, {uid: "user-1"});
+  assert.equal(result.contractVersion, "case-evidence-vault-list-v1"); assert.equal(result.items.length, 1); assert.equal(result.items[0].evidenceRefId, "evidence-1"); assert.equal(result.items[0].integrityStatus, "not_started"); assert.equal(result.writesPerformed, 0); assert.equal(db.writes, 0);
+});
+
+test("evidence detail is strict, tenant scoped, ordered and hides hashes", async () => {
+  const db = new FakeDb(vaultCollections()); const service = createService({db, clock});
+  await assert.rejects(() => service.evidenceDetail({contractVersion: "wrong", evidenceRefId: "evidence-1"}, {uid: "user-1"}), /contract/);
+  const result = await service.evidenceDetail({contractVersion: "case-evidence-item-detail-request-v1", evidenceRefId: "evidence-1"}, {uid: "user-1"});
+  assert.equal(result.evidence.caseNumber, "VK-2026-EA953C48"); assert.deepEqual(result.allowedActions, ["chain_started"]); assert.equal(result.writesPerformed, 0); assert.equal(JSON.stringify(result).includes("chainHash"), false);
+  db.collections.case_evidence_refs[0].data.tenantId = "other"; await assert.rejects(() => service.evidenceDetail({contractVersion: "case-evidence-item-detail-request-v1", evidenceRefId: "evidence-1"}, {uid: "user-1"}), (error) => error.code === "evidence.not_found");
+});
+
+test("chain append is atomic, idempotent and hash continuity verifies", async () => {
+  const db = new FakeDb(vaultCollections()); const service = createService({db, clock}); const request = {contractVersion: "case-evidence-chain-event-request-v1", evidenceRefId: "evidence-1", eventType: "chain_started", note: "Zincir kontrollü biçimde başlatıldı.", requestId: "request-1"};
+  const first = await service.appendChainEvent(request, {uid: "user-1"}); assert.equal(first.sequence, 1); assert.equal(first.duplicate, false); assert.equal(db.writes, 4);
+  const duplicate = await service.appendChainEvent(request, {uid: "user-1"}); assert.equal(duplicate.duplicate, true); assert.equal(db.writes, 4);
+  const second = await service.appendChainEvent({...request, eventType: "review_started", note: "İnceleme yetkili tarafından başlatıldı.", requestId: "request-2"}, {uid: "user-1"}); assert.equal(second.sequence, 2); assert.equal(second.reviewStatus, "under_review"); assert.equal(db.writes, 8);
+  db.collections.case_evidence_chain_events.reverse();
+  const detail = await service.evidenceDetail({contractVersion: "case-evidence-item-detail-request-v1", evidenceRefId: "evidence-1"}, {uid: "user-1"}); assert.equal(detail.evidence.integrityStatus, "verified"); assert.deepEqual(detail.chainEvents.map((item) => item.sequence), [1, 2]); assert.equal(JSON.stringify(detail).includes("previousHash"), false);
+  assert.equal(db.collections.case_events.length, 2); assert.equal(db.collections.case_audit_events.length, 2);
+  db.collections.case_evidence_chain_events[0].data.note = "Değiştirilmiş not";
+  const broken = await service.evidenceDetail({contractVersion: "case-evidence-item-detail-request-v1", evidenceRefId: "evidence-1"}, {uid: "user-1"}); assert.equal(broken.evidence.integrityStatus, "broken");
+});
+
+test("chain append rejects auth, invalid note, invalid transitions and closed cases", async () => {
+  const db = new FakeDb(vaultCollections()); const service = createService({db, clock}); const base = {contractVersion: "case-evidence-chain-event-request-v1", evidenceRefId: "evidence-1", eventType: "chain_started", note: "Başlatıldı", requestId: "request-x"};
+  await assert.rejects(() => service.appendChainEvent(base, {}), /authentication/); await assert.rejects(() => service.appendChainEvent({...base, note: "x"}, {uid: "user-1"}), /note/); await assert.rejects(() => service.appendChainEvent({...base, eventType: "review_started"}, {uid: "user-1"}), (error) => error.code === "transition.denied"); assert.equal(db.writes, 0);
+  for (const status of ["closed", "archived"]) {
+    db.collections.case_files[0].data.status = status; await assert.rejects(() => service.appendChainEvent(base, {uid: "user-1"}), (error) => error.code === "transition.denied"); assert.equal(db.writes, 0);
+  }
+});
+
+test("chain append rejects a repeated custody transition", async () => {
+  const db = new FakeDb(vaultCollections()); const service = createService({db, clock}); const base = {contractVersion: "case-evidence-chain-event-request-v1", evidenceRefId: "evidence-1", note: "Kontrollü teslim kaydı"};
+  await service.appendChainEvent({...base, eventType: "chain_started", requestId: "repeat-1"}, {uid: "user-1"});
+  await service.appendChainEvent({...base, eventType: "custody_received", requestId: "repeat-2"}, {uid: "user-1"});
+  await assert.rejects(() => service.appendChainEvent({...base, eventType: "custody_received", requestId: "repeat-3"}, {uid: "user-1"}), (error) => error.code === "transition.denied");
+  assert.equal(db.collections.case_evidence_chain_events.length, 2);
+});
+
+test("chain append handler requires auth and App Check", async () => {
+  const handler = createAppendChainEventHandler({db: new FakeDb(vaultCollections()), clock, log: {info: () => {}}});
+  const data = {contractVersion: "case-evidence-chain-event-request-v1", evidenceRefId: "evidence-1", eventType: "chain_started", note: "Zincir başlatıldı", requestId: "request-handler"};
+  await assert.rejects(() => handler({data}), (error) => error instanceof HttpsError && error.code === "unauthenticated");
+  await assert.rejects(() => handler({auth: {uid: "user-1"}, data}), (error) => error instanceof HttpsError && error.code === "failed-precondition");
+  assert.equal((await handler({auth: {uid: "user-1"}, app: {appId: "verified"}, data})).duplicate, false);
+});
+
+test("chain append hides foreign tenant and brand and leaves zero writes", async () => {
+  for (const field of ["tenantId", "canonicalBrandId"]) {
+    const value = vaultCollections(); value.case_evidence_refs[0].data[field] = "foreign";
+    const db = new FakeDb(value); const service = createService({db, clock});
+    await assert.rejects(() => service.appendChainEvent({contractVersion: "case-evidence-chain-event-request-v1", evidenceRefId: "evidence-1", eventType: "chain_started", note: "Zincir başlatıldı", requestId: `foreign-${field}`}, {uid: "user-1"}), (error) => error.code === "evidence.not_found");
+    assert.equal(db.writes, 0);
+  }
+});
+
+test("transaction failure leaves no partial chain, case or audit writes", async () => {
+  const db = new FakeDb(vaultCollections(), {transactionFailure: true}); const service = createService({db, clock});
+  await assert.rejects(() => service.appendChainEvent({contractVersion: "case-evidence-chain-event-request-v1", evidenceRefId: "evidence-1", eventType: "chain_started", note: "Zincir başlatıldı", requestId: "request-failure"}, {uid: "user-1"}), /simulated transaction failure/);
+  assert.equal(db.writes, 0); assert.equal(db.collections.case_evidence_chain_events.length, 0); assert.equal(db.collections.case_events.length, 0); assert.equal(db.collections.case_audit_events.length, 0);
 });

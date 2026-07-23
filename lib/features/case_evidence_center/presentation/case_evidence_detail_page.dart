@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_presentation_labels.dart';
 
 abstract interface class CaseEvidenceDetailRepository {
@@ -82,9 +83,12 @@ class CaseEvidenceDetailPage extends StatefulWidget {
     super.key,
     required this.caseId,
     this.repository,
+    this.evidenceDetailOpener,
   });
   final String caseId;
   final CaseEvidenceDetailRepository? repository;
+  final Future<void> Function(BuildContext context, String evidenceRefId)?
+  evidenceDetailOpener;
   @override
   State<CaseEvidenceDetailPage> createState() => _CaseEvidenceDetailPageState();
 }
@@ -162,11 +166,26 @@ class _CaseEvidenceDetailPageState extends State<CaseEvidenceDetailPage> {
       detail.evidence,
       'Henüz delil referansı bulunmuyor.',
       (item) => ListTile(
+        key: ValueKey('case-evidence-${item['evidenceRefId']}'),
         leading: const Icon(Icons.link),
         title: Text(_safe(item, 'title')),
         subtitle: Text(
           '${_source(_safe(item, 'sourceType'))} · ${_review(_safe(item, 'reviewStatus'))}',
         ),
+        onTap: _evidenceRefId(item) == null
+            ? null
+            : () {
+                final evidenceRefId = _evidenceRefId(item)!;
+                final opener = widget.evidenceDetailOpener;
+                if (opener != null) {
+                  opener(context, evidenceRefId);
+                } else {
+                  AppRouter.openCaseEvidenceItemDetail(
+                    context,
+                    evidenceRefId: evidenceRefId,
+                  );
+                }
+              },
       ),
     ),
     const SizedBox(height: 20),
@@ -192,6 +211,11 @@ class _CaseEvidenceDetailPageState extends State<CaseEvidenceDetailPage> {
       ),
     ),
   ];
+
+  String? _evidenceRefId(Map<String, dynamic> item) {
+    final value = item['evidenceRefId'];
+    return value is String && value.isNotEmpty ? value : null;
+  }
 }
 
 class _ErrorState extends StatelessWidget {

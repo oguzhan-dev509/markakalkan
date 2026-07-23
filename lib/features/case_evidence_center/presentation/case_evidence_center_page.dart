@@ -209,11 +209,17 @@ class CaseCreationResult {
 }
 
 class CaseEvidenceCenterPage extends StatefulWidget {
-  const CaseEvidenceCenterPage({super.key, this.repository, this.detailOpener});
+  const CaseEvidenceCenterPage({
+    super.key,
+    this.repository,
+    this.detailOpener,
+    this.vaultOpener,
+  });
 
   final CaseEvidenceCenterRepository? repository;
   final Future<void> Function(BuildContext context, String caseId)?
   detailOpener;
+  final Future<void> Function(BuildContext context)? vaultOpener;
 
   @override
   State<CaseEvidenceCenterPage> createState() => _CaseEvidenceCenterPageState();
@@ -241,6 +247,12 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
     final opener = widget.detailOpener;
     if (opener != null) return opener(context, caseId);
     return AppRouter.openCaseEvidenceDetail(context, caseId: caseId);
+  }
+
+  Future<void> _openVault() {
+    final opener = widget.vaultOpener;
+    if (opener != null) return opener(context);
+    return AppRouter.openCaseEvidenceVault(context);
   }
 
   Future<void> _scrollToCases() async {
@@ -425,7 +437,10 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
     ],
     _SummaryGrid(summary: result.summary),
     const SizedBox(height: 22),
-    _WorkspaceGrid(onCaseFilesTap: _scrollToCases),
+    _WorkspaceGrid(
+      onCaseFilesTap: _scrollToCases,
+      onEvidenceVaultTap: _openVault,
+    ),
     const SizedBox(height: 26),
     _SectionTitle(
       title: 'İnceleme Gerektiren Riskler',
@@ -661,8 +676,12 @@ class _SummaryGrid extends StatelessWidget {
 }
 
 class _WorkspaceGrid extends StatelessWidget {
-  const _WorkspaceGrid({required this.onCaseFilesTap});
+  const _WorkspaceGrid({
+    required this.onCaseFilesTap,
+    required this.onEvidenceVaultTap,
+  });
   final VoidCallback onCaseFilesTap;
+  final VoidCallback onEvidenceVaultTap;
 
   @override
   Widget build(BuildContext context) {
@@ -711,10 +730,20 @@ class _WorkspaceGrid extends StatelessWidget {
                 (value) => SizedBox(
                   width: width,
                   child: InkWell(
-                    key: value.$1 == 'Vaka Dosyaları'
-                        ? const ValueKey('case-files-workspace')
-                        : null,
-                    onTap: value.$1 == 'Vaka Dosyaları' ? onCaseFilesTap : null,
+                    key: switch (value.$1) {
+                      'Vaka Dosyaları' => const ValueKey(
+                        'case-files-workspace',
+                      ),
+                      'Delil Kasası ve Delil Zinciri' => const ValueKey(
+                        'evidence-vault-workspace',
+                      ),
+                      _ => null,
+                    },
+                    onTap: switch (value.$1) {
+                      'Vaka Dosyaları' => onCaseFilesTap,
+                      'Delil Kasası ve Delil Zinciri' => onEvidenceVaultTap,
+                      _ => null,
+                    },
                     borderRadius: BorderRadius.circular(18),
                     child: Container(
                       constraints: const BoxConstraints(minHeight: 168),
