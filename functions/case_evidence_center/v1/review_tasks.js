@@ -178,7 +178,7 @@ function createReviewTaskService({db, clock = {now: () => new Date(), timestamp:
           const task = existing.data() || {}; return {contractVersion: "case-review-task-create-result-v1", ok: true, duplicate: true, taskId, taskNumber: task.taskNumber, status: task.status, eventCount: task.eventCount};
         }
         let memberLabel = null; if (request.assignee.type === "internal_member") memberLabel = await activeInternalMember(db, transaction, context.tenantId, request.assignee.uid);
-        const recordedAt = stamp(now); const status = taskStatus(request.assignee.type); const taskNumber = `GV-${now.getUTCFullYear()}-${taskId.slice(0, 8).toUpperCase()}`;
+        const recordedAt = stamp(now); const caseOccurredAt = now.toISOString(); const status = taskStatus(request.assignee.type); const taskNumber = `GV-${now.getUTCFullYear()}-${taskId.slice(0, 8).toUpperCase()}`;
         const collision = await transaction.get(db.collection("case_review_tasks").where("taskNumber", "==", taskNumber).limit(1));
         if (collision.docs.length) fail("task number collision", "failed-precondition");
         const createdEventId = sha256(`${taskId}|created`);
@@ -186,7 +186,7 @@ function createReviewTaskService({db, clock = {now: () => new Date(), timestamp:
         if (request.evidenceRefId) task.evidenceRefId = request.evidenceRefId; if (request.dueAt) task.dueAt = stamp(request.dueAt);
         const eventRef = db.collection("case_review_task_events").doc(createdEventId); const base = {tenantId: context.tenantId, canonicalBrandId: context.brandId, taskId, caseId: request.caseId};
         transaction.create(taskRef, task); transaction.create(eventRef, {contractVersion: "case-review-task-event-v1", ...base, ...(request.evidenceRefId ? {evidenceRefId: request.evidenceRefId} : {}), sequence: 1, eventType: "task_created", note: "İnceleme görevi oluşturuldu.", actorUid: invocation.uid, actorLabel: "Yetkili kullanıcı", recordedAt, payloadSummary: eventLabel("task_created")});
-        transaction.create(db.collection("case_events").doc(sha256(`${taskId}|case`)), {contractVersion: "case-event-v1", caseId: request.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, eventType: "review_task_created", summary: `${taskNumber} inceleme görevi oluşturuldu.`, occurredAt: recordedAt, actorUid: invocation.uid, appendOnly: true});
+        transaction.create(db.collection("case_events").doc(sha256(`${taskId}|case`)), {contractVersion: "case-event-v1", caseId: request.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, eventType: "review_task_created", summary: `${taskNumber} inceleme görevi oluşturuldu.`, occurredAt: caseOccurredAt, actorUid: invocation.uid, appendOnly: true});
         transaction.create(db.collection("case_audit_events").doc(sha256(`${taskId}|audit`)), {contractVersion: "case-audit-event-v1", caseId: request.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, action: "review_task.created", actorUid: invocation.uid, occurredAt: recordedAt, appendOnly: true});
         return {contractVersion: "case-review-task-create-result-v1", ok: true, duplicate: false, taskId, taskNumber, status, eventCount: 1};
       });
@@ -211,7 +211,7 @@ function createReviewTaskService({db, clock = {now: () => new Date(), timestamp:
         const expected = {assignment_set: ["open"], assignment_changed: ["assigned"], review_started: ["assigned"], note_added: ["assigned", "in_review"], due_date_changed: ["open", "assigned", "in_review"], review_completed: ["in_review"], task_cancelled: ["open", "assigned", "in_review"]}[request.eventType];
         if (!expected.includes(task.status)) fail("transition denied", "failed-precondition");
         let memberLabel = null; if (request.assignee?.type === "internal_member") memberLabel = await activeInternalMember(db, transaction, context.tenantId, request.assignee.uid);
-        const sequence = Number(task.eventCount || 0) + 1; const recordedAt = stamp(now); const update = {updatedAt: recordedAt, lastEventType: request.eventType, lastEventAt: recordedAt, eventCount: sequence};
+        const sequence = Number(task.eventCount || 0) + 1; const recordedAt = stamp(now); const caseOccurredAt = now.toISOString(); const update = {updatedAt: recordedAt, lastEventType: request.eventType, lastEventAt: recordedAt, eventCount: sequence};
         if (request.eventType === "assignment_set" || request.eventType === "assignment_changed") Object.assign(update, assignmentUpdateFields(request.assignee, memberLabel, clock.deleteValue ? clock.deleteValue() : undefined), {status: "assigned"});
         if (request.eventType === "review_started") Object.assign(update, {status: "in_review", startedAt: recordedAt});
         if (request.eventType === "due_date_changed") update.dueAt = stamp(request.dueAt);
@@ -219,7 +219,7 @@ function createReviewTaskService({db, clock = {now: () => new Date(), timestamp:
         if (request.eventType === "task_cancelled") Object.assign(update, {status: "cancelled", cancelledAt: recordedAt});
         const event = {contractVersion: "case-review-task-event-v1", tenantId: context.tenantId, canonicalBrandId: context.brandId, taskId: request.taskId, caseId: task.caseId, ...(task.evidenceRefId ? {evidenceRefId: task.evidenceRefId} : {}), sequence, eventType: request.eventType, note: request.note, actorUid: invocation.uid, actorLabel: "Yetkili kullanıcı", recordedAt, previousEventId: task.lastEventId, payloadSummary: eventLabel(request.eventType)};
         update.lastEventId = eventId; transaction.create(eventRef, event); transaction.update(taskRef, update);
-        transaction.create(db.collection("case_events").doc(sha256(`${eventId}|case`)), {contractVersion: "case-event-v1", caseId: task.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, eventType: `review_task_${request.eventType}`, summary: eventLabel(request.eventType), occurredAt: recordedAt, actorUid: invocation.uid, appendOnly: true});
+        transaction.create(db.collection("case_events").doc(sha256(`${eventId}|case`)), {contractVersion: "case-event-v1", caseId: task.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, eventType: `review_task_${request.eventType}`, summary: eventLabel(request.eventType), occurredAt: caseOccurredAt, actorUid: invocation.uid, appendOnly: true});
         transaction.create(db.collection("case_audit_events").doc(sha256(`${eventId}|audit`)), {contractVersion: "case-audit-event-v1", caseId: task.caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, action: `review_task.${request.eventType}`, actorUid: invocation.uid, occurredAt: recordedAt, appendOnly: true});
         const next = {...task, ...update}; return {contractVersion: "case-review-task-event-result-v1", ok: true, duplicate: false, taskId: request.taskId, taskNumber: task.taskNumber, sequence, eventType: request.eventType, eventLabel: eventLabel(request.eventType), status: next.status, assigneeLabel: next.assigneeDisplayLabel || null, dueAt: iso(next.dueAt), resultOutcome: next.resultOutcome || null, eventCount: sequence};
       });

@@ -385,3 +385,19 @@ test("review task transaction failure leaves no partial writes", async () => {
   await assert.rejects(() => createReviewTaskService({db, clock: reviewClock}).create(unassignedReviewRequest(), {uid: "user-1"}), /simulated transaction failure/);
   assert.equal(db.writes, 0); assert.equal(db.collections.case_review_tasks.length, 0); assert.equal(db.collections.case_review_task_events.length, 0);
 });
+
+test("review task case events expose server ISO occurredAt while task and audit timestamps stay server timestamps", async () => {
+  const serverTimestamp = (date) => ({kind: "server-timestamp", value: date.toISOString(), toDate: () => date});
+  const timestampClock = {now: reviewClock.now, timestamp: serverTimestamp};
+  const db = new FakeDb(reviewCollections()); const service = createReviewTaskService({db, clock: timestampClock});
+  const created = await service.create(unassignedReviewRequest(), {uid: "user-1"});
+  assert.equal(db.collections.case_events[0].data.occurredAt, "2026-07-23T05:00:00.000Z");
+  assert.equal(db.collections.case_review_task_events[0].data.recordedAt.kind, "server-timestamp");
+  assert.equal(db.collections.case_audit_events[0].data.occurredAt.kind, "server-timestamp");
+  const duplicate = await service.create(unassignedReviewRequest(), {uid: "user-1"});
+  assert.equal(duplicate.duplicate, true); assert.equal(db.collections.case_events.length, 1);
+  await service.append({contractVersion: "case-review-task-event-request-v1", taskId: created.taskId, eventType: "assignment_set", note: "Uzman güvenli biçimde atandı.", assignee: {type: "external_expert", displayLabel: "Ayşe Uzman", expertiseArea: "Ayakkabı analizi"}, requestId: "923e4567-e89b-42d3-a456-426614174008"}, {uid: "user-1"});
+  assert.equal(db.collections.case_events[1].data.occurredAt, "2026-07-23T05:00:00.000Z");
+  assert.equal(db.collections.case_review_task_events[1].data.recordedAt.kind, "server-timestamp");
+  assert.equal(db.collections.case_audit_events[1].data.occurredAt.kind, "server-timestamp");
+});
