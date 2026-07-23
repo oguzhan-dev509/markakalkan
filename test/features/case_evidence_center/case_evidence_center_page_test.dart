@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_center_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_detail_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_presentation_labels.dart';
 
 class FakeRepository implements CaseEvidenceCenterRepository {
   FakeRepository(this.result);
@@ -95,7 +96,37 @@ Map<String, dynamic> navigationResponseMap() {
   return map;
 }
 
+Map<String, dynamic> labelsResponseMap() {
+  final map = navigationResponseMap();
+  final candidates = map['caseCandidates']! as List<dynamic>;
+  candidates.add({
+    ...(candidates.first as Map<String, dynamic>),
+    'signalId': 'signal-3',
+    'title': 'unknown_signal_code',
+  });
+  return map;
+}
+
 void main() {
+  test('signal labels normalize lists, duplicates and safe fallbacks', () {
+    expect(
+      caseEvidenceSignalLabel(
+        ' repeat_scan_observed, rapid_repeat_scan, repeat_scan_observed ',
+      ),
+      'Tekrarlanan tarama gözlendi, Kısa sürede tekrar tarandı',
+    );
+    expect(
+      caseEvidenceSignalLabel('repeat_scan_observed, unknown_signal_code'),
+      'Tekrarlanan tarama gözlendi, İnceleme sinyali',
+    );
+    expect(caseEvidenceSignalLabel('unknown_signal_code'), 'İnceleme sinyali');
+    expect(caseEvidenceSignalLabel(null), 'İnceleme sinyali');
+    expect(
+      caseEvidenceSignalLabel('Şüpheli tekrar tarama davranışı gözlendi'),
+      'Şüpheli tekrar tarama davranışı gözlendi',
+    );
+  });
+
   testWidgets('renders approved navy identity and five workspaces', (
     tester,
   ) async {
@@ -151,6 +182,29 @@ void main() {
       find.text('Yazısız doğrulama başarılı. Vaka dosyası oluşturulmadı.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('center presents known and unknown signal codes safely', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceCenterPage(
+          repository: FakeRepository(
+            CaseEvidenceCenterResult.fromMap(labelsResponseMap()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Tekrarlanan tarama gözlendi'), findsOneWidget);
+    expect(find.text('Kısa sürede tekrar tarandı'), findsOneWidget);
+    expect(find.text('İnceleme sinyali'), findsOneWidget);
+    expect(find.textContaining('repeat_scan_observed'), findsNothing);
+    expect(find.textContaining('rapid_repeat_scan'), findsNothing);
+    expect(find.textContaining('unknown_signal_code'), findsNothing);
   });
 
   testWidgets('all case controls push the real detail route with internal id', (

@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_presentation_labels.dart';
 
 abstract interface class CaseEvidenceDetailRepository {
   Future<CaseEvidenceDetail> load(String caseId);
@@ -143,7 +144,7 @@ class _CaseEvidenceDetailPageState extends State<CaseEvidenceDetailPage> {
       style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
     ),
     const SizedBox(height: 10),
-    Text(detail.summary),
+    Text(caseEvidenceSignalLabel(detail.summary)),
     const SizedBox(height: 16),
     Wrap(
       spacing: 8,

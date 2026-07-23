@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_presentation_labels.dart';
 
 abstract interface class CaseEvidenceCenterRepository {
   Future<CaseEvidenceCenterResult> load();
@@ -844,7 +845,7 @@ class _CandidateCard extends StatelessWidget {
           ),
           const SizedBox(height: 13),
           Text(
-            _riskSignalLabel(candidate.title),
+            caseEvidenceSignalLabel(candidate.title),
             style: const TextStyle(
               color: Color(0xFF17314D),
               fontSize: 17,
@@ -1070,11 +1071,6 @@ String _sourceLabel(String value) => switch (value) {
   'digital_detective' => 'Dijital Dedektif',
   'shared_risk' => 'Ortak Risk',
   _ => 'Diğer Kaynak',
-};
-String _riskSignalLabel(String value) => switch (value) {
-  'repeat_scan_observed' => 'Tekrarlanan tarama gözlendi',
-  'rapid_repeat_scan' => 'Kısa sürede tekrar tarandı',
-  _ => value.contains('_') ? 'İnceleme sinyali' : value,
 };
 String _severityLabel(String value) => switch (value) {
   'critical' => 'Kritik Risk',

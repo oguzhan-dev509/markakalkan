@@ -12,48 +12,50 @@ class FakeDetailRepository implements CaseEvidenceDetailRepository {
   Future<CaseEvidenceDetail> load(String caseId) => loader();
 }
 
-CaseEvidenceDetail detail({bool emptyEvidence = false}) =>
-    CaseEvidenceDetail.fromMap({
-      'contractVersion': 'case-evidence-detail-v1',
-      'readOnly': true,
-      'writesPerformed': 0,
-      'case': {
-        'id': 'internal-case-id',
-        'caseCode': 'VK-2026-ABC12345',
-        'title': 'Şüpheli ilan',
-        'summary': 'Kullanıcı dostu özet.',
-        'status': 'open',
-        'priority': 'high',
-        'sourceType': 'monitoring',
-        'sourceReference': 'Kaynak risk kaydı',
-        'createdAt': '2026-07-22T10:00:00.000Z',
-        'updatedAt': '2026-07-22T11:00:00.000Z',
-      },
-      'evidenceReferences': emptyEvidence
-          ? []
-          : [
-              {
-                'title': 'Kaynak risk kaydı',
-                'sourceType': 'monitoring',
-                'reviewStatus': 'pending',
-                'integrityStatus': 'reference_only',
-                'createdAt': '2026-07-22T10:00:00.000Z',
-              },
-            ],
-      'timelineEvents': [
-        {
-          'type': 'case_opened_from_risk',
-          'summary': 'Vaka kontrollü biçimde açıldı.',
-          'occurredAt': '2026-07-22T10:00:00.000Z',
-        },
-      ],
-      'auditSummary': [
-        {
-          'action': 'case.created_from_risk',
-          'occurredAt': '2026-07-22T10:00:00.000Z',
-        },
-      ],
-    });
+CaseEvidenceDetail detail({
+  bool emptyEvidence = false,
+  String summary = 'Kullanıcı dostu özet.',
+}) => CaseEvidenceDetail.fromMap({
+  'contractVersion': 'case-evidence-detail-v1',
+  'readOnly': true,
+  'writesPerformed': 0,
+  'case': {
+    'id': 'internal-case-id',
+    'caseCode': 'VK-2026-ABC12345',
+    'title': 'Şüpheli ilan',
+    'summary': summary,
+    'status': 'open',
+    'priority': 'high',
+    'sourceType': 'monitoring',
+    'sourceReference': 'Kaynak risk kaydı',
+    'createdAt': '2026-07-22T10:00:00.000Z',
+    'updatedAt': '2026-07-22T11:00:00.000Z',
+  },
+  'evidenceReferences': emptyEvidence
+      ? []
+      : [
+          {
+            'title': 'Kaynak risk kaydı',
+            'sourceType': 'monitoring',
+            'reviewStatus': 'pending',
+            'integrityStatus': 'reference_only',
+            'createdAt': '2026-07-22T10:00:00.000Z',
+          },
+        ],
+  'timelineEvents': [
+    {
+      'type': 'case_opened_from_risk',
+      'summary': 'Vaka kontrollü biçimde açıldı.',
+      'occurredAt': '2026-07-22T10:00:00.000Z',
+    },
+  ],
+  'auditSummary': [
+    {
+      'action': 'case.created_from_risk',
+      'occurredAt': '2026-07-22T10:00:00.000Z',
+    },
+  ],
+});
 
 Future<void> pump(
   WidgetTester tester,
@@ -90,6 +92,46 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Henüz delil referansı bulunmuyor.'), findsOneWidget);
+  });
+
+  testWidgets('detail presents canonical signal codes in Turkish', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      FakeDetailRepository(
+        () async => detail(summary: 'repeat_scan_observed, rapid_repeat_scan'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Tekrarlanan tarama gözlendi, Kısa sürede tekrar tarandı'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('repeat_scan_observed'), findsNothing);
+    expect(find.textContaining('rapid_repeat_scan'), findsNothing);
+  });
+
+  testWidgets('detail hides unknown technical code behind safe fallback', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      FakeDetailRepository(() async => detail(summary: 'unknown_signal_code')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('İnceleme sinyali'), findsOneWidget);
+    expect(find.textContaining('unknown_signal_code'), findsNothing);
+  });
+
+  testWidgets('detail preserves normal user summary', (tester) async {
+    const summary = 'Şüpheli tekrar tarama davranışı gözlendi';
+    await pump(
+      tester,
+      FakeDetailRepository(() async => detail(summary: summary)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(summary), findsOneWidget);
   });
 
   for (final scenario in [
