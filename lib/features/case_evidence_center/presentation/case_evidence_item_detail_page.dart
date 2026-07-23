@@ -188,7 +188,8 @@ class _CaseEvidenceItemDetailPageState
                       evidenceEventLabel(event['eventType'] as String? ?? ''),
                     ),
                     subtitle: Text(
-                      '${event['note']}\n${event['actorLabel']} · ${event['recordedAt']}',
+                      '${event['note']}\n${event['actorLabel']} · '
+                      '${caseEvidenceDateTimeLabel(event['recordedAt'])}',
                     ),
                   ),
                 ),

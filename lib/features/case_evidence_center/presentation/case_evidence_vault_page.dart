@@ -106,7 +106,7 @@ class EvidenceItem {
       custody,
       integrity;
   final int count;
-  final String? lastAt;
+  final Object? lastAt;
   factory EvidenceItem.fromMap(Map<String, dynamic> m) => EvidenceItem(
     id: _s(m, 'evidenceRefId'),
     caseNumber: _s(m, 'caseNumber'),
@@ -118,7 +118,7 @@ class EvidenceItem {
     custody: _s(m, 'custodyStatus'),
     integrity: _s(m, 'integrityStatus'),
     count: (m['chainEventCount'] as num).toInt(),
-    lastAt: m['lastChainEventAt'] as String?,
+    lastAt: m['lastChainEventAt'],
   );
 }
 
@@ -212,7 +212,7 @@ class _CaseEvidenceVaultPageState extends State<CaseEvidenceVaultPage> {
                           ),
                       title: Text(item.label),
                       subtitle: Text(
-                        '${item.caseNumber} · ${item.caseTitle}\n${evidenceReviewLabel(item.review)} · ${evidenceCustodyLabel(item.custody)} · ${evidenceIntegrityLabel(item.integrity)}\nSon zincir işlemi: ${item.lastAt ?? 'Henüz yok'}',
+                        '${item.caseNumber} · ${item.caseTitle}\n${evidenceReviewLabel(item.review)} · ${evidenceCustodyLabel(item.custody)} · ${evidenceIntegrityLabel(item.integrity)}\nSon zincir işlemi: ${_lastChainEventLabel(item.lastAt)}',
                       ),
                     ),
                   ),
@@ -220,6 +220,13 @@ class _CaseEvidenceVaultPageState extends State<CaseEvidenceVaultPage> {
             ],
           ),
   );
+}
+
+String _lastChainEventLabel(Object? value) {
+  if (value == null || (value is String && value.trim().isEmpty)) {
+    return 'Henüz yok';
+  }
+  return caseEvidenceDateTimeLabel(value);
 }
 
 class _Stats extends StatelessWidget {

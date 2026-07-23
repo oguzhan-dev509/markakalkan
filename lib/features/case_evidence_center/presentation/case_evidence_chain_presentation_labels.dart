@@ -52,3 +52,16 @@ String evidenceActionLabel(String value) =>
       'unsealed': 'Mührü aç',
     }[value] ??
     'Delil zinciri işlemi';
+
+String caseEvidenceDateTimeLabel(Object? value) {
+  final parsed = switch (value) {
+    DateTime date => date,
+    String text when text.trim().isNotEmpty => DateTime.tryParse(text.trim()),
+    _ => null,
+  };
+  if (parsed == null) return 'Tarih bilgisi yok';
+  final local = parsed.toLocal();
+  String twoDigits(int part) => part.toString().padLeft(2, '0');
+  return '${twoDigits(local.day)}.${twoDigits(local.month)}.${local.year} '
+      '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
+}

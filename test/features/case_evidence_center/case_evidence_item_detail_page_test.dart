@@ -39,6 +39,7 @@ class _Repository implements CaseEvidenceVaultRepository {
 EvidenceItemDetail _detail({
   List<String> actions = const ['chain_started'],
   bool withEvent = false,
+  Object? recordedAt = '2026-07-23T04:58:04.271Z',
 }) => EvidenceItemDetail.fromMap({
   'contractVersion': 'case-evidence-item-detail-v1',
   'readOnly': true,
@@ -66,7 +67,7 @@ EvidenceItemDetail _detail({
             'eventLabel': 'Delil zinciri başlatıldı',
             'note': 'İlk teslim kaydı',
             'actorLabel': 'Yetkili kullanıcı',
-            'recordedAt': '2026-07-22T10:00:00.000Z',
+            'recordedAt': recordedAt,
           },
         ]
       : [],
@@ -150,10 +151,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delil zinciri başlatıldı'), findsOneWidget);
     expect(find.textContaining('İlk teslim kaydı'), findsOneWidget);
+    expect(find.textContaining('23.07.2026 07:58'), findsOneWidget);
+    expect(find.textContaining('2026-07-23T04:58:04.271Z'), findsNothing);
     expect(find.textContaining('Bütünlük doğrulandı'), findsOneWidget);
     expect(find.text('Mühürle'), findsOneWidget);
     expect(find.textContaining('chain_started'), findsNothing);
   });
+
+  for (final scenario in [(null, 'null'), ('not-a-timestamp', 'invalid')]) {
+    testWidgets('timeline uses fallback for ${scenario.$2} timestamp', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CaseEvidenceItemDetailPage(
+            evidenceRefId: 'internal-evidence-id',
+            repository: _Repository(
+              _detail(
+                actions: const ['sealed'],
+                withEvent: true,
+                recordedAt: scenario.$1,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Tarih bilgisi yok'), findsOneWidget);
+      expect(find.textContaining('not-a-timestamp'), findsNothing);
+      expect(find.text('Delil zinciri başlatıldı'), findsOneWidget);
+      expect(find.text('Mühürle'), findsOneWidget);
+    });
+  }
 
   for (final scenario in [
     ('not-found', 'Delil kaydı bulunamadı.'),
