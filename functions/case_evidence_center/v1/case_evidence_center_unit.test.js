@@ -4,6 +4,7 @@ const test = require("node:test");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {createAppendChainEventHandler, createDetailHandler, createListHandler, createService, createWriteHandler, detailRequest, listRequest} = require("./index");
 const {createRequest: createReviewTaskRequest, createReviewTaskService, eventRequest: reviewTaskEventRequest, handler: reviewTaskHandler} = require("./review_tasks");
+const {createCaseGraphService, graphEventRequest, handler: graphHandler, partyCreateRequest, relationshipCreateRequest} = require("./party_relationships");
 
 class Snapshot {
   constructor(id, data, path, exists = true, version = "2026-07-22T10:00:00.000Z") {
@@ -88,7 +89,7 @@ const collections = {
   "tenant_memberships": [{id: "membership-1", data: {uid: "user-1", tenantId: "tenant-1", status: "active", role: "owner"}}],
   "canonical_brands": [{id: "brand-1", data: {tenantId: "tenant-1", status: "active"}}],
   "monitoring_signals": [{id: "monitoring-1", version: "2026-07-22T10:00:00.000Z", data: {tenantId: "tenant-1", brandId: "brand-1", pageId: "page-1", signalLevel: "critical", status: "new", title: "Şüpheli pazar yeri ilanı", summary: "Birden fazla kaynakla desteklenen risk.", detectedAt: "2026-07-22T09:00:00.000Z", createdAt: "2026-07-22T09:00:00.000Z", evidenceVerified: true, confidence: .95}}],
-  "verificationScans": [], "shared_risk_signals": [], "brands/user-1/digitalDetectiveTasks": [], "case_files": [], "case_events": [], "case_evidence_refs": [], "case_audit_events": [], "case_review_tasks": [], "case_review_task_events": [],
+  "verificationScans": [], "shared_risk_signals": [], "brands/user-1/digitalDetectiveTasks": [], "case_files": [], "case_events": [], "case_evidence_refs": [], "case_audit_events": [], "case_review_tasks": [], "case_review_task_events": [], "case_parties": [], "case_relationships": [], "case_graph_events": [],
 };
 const clock = {now: () => "2026-07-22T11:00:00.000Z"};
 
@@ -412,4 +413,83 @@ test("review task case events expose server ISO occurredAt while task and audit 
   assert.equal(db.collections.case_events[1].data.occurredAt, "2026-07-23T05:00:00.000Z");
   assert.equal(db.collections.case_review_task_events[1].data.recordedAt.kind, "server-timestamp");
   assert.equal(db.collections.case_audit_events[1].data.occurredAt.kind, "server-timestamp");
+});
+
+const graphUuid = "123e4567-e89b-42d3-a456-426614174101";
+const graphClock = {now: () => new Date("2026-07-23T14:47:00.000Z"), timestamp: (date) => ({kind: "server-timestamp", value: date.toISOString(), toDate: () => date})};
+function graphCollections() {
+  const value = structuredClone(collections);
+  value.case_files = [{id: "case-1", data: {tenantId: "tenant-1", canonicalBrandId: "brand-1", caseNumber: "VK-2026-EA953C48", title: "Dejure Spor Ayakkabı", status: "open", openedAt: "2026-07-22T10:00:00.000Z"}}];
+  value.case_evidence_refs = [{id: "evidence-1", data: {tenantId: "tenant-1", canonicalBrandId: "brand-1", caseId: "case-1", title: "Kaynak risk kaydı"}}];
+  value.case_review_tasks = [{id: "task-1", data: {tenantId: "tenant-1", canonicalBrandId: "brand-1", caseId: "case-1", taskNumber: "GV-2026-43A9D932", title: "Kaynak risk kaydı incelemesi"}}];
+  return value;
+}
+const partyRequest = {contractVersion: "case-party-create-request-v1", caseId: "case-1", displayName: "Örnek Satıcı", partyType: "seller_account", caseRoles: ["suspected_seller", "suspected_seller"], countryCode: "TR", city: "İstanbul", description: "Kontrollü taraf inceleme kaydı.", requestId: graphUuid};
+
+test("case graph request contracts are strict and normalize party roles", () => {
+  assert.deepEqual(partyCreateRequest(partyRequest).caseRoles, ["suspected_seller"]);
+  assert.throws(() => partyCreateRequest({...partyRequest, requestId: "bad"}), /requestId/);
+  assert.throws(() => relationshipCreateRequest({contractVersion: "case-relationship-create-request-v1", caseId: "case-1", source: {entityType: "case", entityId: "case-1"}, target: {entityType: "task", entityId: "task-1"}, relationshipType: "linked_to", confidence: "medium", summary: "Geçerli uzunlukta ilişki özeti.", requestId: graphUuid}), /party endpoint/);
+  assert.throws(() => graphEventRequest({contractVersion: "case-graph-event-request-v1", targetType: "party", targetId: "party-1", eventType: "relationship_confirmed", note: "Geçerli not", requestId: graphUuid}), /eventType/);
+});
+
+test("party workspace is tenant scoped bounded and zero-write", async () => {
+  const value = graphCollections(); value.case_files.push({id: "foreign-case", data: {tenantId: "tenant-1", canonicalBrandId: "brand-other", caseNumber: "GİZLİ", title: "Gizli", status: "open"}});
+  value.case_parties.push({id: "party-1", data: {tenantId: "tenant-1", canonicalBrandId: "brand-1", caseId: "case-1", partyNumber: "TRF-2026-AAAA1111", displayName: "Örnek Satıcı", partyType: "seller_account", caseRoles: ["suspected_seller"], status: "observed", createdAt: "2026-07-23T10:00:00.000Z", updatedAt: "2026-07-23T10:00:00.000Z"}});
+  const db = new FakeDb(value); const result = await createCaseGraphService({db, clock: graphClock}).workspace({contractVersion: "case-party-workspace-list-request-v1"}, {uid: "user-1"});
+  assert.equal(result.cases.length, 1); assert.equal(result.parties.length, 1); assert.equal(result.stats.observedParties, 1); assert.equal(result.writesPerformed, 0); assert.equal(db.writes, 0); assert.equal(JSON.stringify(result).includes("GİZLİ"), false);
+});
+
+test("party create is atomic idempotent and writes graph case and audit timestamps", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock});
+  const first = await service.createParty(partyRequest, {uid: "user-1"}); const duplicate = await service.createParty(partyRequest, {uid: "user-1"});
+  assert.match(first.partyNumber, /^TRF-2026-[A-F0-9]{8}$/); assert.equal(first.status, "observed"); assert.equal(duplicate.duplicate, true);
+  assert.equal(db.collections.case_parties.length, 1); assert.equal(db.collections.case_graph_events.length, 1); assert.equal(db.collections.case_events.length, 1); assert.equal(db.collections.case_audit_events.length, 1);
+  assert.equal(db.collections.case_events[0].data.occurredAt, "2026-07-23T14:47:00.000Z"); assert.equal(db.collections.case_audit_events[0].data.occurredAt.kind, "server-timestamp");
+});
+
+test("relationship endpoints are same-case scoped and relationship create is idempotent", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const party = await service.createParty(partyRequest, {uid: "user-1"});
+  const request = {contractVersion: "case-relationship-create-request-v1", caseId: "case-1", source: {entityType: "party", entityId: party.partyId}, target: {entityType: "task", entityId: "task-1"}, relationshipType: "assigned_to_task", confidence: "high", summary: "Taraf inceleme görevine güvenli biçimde bağlandı.", supportingEvidenceRefId: "evidence-1", requestId: "123e4567-e89b-42d3-a456-426614174102"};
+  const result = await service.createRelationship(request, {uid: "user-1"}); const duplicate = await service.createRelationship(request, {uid: "user-1"});
+  assert.match(result.relationshipNumber, /^IL-2026-[A-F0-9]{8}$/); assert.equal(result.status, "observed"); assert.equal(duplicate.duplicate, true); assert.equal(db.collections.case_relationships.length, 1);
+  await assert.rejects(() => service.createRelationship({...request, requestId: "123e4567-e89b-42d3-a456-426614174103", target: {entityType: "task", entityId: "missing"}}, {uid: "user-1"}), /endpoint not found/);
+});
+
+test("party detail resolves relationships, event order and safe allowed actions", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const party = await service.createParty(partyRequest, {uid: "user-1"});
+  await service.append({contractVersion: "case-graph-event-request-v1", targetType: "party", targetId: party.partyId, eventType: "party_review_started", note: "Kontrollü inceleme başlatıldı.", requestId: "123e4567-e89b-42d3-a456-426614174104"}, {uid: "user-1"});
+  const detail = await service.partyDetail({contractVersion: "case-party-detail-request-v1", partyId: party.partyId}, {uid: "user-1"});
+  assert.deepEqual(detail.timelineEvents.map((item) => item.sequence), [1, 2]); assert.deepEqual(detail.allowedActions, ["verify", "dispute", "add_note", "deactivate"]); assert.equal(detail.writesPerformed, 0);
+  for (const forbidden of ["tenantId", "canonicalBrandId", "actorUid", "previousEventId", "payloadSummary"]) assert.equal(JSON.stringify(detail).includes(forbidden), false);
+});
+
+test("graph event transitions are idempotent and inactive is terminal", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const party = await service.createParty(partyRequest, {uid: "user-1"});
+  const request = {contractVersion: "case-graph-event-request-v1", targetType: "party", targetId: party.partyId, eventType: "party_deactivated", note: "Taraf kontrollü biçimde pasife alındı.", requestId: "123e4567-e89b-42d3-a456-426614174105"};
+  const first = await service.append(request, {uid: "user-1"}); const duplicate = await service.append(request, {uid: "user-1"});
+  assert.equal(first.status, "inactive"); assert.equal(duplicate.duplicate, true); assert.equal(db.collections.case_graph_events.length, 2);
+  await assert.rejects(() => service.append({...request, eventType: "party_note_added", requestId: "123e4567-e89b-42d3-a456-426614174106"}, {uid: "user-1"}), /transition denied/);
+});
+
+test("unified timeline reads only case_events, classifies and normalizes timestamps", async () => {
+  const db = new FakeDb(graphCollections()); db.collections.case_events.push(
+      {id: "case-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "case_opened", summary: "Vaka açıldı", occurredAt: "2026-07-23T10:00:00.000Z"}},
+      {id: "task-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "review_task_created", summary: "Görev oluşturuldu", occurredAt: new Date("2026-07-23T11:00:00.000Z")}},
+      {id: "party-event", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", eventType: "party_created", summary: "Taraf oluşturuldu", occurredAt: {toDate: () => new Date("2026-07-23T12:00:00.000Z")}}},
+  ); db.collections.case_review_task_events.push({id: "must-not-appear", data: {caseId: "case-1", summary: "Çoğaltılmamalı"}});
+  const result = await createCaseGraphService({db, clock: graphClock}).timeline({contractVersion: "case-unified-timeline-request-v1", caseId: "case-1"}, {uid: "user-1"});
+  assert.equal(result.events.length, 3); assert.deepEqual(result.events.map((item) => item.category), ["party", "task", "case"]); assert.equal(result.events[0].occurredAt, "2026-07-23T12:00:00.000Z"); assert.equal(JSON.stringify(result).includes("Çoğaltılmamalı"), false); assert.equal(db.writes, 0);
+});
+
+test("graph write handlers require auth and App Check", async () => {
+  const handler = graphHandler("createParty", {db: new FakeDb(graphCollections()), clock: graphClock, appCheck: true, log: {info: () => {}}});
+  await assert.rejects(() => handler({data: partyRequest}), (error) => error instanceof HttpsError && error.code === "unauthenticated");
+  await assert.rejects(() => handler({auth: {uid: "user-1"}, data: partyRequest}), (error) => error instanceof HttpsError && error.code === "failed-precondition");
+});
+
+test("graph transaction failure leaves no partial writes", async () => {
+  const db = new FakeDb(graphCollections(), {transactionFailure: true}); const service = createCaseGraphService({db, clock: graphClock});
+  await assert.rejects(() => service.createParty(partyRequest, {uid: "user-1"}), /simulated transaction failure/);
+  assert.equal(db.collections.case_parties.length, 0); assert.equal(db.collections.case_graph_events.length, 0); assert.equal(db.collections.case_events.length, 0); assert.equal(db.collections.case_audit_events.length, 0);
 });

@@ -14,6 +14,14 @@ const {
   buildGetCaseReviewTaskDetail,
   buildListCaseReviewTasks,
 } = require("./case_evidence_center/v1/review_tasks");
+const {
+  buildAppendCaseGraphEvent,
+  buildCreateCaseParty,
+  buildCreateCaseRelationship,
+  buildGetCasePartyDetail,
+  buildGetCaseUnifiedTimeline,
+  buildListCasePartyWorkspace,
+} = require("./case_evidence_center/v1/party_relationships");
 
 const {
   buildCreateSupplyProtectionControl,
@@ -248,5 +256,11 @@ exports.getCaseReviewTaskDetail = buildGetCaseReviewTaskDetail({db, admin});
 exports.createCaseReviewTask = buildCreateCaseReviewTask({db, admin});
 exports.appendCaseReviewTaskEvent =
     buildAppendCaseReviewTaskEvent({db, admin});
+exports.listCasePartyWorkspace = buildListCasePartyWorkspace({db, admin});
+exports.getCasePartyDetail = buildGetCasePartyDetail({db, admin});
+exports.getCaseUnifiedTimeline = buildGetCaseUnifiedTimeline({db, admin});
+exports.createCaseParty = buildCreateCaseParty({db, admin});
+exports.createCaseRelationship = buildCreateCaseRelationship({db, admin});
+exports.appendCaseGraphEvent = buildAppendCaseGraphEvent({db, admin});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});

@@ -263,6 +263,10 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
     return AppRouter.openCaseReviewTasks(context);
   }
 
+  Future<void> _openPartiesRelationships() {
+    return AppRouter.openCasePartiesRelationships(context);
+  }
+
   Future<void> _scrollToCases() async {
     if (_caseFilesKey.currentContext == null && _scrollController.hasClients) {
       final position = _scrollController.position;
@@ -449,6 +453,7 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
       onCaseFilesTap: _scrollToCases,
       onEvidenceVaultTap: _openVault,
       onReviewTasksTap: _openReviewTasks,
+      onPartiesRelationshipsTap: _openPartiesRelationships,
     ),
     const SizedBox(height: 26),
     _SectionTitle(
@@ -689,10 +694,12 @@ class _WorkspaceGrid extends StatelessWidget {
     required this.onCaseFilesTap,
     required this.onEvidenceVaultTap,
     required this.onReviewTasksTap,
+    required this.onPartiesRelationshipsTap,
   });
   final VoidCallback onCaseFilesTap;
   final VoidCallback onEvidenceVaultTap;
   final VoidCallback onReviewTasksTap;
+  final VoidCallback onPartiesRelationshipsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -751,12 +758,16 @@ class _WorkspaceGrid extends StatelessWidget {
                       'Görevler, Uzmanlar ve İncelemeler' => const ValueKey(
                         'review-tasks-workspace',
                       ),
+                      'Taraflar, İlişkiler ve Olay Zaman Çizelgesi' =>
+                        const ValueKey('parties-relationships-workspace'),
                       _ => null,
                     },
                     onTap: switch (value.$1) {
                       'Vaka Dosyaları' => onCaseFilesTap,
                       'Delil Kasası ve Delil Zinciri' => onEvidenceVaultTap,
                       'Görevler, Uzmanlar ve İncelemeler' => onReviewTasksTap,
+                      'Taraflar, İlişkiler ve Olay Zaman Çizelgesi' =>
+                        onPartiesRelationshipsTap,
                       _ => null,
                     },
                     borderRadius: BorderRadius.circular(18),

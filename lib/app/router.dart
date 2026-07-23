@@ -23,6 +23,9 @@ import 'package:markakalkan/features/case_evidence_center/presentation/case_evid
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_vault_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_review_task_detail_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_review_tasks_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_parties_relationships_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_party_detail_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_unified_timeline_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -481,6 +484,45 @@ abstract final class AppRouter {
           name: '/case-evidence-center/review-task-detail',
         ),
         builder: (_) => CaseReviewTaskDetailPage(taskId: taskId),
+      ),
+    );
+  }
+
+  static Future<void> openCasePartiesRelationships(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/parties-relationships',
+        ),
+        builder: (_) => const CasePartiesRelationshipsPage(),
+      ),
+    );
+  }
+
+  static Future<void> openCasePartyDetail(
+    BuildContext context, {
+    required String partyId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/party-detail',
+        ),
+        builder: (_) => CasePartyDetailPage(partyId: partyId),
+      ),
+    );
+  }
+
+  static Future<void> openCaseUnifiedTimeline(
+    BuildContext context, {
+    required String caseId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/case-evidence-center/unified-timeline',
+        ),
+        builder: (_) => CaseUnifiedTimelinePage(caseId: caseId),
       ),
     );
   }

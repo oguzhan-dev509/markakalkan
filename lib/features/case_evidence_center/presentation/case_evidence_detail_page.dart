@@ -29,6 +29,7 @@ class CallableCaseEvidenceDetailRepository
 
 class CaseEvidenceDetail {
   const CaseEvidenceDetail({
+    required this.caseId,
     required this.caseCode,
     required this.title,
     required this.summary,
@@ -40,6 +41,7 @@ class CaseEvidenceDetail {
     required this.events,
     required this.audits,
   });
+  final String caseId;
   final String caseCode;
   final String title;
   final String summary;
@@ -59,6 +61,7 @@ class CaseEvidenceDetail {
     }
     final item = _detailMap(map['case']);
     return CaseEvidenceDetail(
+      caseId: _detailString(item, 'id'),
       caseCode: _detailString(item, 'caseCode'),
       title: _detailString(item, 'title'),
       summary: _detailString(item, 'summary'),
@@ -145,6 +148,28 @@ class _CaseEvidenceDetailPageState extends State<CaseEvidenceDetailPage> {
         fontWeight: FontWeight.w800,
         color: Color(0xFF116149),
       ),
+    ),
+    Wrap(
+      spacing: 8,
+      children: [
+        OutlinedButton.icon(
+          key: const ValueKey('case-add-party'),
+          onPressed: () => AppRouter.openCasePartiesRelationships(context),
+          icon: const Icon(Icons.person_add_alt_1),
+          label: const Text('Taraf ekle'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('case-open-unified-timeline'),
+          onPressed: detail.caseId.isEmpty
+              ? null
+              : () => AppRouter.openCaseUnifiedTimeline(
+                  context,
+                  caseId: detail.caseId,
+                ),
+          icon: const Icon(Icons.timeline),
+          label: const Text('Birleşik zaman çizelgesini aç'),
+        ),
+      ],
     ),
     const SizedBox(height: 8),
     Text(
