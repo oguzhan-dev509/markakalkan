@@ -448,7 +448,7 @@ test("party create is atomic idempotent and writes graph case and audit timestam
   const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock});
   const first = await service.createParty(partyRequest, {uid: "user-1"}); const duplicate = await service.createParty(partyRequest, {uid: "user-1"});
   assert.match(first.partyNumber, /^TRF-2026-[A-F0-9]{8}$/); assert.equal(first.status, "observed"); assert.equal(duplicate.duplicate, true);
-  assert.equal(db.collections.case_parties.length, 1); assert.equal(db.collections.case_graph_events.length, 1); assert.equal(db.collections.case_events.length, 1); assert.equal(db.collections.case_audit_events.length, 1);
+  assert.equal(db.collections.case_parties.length, 1); assert.equal(db.collections.case_graph_events.length, 1); assert.equal(db.collections.case_events.length, 1); assert.equal(db.collections.case_audit_events.length, 1); assert.equal(db.collections.case_parties[0].data.lastEventId, db.collections.case_graph_events[0].id);
   assert.equal(db.collections.case_events[0].data.occurredAt, "2026-07-23T14:47:00.000Z"); assert.equal(db.collections.case_audit_events[0].data.occurredAt.kind, "server-timestamp");
 });
 
@@ -456,7 +456,7 @@ test("relationship endpoints are same-case scoped and relationship create is ide
   const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const party = await service.createParty(partyRequest, {uid: "user-1"});
   const request = {contractVersion: "case-relationship-create-request-v1", caseId: "case-1", source: {entityType: "party", entityId: party.partyId}, target: {entityType: "task", entityId: "task-1"}, relationshipType: "assigned_to_task", confidence: "high", summary: "Taraf inceleme görevine güvenli biçimde bağlandı.", supportingEvidenceRefId: "evidence-1", requestId: "123e4567-e89b-42d3-a456-426614174102"};
   const result = await service.createRelationship(request, {uid: "user-1"}); const duplicate = await service.createRelationship(request, {uid: "user-1"});
-  assert.match(result.relationshipNumber, /^IL-2026-[A-F0-9]{8}$/); assert.equal(result.status, "observed"); assert.equal(duplicate.duplicate, true); assert.equal(db.collections.case_relationships.length, 1);
+  assert.match(result.relationshipNumber, /^IL-2026-[A-F0-9]{8}$/); assert.equal(result.status, "observed"); assert.equal(duplicate.duplicate, true); assert.equal(db.collections.case_relationships.length, 1); const relationshipEvent = db.collections.case_graph_events.find((item) => item.data.eventType === "relationship_created"); assert.equal(db.collections.case_relationships[0].data.lastEventId, relationshipEvent.id);
   await assert.rejects(() => service.createRelationship({...request, requestId: "123e4567-e89b-42d3-a456-426614174103", target: {entityType: "task", entityId: "missing"}}, {uid: "user-1"}), /endpoint not found/);
 });
 
@@ -466,6 +466,15 @@ test("party detail resolves relationships, event order and safe allowed actions"
   const detail = await service.partyDetail({contractVersion: "case-party-detail-request-v1", partyId: party.partyId}, {uid: "user-1"});
   assert.deepEqual(detail.timelineEvents.map((item) => item.sequence), [1, 2]); assert.deepEqual(detail.allowedActions, ["verify", "dispute", "edit_profile", "add_note", "deactivate"]); assert.equal(detail.writesPerformed, 0);
   for (const forbidden of ["tenantId", "canonicalBrandId", "actorUid", "previousEventId", "payloadSummary"]) assert.equal(JSON.stringify(detail).includes(forbidden), false);
+});
+
+
+test("legacy graph target omits undefined previousEventId", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const party = await service.createParty(partyRequest, {uid: "user-1"});
+  delete db.collections.case_parties[0].data.lastEventId;
+  const result = await service.append({contractVersion: "case-graph-event-request-v1", targetType: "party", targetId: party.partyId, eventType: "party_review_started", note: "Eski taraf kaydı için kontrollü inceleme başlatıldı.", requestId: "123e4567-e89b-42d3-a456-426614174111"}, {uid: "user-1"});
+  const event = db.collections.case_graph_events.find((item) => item.data.eventType === "party_review_started");
+  assert.equal(result.eventCount, 2); assert.equal("previousEventId" in event.data, false); assert.equal(db.collections.case_parties[0].data.lastEventId, event.id);
 });
 
 test("graph event transitions are idempotent and inactive is terminal", async () => {
@@ -515,6 +524,15 @@ test("party profile update is atomic idempotent auditable and removes optional f
   assert.equal(result.noChange, false); assert.equal(duplicate.duplicate, true); assert.equal(result.partyId, created.partyId); assert.equal(result.partyNumber, created.partyNumber); assert.equal(party.caseId, "case-1"); assert.equal(party.partyNumber, created.partyNumber); assert.equal(party.displayName, "Dejure Marka"); assert.equal(party.countryCode, "TR"); assert.equal("publicAlias" in party, false); assert.equal("organizationName" in party, false); assert.equal("city" in party, false); assert.equal(party.eventCount, 2);
   const event = db.collections.case_graph_events.find((item) => item.data.eventType === "party_profile_updated").data; assert.deepEqual(event.payloadSummary.changedFields.sort(), ["caseRoles", "city", "description", "displayName", "organizationName", "partyType", "publicAlias"].sort()); assert.equal("tenantId" in event.payloadSummary.beforeSnapshot, false); assert.equal(db.collections.case_events.at(-1).data.occurredAt, "2026-07-23T14:47:00.000Z"); assert.equal(db.collections.case_audit_events.at(-1).data.occurredAt.kind, "server-timestamp");
   const detail = await service.partyDetail({contractVersion: "case-party-detail-request-v1", partyId: created.partyId}, {uid: "user-1"}); assert.equal(detail.timelineEvents.at(-1).eventLabel, "Taraf bilgileri güncellendi"); assert.equal(JSON.stringify(detail).includes("beforeSnapshot"), false);
+});
+
+
+test("legacy party profile update omits undefined previousEventId", async () => {
+  const db = new FakeDb(graphCollections()); const service = createCaseGraphService({db, clock: graphClock}); const created = await service.createParty(partyRequest, {uid: "user-1"}); const party = db.collections.case_parties[0].data;
+  delete party.lastEventId;
+  const request = {contractVersion: "case-party-profile-update-request-v1", partyId: created.partyId, displayName: party.displayName, partyType: party.partyType, caseRoles: party.caseRoles, description: "Eski taraf profili güvenli biçimde güncellendi.", note: "Eski kayıt uyumluluğu doğrulandı.", requestId: "123e4567-e89b-42d3-a456-426614174112"};
+  const result = await service.updatePartyProfile(request, {uid: "user-1"}); const event = db.collections.case_graph_events.find((item) => item.data.eventType === "party_profile_updated");
+  assert.equal(result.noChange, false); assert.equal(result.eventCount, 2); assert.equal("previousEventId" in event.data, false); assert.equal(db.collections.case_parties[0].data.lastEventId, event.id);
 });
 
 test("party profile noChange is zero-write and inactive party is denied", async () => {
