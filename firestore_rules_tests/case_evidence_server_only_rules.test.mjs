@@ -36,6 +36,9 @@ const caseCollections = [
   'case_retention_events',
   'case_export_packages',
   'case_export_events',
+  'case_evidence_upload_sessions',
+  'case_evidence_objects',
+  'case_evidence_object_events',
 ];
 const rules = fs.readFileSync(
   new URL('../firestore.rules', import.meta.url),

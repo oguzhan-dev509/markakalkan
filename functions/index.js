@@ -39,6 +39,11 @@ const {
   buildGetCaseExportReadiness,
   buildListCaseExportPackages,
 } = require("./case_evidence_center/v1/export_manifest");
+const {
+  buildCreateCaseEvidenceUploadSession,
+  buildFinalizeCaseEvidenceUpload,
+  buildGetCaseEvidenceObjectDetail,
+} = require("./case_evidence_center/v1/evidence_object_binding");
 
 const {
   buildCreateSupplyProtectionControl,
@@ -291,5 +296,11 @@ exports.getCaseExportReadiness = buildGetCaseExportReadiness({db});
 exports.listCaseExportPackages = buildListCaseExportPackages({db});
 exports.createCaseExportPackage = buildCreateCaseExportPackage({db});
 exports.getCaseExportPackageDetail = buildGetCaseExportPackageDetail({db});
+exports.createCaseEvidenceUploadSession =
+    buildCreateCaseEvidenceUploadSession({db, admin});
+exports.finalizeCaseEvidenceUpload =
+    buildFinalizeCaseEvidenceUpload({db, admin});
+exports.getCaseEvidenceObjectDetail =
+    buildGetCaseEvidenceObjectDetail({db, admin});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});
