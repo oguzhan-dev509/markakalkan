@@ -23,6 +23,11 @@ const {
   buildListCasePartyWorkspace,
   buildUpdateCasePartyProfile,
 } = require("./case_evidence_center/v1/party_relationships");
+const {
+  buildGetCaseLegalHoldDetail,
+  buildReleaseCaseLegalHold,
+  buildStartCaseLegalHold,
+} = require("./case_evidence_center/v1/legal_hold");
 
 const {
   buildCreateSupplyProtectionControl,
@@ -264,5 +269,8 @@ exports.createCaseParty = buildCreateCaseParty({db, admin});
 exports.createCaseRelationship = buildCreateCaseRelationship({db, admin});
 exports.appendCaseGraphEvent = buildAppendCaseGraphEvent({db, admin});
 exports.updateCasePartyProfile = buildUpdateCasePartyProfile({db, admin});
+exports.getCaseLegalHoldDetail = buildGetCaseLegalHoldDetail({db});
+exports.startCaseLegalHold = buildStartCaseLegalHold({db});
+exports.releaseCaseLegalHold = buildReleaseCaseLegalHold({db});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});
