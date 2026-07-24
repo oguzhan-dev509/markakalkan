@@ -28,6 +28,11 @@ const {
   buildReleaseCaseLegalHold,
   buildStartCaseLegalHold,
 } = require("./case_evidence_center/v1/legal_hold");
+const {
+  buildAssessCaseRetentionDisposition,
+  buildGetCaseRetentionDetail,
+  buildSetCaseRetentionPolicy,
+} = require("./case_evidence_center/v1/retention");
 
 const {
   buildCreateSupplyProtectionControl,
@@ -272,5 +277,9 @@ exports.updateCasePartyProfile = buildUpdateCasePartyProfile({db, admin});
 exports.getCaseLegalHoldDetail = buildGetCaseLegalHoldDetail({db});
 exports.startCaseLegalHold = buildStartCaseLegalHold({db});
 exports.releaseCaseLegalHold = buildReleaseCaseLegalHold({db});
+exports.getCaseRetentionDetail = buildGetCaseRetentionDetail({db});
+exports.setCaseRetentionPolicy = buildSetCaseRetentionPolicy({db});
+exports.assessCaseRetentionDisposition =
+    buildAssessCaseRetentionDisposition({db});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});
