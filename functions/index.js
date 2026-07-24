@@ -33,6 +33,12 @@ const {
   buildGetCaseRetentionDetail,
   buildSetCaseRetentionPolicy,
 } = require("./case_evidence_center/v1/retention");
+const {
+  buildCreateCaseExportPackage,
+  buildGetCaseExportPackageDetail,
+  buildGetCaseExportReadiness,
+  buildListCaseExportPackages,
+} = require("./case_evidence_center/v1/export_manifest");
 
 const {
   buildCreateSupplyProtectionControl,
@@ -281,5 +287,9 @@ exports.getCaseRetentionDetail = buildGetCaseRetentionDetail({db});
 exports.setCaseRetentionPolicy = buildSetCaseRetentionPolicy({db});
 exports.assessCaseRetentionDisposition =
     buildAssessCaseRetentionDisposition({db});
+exports.getCaseExportReadiness = buildGetCaseExportReadiness({db});
+exports.listCaseExportPackages = buildListCaseExportPackages({db});
+exports.createCaseExportPackage = buildCreateCaseExportPackage({db});
+exports.getCaseExportPackageDetail = buildGetCaseExportPackageDetail({db});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});
