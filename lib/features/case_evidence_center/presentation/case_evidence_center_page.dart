@@ -215,6 +215,7 @@ class CaseEvidenceCenterPage extends StatefulWidget {
     this.detailOpener,
     this.vaultOpener,
     this.reviewTasksOpener,
+    this.legalHoldOpener,
   });
 
   final CaseEvidenceCenterRepository? repository;
@@ -222,6 +223,7 @@ class CaseEvidenceCenterPage extends StatefulWidget {
   detailOpener;
   final Future<void> Function(BuildContext context)? vaultOpener;
   final Future<void> Function(BuildContext context)? reviewTasksOpener;
+  final Future<void> Function(BuildContext context)? legalHoldOpener;
 
   @override
   State<CaseEvidenceCenterPage> createState() => _CaseEvidenceCenterPageState();
@@ -265,6 +267,12 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
 
   Future<void> _openPartiesRelationships() {
     return AppRouter.openCasePartiesRelationships(context);
+  }
+
+  Future<void> _openLegalHold() {
+    final opener = widget.legalHoldOpener;
+    if (opener != null) return opener(context);
+    return AppRouter.openCaseLegalHold(context);
   }
 
   Future<void> _scrollToCases() async {
@@ -454,6 +462,7 @@ class _CaseEvidenceCenterPageState extends State<CaseEvidenceCenterPage> {
       onEvidenceVaultTap: _openVault,
       onReviewTasksTap: _openReviewTasks,
       onPartiesRelationshipsTap: _openPartiesRelationships,
+      onLegalHoldTap: _openLegalHold,
     ),
     const SizedBox(height: 26),
     _SectionTitle(
@@ -695,11 +704,13 @@ class _WorkspaceGrid extends StatelessWidget {
     required this.onEvidenceVaultTap,
     required this.onReviewTasksTap,
     required this.onPartiesRelationshipsTap,
+    required this.onLegalHoldTap,
   });
   final VoidCallback onCaseFilesTap;
   final VoidCallback onEvidenceVaultTap;
   final VoidCallback onReviewTasksTap;
   final VoidCallback onPartiesRelationshipsTap;
+  final VoidCallback onLegalHoldTap;
 
   @override
   Widget build(BuildContext context) {
@@ -760,6 +771,8 @@ class _WorkspaceGrid extends StatelessWidget {
                       ),
                       'Taraflar, İlişkiler ve Olay Zaman Çizelgesi' =>
                         const ValueKey('parties-relationships-workspace'),
+                      'Hukuki Muhafaza, Saklama ve Dışa Aktarım' =>
+                        const ValueKey('legal-hold-workspace'),
                       _ => null,
                     },
                     onTap: switch (value.$1) {
@@ -768,6 +781,8 @@ class _WorkspaceGrid extends StatelessWidget {
                       'Görevler, Uzmanlar ve İncelemeler' => onReviewTasksTap,
                       'Taraflar, İlişkiler ve Olay Zaman Çizelgesi' =>
                         onPartiesRelationshipsTap,
+                      'Hukuki Muhafaza, Saklama ve Dışa Aktarım' =>
+                        onLegalHoldTap,
                       _ => null,
                     },
                     borderRadius: BorderRadius.circular(18),

@@ -26,6 +26,7 @@ import 'package:markakalkan/features/case_evidence_center/presentation/case_revi
 import 'package:markakalkan/features/case_evidence_center/presentation/case_parties_relationships_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_party_detail_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_unified_timeline_page.dart';
+import 'package:markakalkan/features/case_evidence_center/presentation/case_legal_hold_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -523,6 +524,18 @@ abstract final class AppRouter {
           name: '/case-evidence-center/unified-timeline',
         ),
         builder: (_) => CaseUnifiedTimelinePage(caseId: caseId),
+      ),
+    );
+  }
+
+  static Future<void> openCaseLegalHold(
+    BuildContext context, {
+    String? caseId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/case-evidence-center/legal-hold'),
+        builder: (_) => CaseLegalHoldPage(initialCaseId: caseId),
       ),
     );
   }

@@ -422,4 +422,30 @@ void main() {
     await tester.pump();
     expect(opened, isTrue);
   });
+
+  testWidgets('legal hold workspace opens the legal hold route callback', (
+    tester,
+  ) async {
+    var opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaseEvidenceCenterPage(
+          repository: FakeRepository(
+            CaseEvidenceCenterResult.fromMap(responseMap()),
+          ),
+          legalHoldOpener: (_) async => opened = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final workspace = find.byKey(const ValueKey('legal-hold-workspace'));
+    await tester.scrollUntilVisible(
+      workspace,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    tester.widget<InkWell>(workspace).onTap!();
+    await tester.pump();
+    expect(opened, isTrue);
+  });
 }
