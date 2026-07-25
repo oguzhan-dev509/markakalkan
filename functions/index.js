@@ -127,6 +127,18 @@ const {
   buildListRiskOperationsReadModel,
 } = require("./risk_operations/v1");
 const {
+  buildCreateCustomsBorderIntervention,
+  buildCreateCustomsProtectionProfile,
+  buildGetCustomsBorderInterventionDetail,
+  buildGetCustomsProtectionProfileDetail,
+  buildListCustomsBorderInterventions,
+  buildListCustomsProtectionProfiles,
+  buildTransitionCustomsBorderIntervention,
+  buildTransitionCustomsProtectionProfile,
+  buildUpdateCustomsBorderIntervention,
+  buildUpdateCustomsProtectionProfile,
+} = require("./customs_security/v1");
+const {
   buildPromoteRiskOperationToSharedRisk,
 } = require("./shared_risk/promotion/v1");
 const {
@@ -264,6 +276,26 @@ exports.provisionInternalTenantBrandPilot =
     buildProvisionInternalTenantBrandPilot({db});
 exports.listRiskOperationsReadModel =
     buildListRiskOperationsReadModel({db});
+exports.createCustomsProtectionProfile =
+    buildCreateCustomsProtectionProfile({db});
+exports.updateCustomsProtectionProfile =
+    buildUpdateCustomsProtectionProfile({db});
+exports.transitionCustomsProtectionProfile =
+    buildTransitionCustomsProtectionProfile({db});
+exports.listCustomsProtectionProfiles =
+    buildListCustomsProtectionProfiles({db});
+exports.getCustomsProtectionProfileDetail =
+    buildGetCustomsProtectionProfileDetail({db});
+exports.createCustomsBorderIntervention =
+    buildCreateCustomsBorderIntervention({db});
+exports.updateCustomsBorderIntervention =
+    buildUpdateCustomsBorderIntervention({db});
+exports.transitionCustomsBorderIntervention =
+    buildTransitionCustomsBorderIntervention({db});
+exports.listCustomsBorderInterventions =
+    buildListCustomsBorderInterventions({db});
+exports.getCustomsBorderInterventionDetail =
+    buildGetCustomsBorderInterventionDetail({db});
 exports.promoteRiskOperationToSharedRisk =
     buildPromoteRiskOperationToSharedRisk({db});
 exports.listCaseEvidenceCenter =
