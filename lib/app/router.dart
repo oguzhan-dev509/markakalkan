@@ -27,6 +27,7 @@ import 'package:markakalkan/features/case_evidence_center/presentation/case_part
 import 'package:markakalkan/features/case_evidence_center/presentation/case_party_detail_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_unified_timeline_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_legal_hold_page.dart';
+import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_detail_page.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_security_detail_page.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_security_hub_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
@@ -452,6 +453,21 @@ abstract final class AppRouter {
         builder: (_) => CustomsSecurityDetailPage.intervention(
           interventionId: interventionId,
         ),
+      ),
+    );
+  }
+
+  static Future<void> openCustomsAuthoritySubmissionDetail(
+    BuildContext context, {
+    required String submissionId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/customs-security/authority-submission-detail',
+        ),
+        builder: (_) =>
+            CustomsAuthoritySubmissionDetailPage(submissionId: submissionId),
       ),
     );
   }

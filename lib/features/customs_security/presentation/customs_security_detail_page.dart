@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/customs_security/data/customs_authority_submission_repository.dart';
 import 'package:markakalkan/features/customs_security/data/customs_security_repository.dart';
+import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_labels.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_security_labels.dart';
+
+typedef CustomsAuthoritySubmissionDetailOpener =
+    Future<void> Function(BuildContext context, String submissionId);
 
 enum CustomsSecurityDetailType { profile, intervention }
 
@@ -10,6 +16,8 @@ class CustomsSecurityDetailPage extends StatefulWidget {
     super.key,
     required String profileId,
     this.repository,
+    this.authorityRepository,
+    this.submissionDetailOpener,
   }) : detailType = CustomsSecurityDetailType.profile,
        recordId = profileId;
 
@@ -17,12 +25,16 @@ class CustomsSecurityDetailPage extends StatefulWidget {
     super.key,
     required String interventionId,
     this.repository,
+    this.authorityRepository,
+    this.submissionDetailOpener,
   }) : detailType = CustomsSecurityDetailType.intervention,
        recordId = interventionId;
 
   final CustomsSecurityDetailType detailType;
   final String recordId;
   final CustomsSecurityRepository? repository;
+  final CustomsAuthoritySubmissionRepository? authorityRepository;
+  final CustomsAuthoritySubmissionDetailOpener? submissionDetailOpener;
 
   @override
   State<CustomsSecurityDetailPage> createState() =>
@@ -31,8 +43,10 @@ class CustomsSecurityDetailPage extends StatefulWidget {
 
 class _CustomsSecurityDetailPageState extends State<CustomsSecurityDetailPage> {
   late final CustomsSecurityRepository _repository;
+  late final CustomsAuthoritySubmissionRepository _authorityRepository;
   bool _loading = true;
   bool _transitioning = false;
+  bool _creatingSubmission = false;
   String? _error;
   CustomsProtectionProfile? _profile;
   CustomsBorderInterventionDetail? _interventionDetail;
@@ -41,6 +55,11 @@ class _CustomsSecurityDetailPageState extends State<CustomsSecurityDetailPage> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? CallableCustomsSecurityRepository();
+    _authorityRepository =
+        widget.authorityRepository ??
+        (widget.repository == null
+            ? CallableCustomsAuthoritySubmissionRepository()
+            : const EmptyCustomsAuthoritySubmissionRepository());
     _load();
   }
 
@@ -163,6 +182,95 @@ class _CustomsSecurityDetailPageState extends State<CustomsSecurityDetailPage> {
     }
   }
 
+  Future<void> _openAuthoritySubmission(
+    CustomsAuthoritySubmission submission,
+  ) async {
+    final opener = widget.submissionDetailOpener;
+    if (opener != null) {
+      await opener(context, submission.submissionId);
+    } else {
+      await AppRouter.openCustomsAuthoritySubmissionDetail(
+        context,
+        submissionId: submission.submissionId,
+      );
+    }
+  }
+
+  Future<void> _createProfileSubmission(
+    CustomsProtectionProfile profile,
+  ) async {
+    if (profile.status != 'active') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'FSMH başvuru taslağı için koruma profili aktif olmalıdır.',
+          ),
+        ),
+      );
+      return;
+    }
+    final draft = await showDialog<CustomsAuthoritySubmissionDraft>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          _CreateAuthoritySubmissionDialog.forProfile(profile: profile),
+    );
+    if (draft == null || !mounted) return;
+    setState(() => _creatingSubmission = true);
+    try {
+      final created = await _authorityRepository.createSubmission(draft);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${created.submissionNumber} resmî başvuru taslağı oluşturuldu.',
+          ),
+        ),
+      );
+      await _openAuthoritySubmission(created);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(customsAuthoritySubmissionErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _creatingSubmission = false);
+    }
+  }
+
+  Future<void> _createInterventionSubmission(
+    CustomsBorderIntervention intervention,
+  ) async {
+    final draft = await showDialog<CustomsAuthoritySubmissionDraft>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _CreateAuthoritySubmissionDialog.forIntervention(
+        intervention: intervention,
+      ),
+    );
+    if (draft == null || !mounted) return;
+    setState(() => _creatingSubmission = true);
+    try {
+      final created = await _authorityRepository.createSubmission(draft);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${created.submissionNumber} yetkili makam iletim taslağı oluşturuldu.',
+          ),
+        ),
+      );
+      await _openAuthoritySubmission(created);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(customsAuthoritySubmissionErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _creatingSubmission = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isProfile = widget.detailType == CustomsSecurityDetailType.profile;
@@ -192,13 +300,19 @@ class _CustomsSecurityDetailPageState extends State<CustomsSecurityDetailPage> {
           ? _ProfileDetailView(
               profile: _profile!,
               transitioning: _transitioning,
+              creatingSubmission: _creatingSubmission,
               onTransition: () => _transitionProfile(_profile!),
+              onCreateSubmission: () => _createProfileSubmission(_profile!),
             )
           : _InterventionDetailView(
               detail: _interventionDetail!,
               transitioning: _transitioning,
+              creatingSubmission: _creatingSubmission,
               onTransition: () =>
                   _transitionIntervention(_interventionDetail!.intervention),
+              onCreateSubmission: () => _createInterventionSubmission(
+                _interventionDetail!.intervention,
+              ),
             ),
     );
   }
@@ -208,12 +322,16 @@ class _ProfileDetailView extends StatelessWidget {
   const _ProfileDetailView({
     required this.profile,
     required this.transitioning,
+    required this.creatingSubmission,
     required this.onTransition,
+    required this.onCreateSubmission,
   });
 
   final CustomsProtectionProfile profile;
   final bool transitioning;
+  final bool creatingSubmission;
   final VoidCallback onTransition;
+  final VoidCallback onCreateSubmission;
 
   @override
   Widget build(BuildContext context) {
@@ -228,9 +346,25 @@ class _ProfileDetailView extends StatelessWidget {
         statusCode: profile.status,
         subtitle: profile.rightHolderName,
       ),
-      action: transitions.isEmpty
-          ? null
-          : FilledButton.icon(
+      action: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          OutlinedButton.icon(
+            key: const ValueKey('create-fsmh-authority-submission'),
+            onPressed: creatingSubmission || profile.status != 'active'
+                ? null
+                : onCreateSubmission,
+            icon: creatingSubmission
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.description_outlined),
+            label: const Text('FSMH Resmî Başvuru Paketi Hazırla'),
+          ),
+          if (transitions.isNotEmpty)
+            FilledButton.icon(
               key: const ValueKey('transition-customs-profile'),
               onPressed: transitioning ? null : onTransition,
               icon: transitioning
@@ -241,6 +375,8 @@ class _ProfileDetailView extends StatelessWidget {
                   : const Icon(Icons.sync_alt_rounded),
               label: const Text('Durumu değiştir'),
             ),
+        ],
+      ),
       sections: [
         _InfoSection(
           title: 'Hak ve ürün kapsamı',
@@ -340,12 +476,16 @@ class _InterventionDetailView extends StatelessWidget {
   const _InterventionDetailView({
     required this.detail,
     required this.transitioning,
+    required this.creatingSubmission,
     required this.onTransition,
+    required this.onCreateSubmission,
   });
 
   final CustomsBorderInterventionDetail detail;
   final bool transitioning;
+  final bool creatingSubmission;
   final VoidCallback onTransition;
+  final VoidCallback onCreateSubmission;
 
   @override
   Widget build(BuildContext context) {
@@ -378,9 +518,23 @@ class _InterventionDetailView extends StatelessWidget {
         subtitle:
             '${intervention.countryCode} · ${intervention.customsAuthorityName}',
       ),
-      action: transitions.isEmpty
-          ? null
-          : FilledButton.icon(
+      action: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          OutlinedButton.icon(
+            key: const ValueKey('create-intervention-authority-submission'),
+            onPressed: creatingSubmission ? null : onCreateSubmission,
+            icon: creatingSubmission
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.account_balance_outlined),
+            label: const Text('Yetkili Makama İletim Dosyası Hazırla'),
+          ),
+          if (transitions.isNotEmpty)
+            FilledButton.icon(
               key: const ValueKey('transition-customs-intervention'),
               onPressed: transitioning ? null : onTransition,
               icon: transitioning
@@ -391,6 +545,8 @@ class _InterventionDetailView extends StatelessWidget {
                   : const Icon(Icons.sync_alt_rounded),
               label: const Text('Durumu değiştir'),
             ),
+        ],
+      ),
       sections: [
         _InfoSection(
           title: 'Sevkiyat ve sınır noktası',
@@ -1047,4 +1203,251 @@ String _formatDateTime(String value) {
   String two(int number) => number.toString().padLeft(2, '0');
   return '${two(parsed.day)}.${two(parsed.month)}.${parsed.year} '
       '${two(parsed.hour)}:${two(parsed.minute)}';
+}
+
+class _CreateAuthoritySubmissionDialog extends StatefulWidget {
+  _CreateAuthoritySubmissionDialog.forProfile({
+    required CustomsProtectionProfile profile,
+  }) : submissionType = 'fsmh_protection_application',
+       targetAuthority = 'fsmh_program',
+       channelType = 'fsmh_portal',
+       protectionProfileId = profile.profileId,
+       interventionId = null,
+       defaultIncidentReference = profile.profileNumber,
+       defaultTitle = '${profile.profileName} FSMH koruma başvurusu',
+       defaultSummary =
+           '${profile.rightHolderName} adına aktif Gümrük Koruma Profili kapsamındaki hak, ürün ve doğrulama bilgilerinin insan incelemesine sunulması için resmî başvuru taslağıdır.';
+
+  _CreateAuthoritySubmissionDialog.forIntervention({
+    required CustomsBorderIntervention intervention,
+  }) : submissionType = 'customs_smuggling_notification',
+       targetAuthority = 'customs_enforcement',
+       channelType = 'official_online_form',
+       protectionProfileId = intervention.protectionProfileId,
+       interventionId = intervention.interventionId,
+       defaultIncidentReference = intervention.interventionNumber,
+       defaultTitle =
+           '${intervention.declaredProductDescription} yetkili makam iletimi',
+       defaultSummary =
+           '${intervention.interventionNumber} numaralı sınır müdahale dosyasındaki sevkiyat, ürün beyanı, şüphe nedenleri ve doğrulama durumu hakkında hukuken nötr resmî iletim taslağıdır.';
+
+  final String submissionType;
+  final String targetAuthority;
+  final String channelType;
+  final String protectionProfileId;
+  final String? interventionId;
+  final String defaultIncidentReference;
+  final String defaultTitle;
+  final String defaultSummary;
+
+  @override
+  State<_CreateAuthoritySubmissionDialog> createState() =>
+      _CreateAuthoritySubmissionDialogState();
+}
+
+class _CreateAuthoritySubmissionDialogState
+    extends State<_CreateAuthoritySubmissionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _targetUnit = TextEditingController();
+  late final TextEditingController _incidentReference;
+  late final TextEditingController _title;
+  late final TextEditingController _summary;
+  bool _dataMinimizationConfirmed = false;
+  bool _nonAccusatoryLanguageConfirmed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _incidentReference = TextEditingController(
+      text: widget.defaultIncidentReference,
+    );
+    _title = TextEditingController(text: widget.defaultTitle);
+    _summary = TextEditingController(text: widget.defaultSummary);
+  }
+
+  @override
+  void dispose() {
+    _targetUnit.dispose();
+    _incidentReference.dispose();
+    _title.dispose();
+    _summary.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    Navigator.of(context).pop(
+      CustomsAuthoritySubmissionDraft(
+        submissionType: widget.submissionType,
+        targetAuthority: widget.targetAuthority,
+        targetUnit: _authorityOptional(_targetUnit.text),
+        channelType: widget.channelType,
+        protectionProfileId: widget.protectionProfileId,
+        interventionId: widget.interventionId,
+        incidentReference: _incidentReference.text.trim(),
+        title: _title.text.trim(),
+        authoritySummary: _summary.text.trim(),
+        dataMinimizationConfirmed: _dataMinimizationConfirmed,
+        nonAccusatoryLanguageConfirmed: _nonAccusatoryLanguageConfirmed,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isProfile = widget.submissionType == 'fsmh_protection_application';
+    return AlertDialog(
+      title: Text(
+        isProfile
+            ? 'FSMH resmî başvuru taslağı'
+            : 'Yetkili makam iletim taslağı',
+      ),
+      content: SizedBox(
+        width: 660,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _AuthorityNotice(
+                  text:
+                      'Bu adım yalnız taslak oluşturur. MarkaKalkan, dosyayı otomatik olarak kuruma göndermez; insan incelemesi ve hak sahibi onayı ayrı aşamalardır.',
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const ValueKey(
+                    'authority-submission-incident-reference',
+                  ),
+                  controller: _incidentReference,
+                  decoration: const InputDecoration(
+                    labelText: 'Olay / kaynak referansı',
+                  ),
+                  validator: (value) => _requiredLength(
+                    value,
+                    minimum: 3,
+                    label: 'Olay referansı',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-submission-title'),
+                  controller: _title,
+                  decoration: const InputDecoration(
+                    labelText: 'İletim başlığı',
+                  ),
+                  validator: (value) =>
+                      _requiredLength(value, minimum: 5, label: 'Başlık'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-submission-target-unit'),
+                  controller: _targetUnit,
+                  decoration: const InputDecoration(
+                    labelText: 'Hedef birim (isteğe bağlı)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-submission-summary'),
+                  controller: _summary,
+                  minLines: 5,
+                  maxLines: 9,
+                  decoration: const InputDecoration(
+                    labelText: 'Kuruma sunulacak hukuken nötr özet',
+                  ),
+                  validator: (value) =>
+                      _requiredLength(value, minimum: 20, label: 'Özet'),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  key: const ValueKey('authority-submission-data-minimization'),
+                  value: _dataMinimizationConfirmed,
+                  onChanged: (value) => setState(
+                    () => _dataMinimizationConfirmed = value == true,
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text(
+                    'Taslakta veri minimizasyonu kontrol edildi',
+                  ),
+                  subtitle: const Text(
+                    'Bu işaret paket üretme onayı değildir.',
+                  ),
+                ),
+                CheckboxListTile(
+                  key: const ValueKey('authority-submission-neutral-language'),
+                  value: _nonAccusatoryLanguageConfirmed,
+                  onChanged: (value) => setState(
+                    () => _nonAccusatoryLanguageConfirmed = value == true,
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text(
+                    'Kesinleşmemiş olgular için suç isnadı içermeyen dil kullanıldı',
+                  ),
+                  subtitle: const Text(
+                    'Şüphe, doğrulama ve kesin sonuç ayrı tutulur.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-create-customs-authority-submission'),
+          onPressed: _submit,
+          child: const Text('Taslak oluştur'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthorityNotice extends StatelessWidget {
+  const _AuthorityNotice({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F7F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD7E4E8)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+}
+
+String? _requiredLength(
+  String? value, {
+  required int minimum,
+  required String label,
+}) {
+  final clean = value?.trim() ?? '';
+  if (clean.length < minimum) {
+    return '$label en az $minimum karakter olmalıdır.';
+  }
+  return null;
+}
+
+String? _authorityOptional(String value) {
+  final clean = value.trim();
+  return clean.isEmpty ? null : clean;
 }

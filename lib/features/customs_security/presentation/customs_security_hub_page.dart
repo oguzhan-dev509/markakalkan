@@ -1,25 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/app/router.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/customs_security/data/customs_authority_submission_repository.dart';
 import 'package:markakalkan/features/customs_security/data/customs_security_repository.dart';
+import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_labels.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_security_labels.dart';
 
 typedef CustomsProfileDetailOpener =
     Future<void> Function(BuildContext context, String profileId);
 typedef CustomsInterventionDetailOpener =
     Future<void> Function(BuildContext context, String interventionId);
+typedef CustomsAuthoritySubmissionDetailOpener =
+    Future<void> Function(BuildContext context, String submissionId);
 
 class CustomsSecurityHubPage extends StatefulWidget {
   const CustomsSecurityHubPage({
     super.key,
     this.repository,
+    this.authorityRepository,
     this.profileDetailOpener,
     this.interventionDetailOpener,
+    this.submissionDetailOpener,
   });
 
   final CustomsSecurityRepository? repository;
+  final CustomsAuthoritySubmissionRepository? authorityRepository;
   final CustomsProfileDetailOpener? profileDetailOpener;
   final CustomsInterventionDetailOpener? interventionDetailOpener;
+  final CustomsAuthoritySubmissionDetailOpener? submissionDetailOpener;
 
   @override
   State<CustomsSecurityHubPage> createState() => _CustomsSecurityHubPageState();
@@ -28,6 +36,7 @@ class CustomsSecurityHubPage extends StatefulWidget {
 class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
     with SingleTickerProviderStateMixin {
   late final CustomsSecurityRepository _repository;
+  late final CustomsAuthoritySubmissionRepository _authorityRepository;
   late final TabController _tabController;
 
   bool _loading = true;
@@ -35,14 +44,21 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
   String? _error;
   String? _profileStatus;
   String? _interventionStatus;
+  String? _submissionStatus;
   List<CustomsProtectionProfile> _profiles = const [];
   List<CustomsBorderIntervention> _interventions = const [];
+  List<CustomsAuthoritySubmission> _submissions = const [];
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? CallableCustomsSecurityRepository();
-    _tabController = TabController(length: 2, vsync: this);
+    _authorityRepository =
+        widget.authorityRepository ??
+        (widget.repository == null
+            ? CallableCustomsAuthoritySubmissionRepository()
+            : const EmptyCustomsAuthoritySubmissionRepository());
+    _tabController = TabController(length: 3, vsync: this);
     _load();
   }
 
@@ -64,11 +80,16 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
           status: _interventionStatus,
           pageSize: 50,
         ),
+        _authorityRepository.listSubmissions(
+          status: _submissionStatus,
+          pageSize: 50,
+        ),
       ]);
       if (!mounted) return;
       setState(() {
         _profiles = (results[0] as CustomsProtectionProfileList).items;
         _interventions = (results[1] as CustomsBorderInterventionList).items;
+        _submissions = (results[2] as CustomsAuthoritySubmissionList).items;
         _loading = false;
       });
     } catch (error) {
@@ -101,6 +122,19 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
       await AppRouter.openCustomsBorderInterventionDetail(
         context,
         interventionId: intervention.interventionId,
+      );
+    }
+    if (mounted) await _load();
+  }
+
+  Future<void> _openSubmission(CustomsAuthoritySubmission submission) async {
+    final opener = widget.submissionDetailOpener;
+    if (opener != null) {
+      await opener(context, submission.submissionId);
+    } else {
+      await AppRouter.openCustomsAuthoritySubmissionDetail(
+        context,
+        submissionId: submission.submissionId,
       );
     }
     if (mounted) await _load();
@@ -195,6 +229,10 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
               key: ValueKey('customs-intervention-tab'),
               text: 'Sınır Müdahaleleri',
             ),
+            Tab(
+              key: ValueKey('customs-authority-submission-tab'),
+              text: 'Resmî İletimler',
+            ),
           ],
         ),
         actions: [
@@ -210,7 +248,9 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
           : AnimatedBuilder(
               animation: _tabController,
               builder: (context, _) {
-                final profilesTab = _tabController.index == 0;
+                final tabIndex = _tabController.index;
+                if (tabIndex == 2) return const SizedBox.shrink();
+                final profilesTab = tabIndex == 0;
                 return FloatingActionButton.extended(
                   key: ValueKey(
                     profilesTab
@@ -263,6 +303,15 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                           _load();
                         },
                         onOpen: _openIntervention,
+                      ),
+                      _AuthoritySubmissionWorkspace(
+                        submissions: _submissions,
+                        selectedStatus: _submissionStatus,
+                        onStatusChanged: (value) {
+                          setState(() => _submissionStatus = value);
+                          _load();
+                        },
+                        onOpen: _openSubmission,
                       ),
                     ],
                   ),
@@ -488,6 +537,89 @@ class _InterventionWorkspace extends StatelessWidget {
   }
 }
 
+class _AuthoritySubmissionWorkspace extends StatelessWidget {
+  const _AuthoritySubmissionWorkspace({
+    required this.submissions,
+    required this.selectedStatus,
+    required this.onStatusChanged,
+    required this.onOpen,
+  });
+
+  final List<CustomsAuthoritySubmission> submissions;
+  final String? selectedStatus;
+  final ValueChanged<String?> onStatusChanged;
+  final ValueChanged<CustomsAuthoritySubmission> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return _WorkspaceShell(
+      title: 'Resmî Başvuru ve Kurum İletimleri',
+      description:
+          'İnsan incelemesi, hak sahibi onayı, veri minimizasyonu, hukuken nötr anlatım, paket bütünlüğü ve resmî teslim kayıtlarını tek zaman çizelgesinde izleyin.',
+      filter: DropdownButtonFormField<String?>(
+        key: const ValueKey('customs-authority-submission-status-filter'),
+        initialValue: selectedStatus,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Durum filtresi'),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Tümü')),
+          ...customsAuthoritySubmissionStatuses.map(
+            (status) => DropdownMenuItem<String?>(
+              value: status,
+              child: Text(customsAuthoritySubmissionStatusLabel(status)),
+            ),
+          ),
+        ],
+        onChanged: onStatusChanged,
+      ),
+      child: submissions.isEmpty
+          ? const _EmptyPanel(
+              key: ValueKey('customs-authority-submissions-empty'),
+              icon: Icons.account_balance_outlined,
+              title: 'Henüz resmî iletim taslağı yok',
+              description:
+                  'Aktif koruma profili veya sınır müdahale dosyası detayından kontrollü bir resmî iletim taslağı hazırlayın.',
+            )
+          : ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: submissions.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final submission = submissions[index];
+                final packageLine = submission.currentPackageHash == null
+                    ? 'Paket henüz hazırlanmadı'
+                    : 'Paket v${submission.currentPackageVersion} · ${_shortHash(submission.currentPackageHash!)}';
+                final officialLine = submission.officialReferenceNumber == null
+                    ? 'Resmî referans henüz kaydedilmedi'
+                    : 'Resmî referans: ${submission.officialReferenceNumber}';
+                return _RecordCard(
+                  key: ValueKey(
+                    'customs-authority-submission-${submission.submissionId}',
+                  ),
+                  icon: Icons.account_balance_outlined,
+                  title: submission.title,
+                  number: submission.submissionNumber,
+                  status: customsAuthoritySubmissionStatusLabel(
+                    submission.status,
+                  ),
+                  statusCode: submission.status,
+                  statusColorResolver: customsAuthoritySubmissionStatusColor,
+                  lines: [
+                    '${customsAuthoritySubmissionTypeLabel(submission.submissionType)} · ${customsAuthorityTargetLabel(submission.targetAuthority)}',
+                    packageLine,
+                    officialLine,
+                  ],
+                  onTap: () => onOpen(submission),
+                );
+              },
+            ),
+    );
+  }
+}
+
+String _shortHash(String value) =>
+    value.length <= 12 ? value : '${value.substring(0, 12)}…';
+
 class _WorkspaceShell extends StatelessWidget {
   const _WorkspaceShell({
     required this.title,
@@ -566,6 +698,7 @@ class _RecordCard extends StatelessWidget {
     required this.lines,
     required this.onTap,
     this.warning,
+    this.statusColorResolver,
   });
 
   final IconData icon;
@@ -576,10 +709,12 @@ class _RecordCard extends StatelessWidget {
   final List<String> lines;
   final VoidCallback onTap;
   final String? warning;
+  final Color Function(String status)? statusColorResolver;
 
   @override
   Widget build(BuildContext context) {
-    final color = customsStatusColor(statusCode);
+    final color =
+        statusColorResolver?.call(statusCode) ?? customsStatusColor(statusCode);
     return Card(
       elevation: 0,
       color: Colors.white,
