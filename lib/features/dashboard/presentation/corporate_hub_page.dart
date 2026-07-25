@@ -7,17 +7,21 @@ import 'package:markakalkan/features/admin/data/admin_entry_gate_service.dart';
 import 'package:markakalkan/features/admin/data/platform_admin_access_service.dart';
 
 typedef RiskOperationsRouteOpener = Future<void> Function(BuildContext context);
+typedef CustomsSecurityRouteOpener =
+    Future<void> Function(BuildContext context);
 
 class CorporateHubPage extends StatefulWidget {
   const CorporateHubPage({
     super.key,
     this.riskOperationsRouteOpener,
+    this.customsSecurityRouteOpener,
     this.userEmailProvider,
     this.entryGateService,
     this.accessService,
   });
 
   final RiskOperationsRouteOpener? riskOperationsRouteOpener;
+  final CustomsSecurityRouteOpener? customsSecurityRouteOpener;
   final String? Function()? userEmailProvider;
   final AdminEntryGateService? entryGateService;
   final PlatformAdminAccessService? accessService;
@@ -131,6 +135,15 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
           'Tekrarlanan kodları, bölgesel anomalileri ve sahtecilik risklerini inceleyin.',
       icon: Icons.warning_amber_rounded,
       status: _ModuleStatus.active,
+    ),
+    _CorporateModule(
+      id: 'customs_security',
+      title: 'Kaçakçılık, Taklit ve Gümrük Güvenliği',
+      description:
+          'Gümrük koruma profillerini, şüpheli sevkiyatları, ürün doğrulamasını '
+          've sınır müdahale dosyalarını denetlenebilir biçimde yönetin.',
+      icon: Icons.local_shipping_outlined,
+      status: _ModuleStatus.pilot,
     ),
     _CorporateModule(
       id: 'cases',
@@ -484,6 +497,8 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                                             module: module,
                                             riskOperationsRouteOpener: widget
                                                 .riskOperationsRouteOpener,
+                                            customsSecurityRouteOpener: widget
+                                                .customsSecurityRouteOpener,
                                           ),
                                         ),
                                       ),
@@ -492,6 +507,8 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                                       module: module,
                                       riskOperationsRouteOpener:
                                           widget.riskOperationsRouteOpener,
+                                      customsSecurityRouteOpener:
+                                          widget.customsSecurityRouteOpener,
                                     ),
                             ),
                           )
@@ -599,10 +616,12 @@ class _CorporateModuleCard extends StatelessWidget {
   const _CorporateModuleCard({
     required this.module,
     this.riskOperationsRouteOpener,
+    this.customsSecurityRouteOpener,
   });
 
   final _CorporateModule module;
   final RiskOperationsRouteOpener? riskOperationsRouteOpener;
+  final CustomsSecurityRouteOpener? customsSecurityRouteOpener;
 
   void _openModule(BuildContext context) {
     switch (module.id) {
@@ -641,6 +660,11 @@ class _CorporateModuleCard extends StatelessWidget {
           context,
         );
         return;
+      case 'customs_security':
+        (customsSecurityRouteOpener ?? AppRouter.openCustomsSecurityHub)(
+          context,
+        );
+        return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -657,6 +681,7 @@ class _CorporateModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
+      key: ValueKey<String>('corporate-module-${module.id}'),
       borderRadius: BorderRadius.circular(20),
       onTap: () => _openModule(context),
       child: Container(

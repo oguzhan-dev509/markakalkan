@@ -1,0 +1,1353 @@
+import 'package:flutter/material.dart';
+import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/core/theme/markakalkan_theme.dart';
+import 'package:markakalkan/features/customs_security/data/customs_security_repository.dart';
+import 'package:markakalkan/features/customs_security/presentation/customs_security_labels.dart';
+
+typedef CustomsProfileDetailOpener =
+    Future<void> Function(BuildContext context, String profileId);
+typedef CustomsInterventionDetailOpener =
+    Future<void> Function(BuildContext context, String interventionId);
+
+class CustomsSecurityHubPage extends StatefulWidget {
+  const CustomsSecurityHubPage({
+    super.key,
+    this.repository,
+    this.profileDetailOpener,
+    this.interventionDetailOpener,
+  });
+
+  final CustomsSecurityRepository? repository;
+  final CustomsProfileDetailOpener? profileDetailOpener;
+  final CustomsInterventionDetailOpener? interventionDetailOpener;
+
+  @override
+  State<CustomsSecurityHubPage> createState() => _CustomsSecurityHubPageState();
+}
+
+class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
+    with SingleTickerProviderStateMixin {
+  late final CustomsSecurityRepository _repository;
+  late final TabController _tabController;
+
+  bool _loading = true;
+  bool _submitting = false;
+  String? _error;
+  String? _profileStatus;
+  String? _interventionStatus;
+  List<CustomsProtectionProfile> _profiles = const [];
+  List<CustomsBorderIntervention> _interventions = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? CallableCustomsSecurityRepository();
+    _tabController = TabController(length: 2, vsync: this);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait<Object>([
+        _repository.listProfiles(status: _profileStatus, pageSize: 50),
+        _repository.listInterventions(
+          status: _interventionStatus,
+          pageSize: 50,
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _profiles = (results[0] as CustomsProtectionProfileList).items;
+        _interventions = (results[1] as CustomsBorderInterventionList).items;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = customsSecurityErrorMessage(error);
+      });
+    }
+  }
+
+  Future<void> _openProfile(CustomsProtectionProfile profile) async {
+    final opener = widget.profileDetailOpener;
+    if (opener != null) {
+      await opener(context, profile.profileId);
+    } else {
+      await AppRouter.openCustomsProtectionProfileDetail(
+        context,
+        profileId: profile.profileId,
+      );
+    }
+    if (mounted) await _load();
+  }
+
+  Future<void> _openIntervention(CustomsBorderIntervention intervention) async {
+    final opener = widget.interventionDetailOpener;
+    if (opener != null) {
+      await opener(context, intervention.interventionId);
+    } else {
+      await AppRouter.openCustomsBorderInterventionDetail(
+        context,
+        interventionId: intervention.interventionId,
+      );
+    }
+    if (mounted) await _load();
+  }
+
+  Future<void> _createProfile() async {
+    final draft = await showDialog<CustomsProtectionProfileDraft>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _CreateProfileDialog(),
+    );
+    if (draft == null || !mounted) return;
+    setState(() => _submitting = true);
+    try {
+      final created = await _repository.createProfile(draft);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${created.profileNumber} taslak profili oluşturuldu.'),
+        ),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(customsSecurityErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _createIntervention() async {
+    setState(() => _submitting = true);
+    try {
+      final activeProfiles = await _repository.listProfiles(
+        status: 'active',
+        pageSize: 50,
+      );
+      if (!mounted) return;
+      if (activeProfiles.items.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sınır müdahale dosyası için önce aktif bir Gümrük Koruma Profili gerekir.',
+            ),
+          ),
+        );
+        return;
+      }
+      final draft = await showDialog<CustomsBorderInterventionDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) =>
+            _CreateInterventionDialog(activeProfiles: activeProfiles.items),
+      );
+      if (draft == null || !mounted) return;
+      final created = await _repository.createIntervention(draft);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${created.interventionNumber} taslak müdahale dosyası oluşturuldu.',
+          ),
+        ),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(customsSecurityErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: MarkaKalkanTheme.background,
+      appBar: AppBar(
+        title: const Text('Kaçakçılık, Taklit ve Gümrük Güvenliği'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(
+              key: ValueKey('customs-profile-tab'),
+              text: 'Koruma Profilleri',
+            ),
+            Tab(
+              key: ValueKey('customs-intervention-tab'),
+              text: 'Sınır Müdahaleleri',
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Yenile',
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      floatingActionButton: _loading
+          ? null
+          : AnimatedBuilder(
+              animation: _tabController,
+              builder: (context, _) {
+                final profilesTab = _tabController.index == 0;
+                return FloatingActionButton.extended(
+                  key: ValueKey(
+                    profilesTab
+                        ? 'create-customs-profile'
+                        : 'create-customs-intervention',
+                  ),
+                  onPressed: _submitting
+                      ? null
+                      : profilesTab
+                      ? _createProfile
+                      : _createIntervention,
+                  icon: Icon(
+                    _submitting
+                        ? Icons.hourglass_top_rounded
+                        : Icons.add_rounded,
+                  ),
+                  label: Text(profilesTab ? 'Yeni profil' : 'Yeni müdahale'),
+                );
+              },
+            ),
+      body: Column(
+        children: [
+          const _CustomsHero(),
+          Expanded(
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      key: ValueKey('customs-security-loading'),
+                    ),
+                  )
+                : _error != null
+                ? _ErrorPanel(message: _error!, onRetry: _load)
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _ProfileWorkspace(
+                        profiles: _profiles,
+                        selectedStatus: _profileStatus,
+                        onStatusChanged: (value) {
+                          setState(() => _profileStatus = value);
+                          _load();
+                        },
+                        onOpen: _openProfile,
+                      ),
+                      _InterventionWorkspace(
+                        interventions: _interventions,
+                        selectedStatus: _interventionStatus,
+                        onStatusChanged: (value) {
+                          setState(() => _interventionStatus = value);
+                          _load();
+                        },
+                        onOpen: _openIntervention,
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomsHero extends StatelessWidget {
+  const _CustomsHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('customs-security-hero'),
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [MarkaKalkanTheme.navy, Color(0xFF183B4E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sınırda sinyali yakala, delili koru, müdahaleyi yönet.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              height: 1.2,
+            ),
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Gümrük koruma profillerini ve şüpheli sevkiyat müdahalelerini insan incelemesi, tenant izolasyonu ve değiştirilemez olay zinciriyle yönetin.',
+            style: TextStyle(color: Color(0xFFD9E5EA), height: 1.5),
+          ),
+          SizedBox(height: 14),
+          _LegalLanguageNotice(),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegalLanguageNotice extends StatelessWidget {
+  const _LegalLanguageNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.balance_outlined, color: MarkaKalkanTheme.teal, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Bu çalışma alanı kişi veya kuruluşlar hakkında otomatik suç isnadı üretmez. Şüphe, doğrulama ve kesinleşmiş sonuçlar ayrı tutulur.',
+              style: TextStyle(color: Color(0xFFE9F0F3), height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileWorkspace extends StatelessWidget {
+  const _ProfileWorkspace({
+    required this.profiles,
+    required this.selectedStatus,
+    required this.onStatusChanged,
+    required this.onOpen,
+  });
+
+  final List<CustomsProtectionProfile> profiles;
+  final String? selectedStatus;
+  final ValueChanged<String?> onStatusChanged;
+  final ValueChanged<CustomsProtectionProfile> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return _WorkspaceShell(
+      title: 'Gümrük Koruma Profilleri',
+      description:
+          'Hak sahipliği, ürün doğrulama yöntemi, GTİP/HS kodu, riskli rota ve acil temas bilgilerini sınır müdahalesine hazır tutun.',
+      filter: DropdownButtonFormField<String?>(
+        key: const ValueKey('customs-profile-status-filter'),
+        initialValue: selectedStatus,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Durum filtresi'),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Tümü')),
+          ...customsProfileStatuses.map(
+            (status) => DropdownMenuItem<String?>(
+              value: status,
+              child: Text(customsProfileStatusLabel(status)),
+            ),
+          ),
+        ],
+        onChanged: onStatusChanged,
+      ),
+      child: profiles.isEmpty
+          ? const _EmptyPanel(
+              key: ValueKey('customs-profiles-empty'),
+              icon: Icons.policy_outlined,
+              title: 'Henüz Gümrük Koruma Profili yok',
+              description:
+                  'İlk profil taslak olarak oluşturulur; inceleme ve aktivasyon kontrollü durum geçişleriyle yapılır.',
+            )
+          : ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: profiles.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final profile = profiles[index];
+                return _RecordCard(
+                  key: ValueKey('customs-profile-${profile.profileId}'),
+                  icon: Icons.policy_outlined,
+                  title: profile.profileName,
+                  number: profile.profileNumber,
+                  status: customsProfileStatusLabel(profile.status),
+                  statusCode: profile.status,
+                  lines: [
+                    profile.rightHolderName,
+                    '${profile.protectedProductIds.length} korunan ürün · ${profile.hsCodes.length} HS/GTİP kodu',
+                    'Son güncelleme: ${_formatDateTime(profile.updatedAt)}',
+                  ],
+                  onTap: () => onOpen(profile),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _InterventionWorkspace extends StatelessWidget {
+  const _InterventionWorkspace({
+    required this.interventions,
+    required this.selectedStatus,
+    required this.onStatusChanged,
+    required this.onOpen,
+  });
+
+  final List<CustomsBorderIntervention> interventions;
+  final String? selectedStatus;
+  final ValueChanged<String?> onStatusChanged;
+  final ValueChanged<CustomsBorderIntervention> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return _WorkspaceShell(
+      title: 'Sınır Müdahale Dosyaları',
+      description:
+          'Sevkiyat, sınır noktası, ürün beyanı, doğrulama sonucu, süreler ve karar dayanaklarını tek operasyon dosyasında izleyin.',
+      filter: DropdownButtonFormField<String?>(
+        key: const ValueKey('customs-intervention-status-filter'),
+        initialValue: selectedStatus,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Durum filtresi'),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Tümü')),
+          ...customsInterventionStatuses.map(
+            (status) => DropdownMenuItem<String?>(
+              value: status,
+              child: Text(customsInterventionStatusLabel(status)),
+            ),
+          ),
+        ],
+        onChanged: onStatusChanged,
+      ),
+      child: interventions.isEmpty
+          ? const _EmptyPanel(
+              key: ValueKey('customs-interventions-empty'),
+              icon: Icons.local_shipping_outlined,
+              title: 'Henüz sınır müdahale dosyası yok',
+              description:
+                  'Müdahale dosyası yalnız aktif bir Gümrük Koruma Profili üzerinden açılır.',
+            )
+          : ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: interventions.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final intervention = interventions[index];
+                return _RecordCard(
+                  key: ValueKey(
+                    'customs-intervention-${intervention.interventionId}',
+                  ),
+                  icon: Icons.local_shipping_outlined,
+                  title: intervention.declaredProductDescription,
+                  number: intervention.interventionNumber,
+                  status: customsInterventionStatusLabel(intervention.status),
+                  statusCode: intervention.status,
+                  warning: intervention.hasIntegritySignal
+                      ? 'İşlem bütünlüğü sinyali insan incelemesi gerektiriyor.'
+                      : null,
+                  lines: [
+                    '${intervention.countryCode} · ${intervention.customsAuthorityName}',
+                    '${customsBorderPointTypeLabel(intervention.borderPointType)} · ${intervention.borderPointName}',
+                    '${customsPriorityLabel(intervention.priority)} öncelik · ${customsAuthenticationResultLabel(intervention.authenticationResult)}',
+                  ],
+                  onTap: () => onOpen(intervention),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _WorkspaceShell extends StatelessWidget {
+  const _WorkspaceShell({
+    required this.title,
+    required this.description,
+    required this.filter,
+    required this.child,
+  });
+
+  final String title;
+  final String description;
+  final Widget filter;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final heading = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: MarkaKalkanTheme.navy,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      color: Color(0xFF687580),
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              );
+              if (constraints.maxWidth < 720) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [heading, const SizedBox(height: 14), filter],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: heading),
+                  const SizedBox(width: 20),
+                  SizedBox(width: 280, child: filter),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordCard extends StatelessWidget {
+  const _RecordCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.number,
+    required this.status,
+    required this.statusCode,
+    required this.lines,
+    required this.onTap,
+    this.warning,
+  });
+
+  final IconData icon;
+  final String title;
+  final String number;
+  final String status;
+  final String statusCode;
+  final List<String> lines;
+  final VoidCallback onTap;
+  final String? warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = customsStatusColor(statusCode);
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFE0E7EC)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F6F4),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: MarkaKalkanTheme.teal),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          number,
+                          style: const TextStyle(
+                            color: MarkaKalkanTheme.blue,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        _StatusPill(label: status, color: color),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: MarkaKalkanTheme.navy,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...lines.map(
+                      (line) => Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          line,
+                          style: const TextStyle(
+                            color: Color(0xFF687580),
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (warning != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        warning!,
+                        style: const TextStyle(
+                          color: Color(0xFF9A5B12),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyPanel extends StatelessWidget {
+  const _EmptyPanel({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 54, color: const Color(0xFF9AA6AE)),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: MarkaKalkanTheme.navy,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF687580), height: 1.45),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorPanel extends StatelessWidget {
+  const _ErrorPanel({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Color(0xFFB33A3A)),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Yeniden dene'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateProfileDialog extends StatefulWidget {
+  const _CreateProfileDialog();
+
+  @override
+  State<_CreateProfileDialog> createState() => _CreateProfileDialogState();
+}
+
+class _CreateProfileDialogState extends State<_CreateProfileDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _rightHolder = TextEditingController();
+  final _rights = TextEditingController();
+  final _products = TextEditingController();
+  final _hsCodes = TextEditingController();
+  final _instructions = TextEditingController();
+  final _features = TextEditingController();
+  final _riskCountries = TextEditingController();
+  final _riskRoutes = TextEditingController();
+  final _validUntil = TextEditingController();
+
+  @override
+  void dispose() {
+    for (final controller in [
+      _name,
+      _rightHolder,
+      _rights,
+      _products,
+      _hsCodes,
+      _instructions,
+      _features,
+      _riskCountries,
+      _riskRoutes,
+      _validUntil,
+    ]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  DateTime? _date(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return null;
+    return DateTime.tryParse('${clean}T23:59:59.000Z');
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      CustomsProtectionProfileDraft(
+        profileName: _name.text,
+        rightHolderName: _rightHolder.text,
+        rightHolderReferenceIds: _split(_rights.text),
+        protectedProductIds: _split(_products.text),
+        hsCodes: _split(_hsCodes.text),
+        authenticationInstructions: _instructions.text,
+        securityFeatureSummaries: _split(_features.text),
+        riskCountryCodes: _split(
+          _riskCountries.text,
+        ).map((value) => value.toUpperCase()).toList(growable: false),
+        riskRouteSummaries: _split(_riskRoutes.text),
+        validUntil: _date(_validUntil.text),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Yeni Gümrük Koruma Profili'),
+      content: SizedBox(
+        width: 680,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _field(
+                  key: 'customs-profile-name',
+                  controller: _name,
+                  label: 'Profil adı',
+                  minimum: 3,
+                ),
+                _field(
+                  key: 'customs-right-holder-name',
+                  controller: _rightHolder,
+                  label: 'Hak sahibi adı',
+                  minimum: 2,
+                ),
+                _field(
+                  key: 'customs-right-holder-references',
+                  controller: _rights,
+                  label: 'Hak sahipliği/tescil referansları',
+                  hint: 'Virgül veya yeni satırla ayırın',
+                ),
+                _field(
+                  key: 'customs-protected-products',
+                  controller: _products,
+                  label: 'Korunan ürün kimlikleri',
+                  hint: 'Aktivasyon için en az bir ürün gerekir',
+                ),
+                _field(
+                  key: 'customs-hs-codes',
+                  controller: _hsCodes,
+                  label: 'HS/GTİP kodları',
+                ),
+                _field(
+                  key: 'customs-authentication-instructions',
+                  controller: _instructions,
+                  label: 'Orijinal ürün doğrulama talimatı',
+                  minimum: 10,
+                  maxLines: 4,
+                ),
+                _field(
+                  key: 'customs-security-features',
+                  controller: _features,
+                  label: 'Güvenlik özellikleri',
+                ),
+                _field(
+                  key: 'customs-risk-countries',
+                  controller: _riskCountries,
+                  label: 'Risk ülke kodları',
+                  hint: 'TR, CN, AE gibi iki harfli kodlar',
+                ),
+                _field(
+                  key: 'customs-risk-routes',
+                  controller: _riskRoutes,
+                  label: 'Riskli rota özetleri',
+                ),
+                _field(
+                  key: 'customs-valid-until',
+                  controller: _validUntil,
+                  label: 'Geçerlilik sonu',
+                  hint: 'YYYY-AA-GG',
+                  validator: (value) {
+                    final clean = value?.trim() ?? '';
+                    if (clean.isEmpty) return null;
+                    return _date(clean) == null
+                        ? 'Tarih YYYY-AA-GG olmalıdır.'
+                        : null;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-create-customs-profile'),
+          onPressed: _submit,
+          child: const Text('Taslak oluştur'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CreateInterventionDialog extends StatefulWidget {
+  const _CreateInterventionDialog({required this.activeProfiles});
+
+  final List<CustomsProtectionProfile> activeProfiles;
+
+  @override
+  State<_CreateInterventionDialog> createState() =>
+      _CreateInterventionDialogState();
+}
+
+class _CreateInterventionDialogState extends State<_CreateInterventionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late String _profileId;
+  String _priority = 'normal';
+  String _sourceType = 'customs_notification';
+  String _borderPointType = 'seaport';
+  String _authenticationResult = 'not_started';
+  final _country = TextEditingController();
+  final _authority = TextEditingController();
+  final _borderName = TextEditingController();
+  final _shipment = TextEditingController();
+  final _description = TextEditingController();
+  final _hsCode = TextEditingController();
+  final _quantity = TextEditingController();
+  String? _unit;
+  final _suspicionReasons = TextEditingController();
+  final _responseDeadline = TextEditingController();
+  final _actionDeadline = TextEditingController();
+  bool _unusualRelease = false;
+  bool _evidenceMismatch = false;
+  bool _missingRecord = false;
+  bool _independentReview = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileId = widget.activeProfiles.first.profileId;
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [
+      _country,
+      _authority,
+      _borderName,
+      _shipment,
+      _description,
+      _hsCode,
+      _quantity,
+      _suspicionReasons,
+      _responseDeadline,
+      _actionDeadline,
+    ]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  DateTime? _date(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return null;
+    return DateTime.tryParse('${clean}T23:59:59.000Z');
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    final quantity = _quantity.text.trim().isEmpty
+        ? null
+        : double.tryParse(_quantity.text.trim().replaceAll(',', '.'));
+    if (_quantity.text.trim().isNotEmpty && quantity == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Miktar sayısal olmalıdır.')),
+      );
+      return;
+    }
+    if ((quantity == null) != (_unit == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Miktar ve birim birlikte girilmelidir.')),
+      );
+      return;
+    }
+    Navigator.of(context).pop(
+      CustomsBorderInterventionDraft(
+        protectionProfileId: _profileId,
+        priority: _priority,
+        sourceType: _sourceType,
+        countryCode: _country.text,
+        customsAuthorityName: _authority.text,
+        borderPointType: _borderPointType,
+        borderPointName: _borderName.text,
+        shipmentReference: _shipment.text,
+        declaredProductDescription: _description.text,
+        declaredHsCode: _hsCode.text,
+        declaredQuantity: quantity,
+        declaredUnit: _unit,
+        suspicionReasons: _split(_suspicionReasons.text),
+        authenticationResult: _authenticationResult,
+        responseDeadlineAt: _date(_responseDeadline.text),
+        actionDeadlineAt: _date(_actionDeadline.text),
+        unusualReleaseFlag: _unusualRelease,
+        decisionEvidenceMismatchFlag: _evidenceMismatch,
+        missingRecordOrSampleFlag: _missingRecord,
+        independentReviewRequired: _independentReview,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Yeni Sınır Müdahale Dosyası'),
+      content: SizedBox(
+        width: 760,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('customs-intervention-profile'),
+                  initialValue: _profileId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Aktif Gümrük Koruma Profili',
+                  ),
+                  items: widget.activeProfiles
+                      .map(
+                        (profile) => DropdownMenuItem(
+                          value: profile.profileId,
+                          child: Text(
+                            '${profile.profileNumber} · ${profile.profileName}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value != null) setState(() => _profileId = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _dropdown(
+                        key: 'customs-intervention-priority',
+                        label: 'Öncelik',
+                        value: _priority,
+                        values: customsPriorities,
+                        labeler: customsPriorityLabel,
+                        onChanged: (value) => setState(() => _priority = value),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _dropdown(
+                        key: 'customs-intervention-source',
+                        label: 'Kaynak',
+                        value: _sourceType,
+                        values: customsSourceTypes,
+                        labeler: customsSourceTypeLabel,
+                        onChanged: (value) =>
+                            setState(() => _sourceType = value),
+                      ),
+                    ),
+                  ],
+                ),
+                _field(
+                  key: 'customs-intervention-country',
+                  controller: _country,
+                  label: 'Ülke kodu',
+                  hint: 'TR',
+                  minimum: 2,
+                  validator: (value) => (value?.trim().length == 2)
+                      ? null
+                      : 'İki harfli ülke kodu girin.',
+                ),
+                _field(
+                  key: 'customs-intervention-authority',
+                  controller: _authority,
+                  label: 'Gümrük idaresi',
+                  minimum: 2,
+                ),
+                _dropdown(
+                  key: 'customs-border-point-type',
+                  label: 'Sınır noktası türü',
+                  value: _borderPointType,
+                  values: customsBorderPointTypes,
+                  labeler: customsBorderPointTypeLabel,
+                  onChanged: (value) =>
+                      setState(() => _borderPointType = value),
+                ),
+                _field(
+                  key: 'customs-border-point-name',
+                  controller: _borderName,
+                  label: 'Sınır noktası adı',
+                  minimum: 2,
+                ),
+                _field(
+                  key: 'customs-shipment-reference',
+                  controller: _shipment,
+                  label: 'Sevkiyat/kargo referansı',
+                ),
+                _field(
+                  key: 'customs-declared-product',
+                  controller: _description,
+                  label: 'Beyan edilen ürün açıklaması',
+                  minimum: 3,
+                  maxLines: 3,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _field(
+                        key: 'customs-declared-hs-code',
+                        controller: _hsCode,
+                        label: 'Beyan edilen HS/GTİP',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _field(
+                        key: 'customs-declared-quantity',
+                        controller: _quantity,
+                        label: 'Miktar',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String?>(
+                        key: const ValueKey('customs-declared-unit'),
+                        initialValue: _unit,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Birim'),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Seçilmedi'),
+                          ),
+                          ...customsDeclaredUnits.map(
+                            (unit) => DropdownMenuItem<String?>(
+                              value: unit,
+                              child: Text(customsDeclaredUnitLabel(unit)),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) => setState(() => _unit = value),
+                      ),
+                    ),
+                  ],
+                ),
+                _field(
+                  key: 'customs-suspicion-reasons',
+                  controller: _suspicionReasons,
+                  label: 'Şüphe nedenleri',
+                  hint: 'Virgül veya yeni satırla ayırın',
+                  maxLines: 3,
+                ),
+                _dropdown(
+                  key: 'customs-authentication-result',
+                  label: 'Ürün doğrulama sonucu',
+                  value: _authenticationResult,
+                  values: customsAuthenticationResults,
+                  labeler: customsAuthenticationResultLabel,
+                  onChanged: (value) =>
+                      setState(() => _authenticationResult = value),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _field(
+                        key: 'customs-response-deadline',
+                        controller: _responseDeadline,
+                        label: 'Yanıt son tarihi',
+                        hint: 'YYYY-AA-GG',
+                        validator: _dateValidator,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _field(
+                        key: 'customs-action-deadline',
+                        controller: _actionDeadline,
+                        label: 'İşlem son tarihi',
+                        hint: 'YYYY-AA-GG',
+                        validator: _dateValidator,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                CheckboxListTile(
+                  value: _unusualRelease,
+                  onChanged: (value) =>
+                      setState(() => _unusualRelease = value == true),
+                  title: const Text('Olağandışı serbest bırakma sinyali'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                CheckboxListTile(
+                  value: _evidenceMismatch,
+                  onChanged: (value) =>
+                      setState(() => _evidenceMismatch = value == true),
+                  title: const Text('Karar-delil uyumsuzluğu sinyali'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                CheckboxListTile(
+                  value: _missingRecord,
+                  onChanged: (value) =>
+                      setState(() => _missingRecord = value == true),
+                  title: const Text('Eksik kayıt veya numune sinyali'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                CheckboxListTile(
+                  value: _independentReview,
+                  onChanged: (value) =>
+                      setState(() => _independentReview = value == true),
+                  title: const Text('Bağımsız inceleme gerekiyor'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-create-customs-intervention'),
+          onPressed: _submit,
+          child: const Text('Taslak oluştur'),
+        ),
+      ],
+    );
+  }
+
+  String? _dateValidator(String? value) {
+    final clean = value?.trim() ?? '';
+    if (clean.isEmpty) return null;
+    return _date(clean) == null ? 'Tarih YYYY-AA-GG olmalıdır.' : null;
+  }
+}
+
+Widget _field({
+  required String key,
+  required TextEditingController controller,
+  required String label,
+  String? hint,
+  int minimum = 0,
+  int maxLines = 1,
+  String? Function(String?)? validator,
+}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: TextFormField(
+      key: ValueKey(key),
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(labelText: label, hintText: hint),
+      validator:
+          validator ??
+          (value) {
+            if (minimum == 0) return null;
+            return (value?.trim().length ?? 0) >= minimum
+                ? null
+                : 'En az $minimum karakter girin.';
+          },
+    ),
+  );
+}
+
+Widget _dropdown({
+  required String key,
+  required String label,
+  required String value,
+  required List<String> values,
+  required String Function(String) labeler,
+  required ValueChanged<String> onChanged,
+}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: DropdownButtonFormField<String>(
+      key: ValueKey(key),
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label),
+      items: values
+          .map(
+            (item) => DropdownMenuItem(value: item, child: Text(labeler(item))),
+          )
+          .toList(growable: false),
+      onChanged: (item) {
+        if (item != null) onChanged(item);
+      },
+    ),
+  );
+}
+
+List<String> _split(String value) {
+  final seen = <String>{};
+  return value
+      .split(RegExp(r'[,;\n]'))
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty && seen.add(item))
+      .toList(growable: false);
+}
+
+String _formatDateTime(String value) {
+  final parsed = DateTime.tryParse(value)?.toLocal();
+  if (parsed == null) return value;
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(parsed.day)}.${two(parsed.month)}.${parsed.year} '
+      '${two(parsed.hour)}:${two(parsed.minute)}';
+}

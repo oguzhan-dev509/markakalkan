@@ -27,6 +27,8 @@ import 'package:markakalkan/features/case_evidence_center/presentation/case_part
 import 'package:markakalkan/features/case_evidence_center/presentation/case_party_detail_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_unified_timeline_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_legal_hold_page.dart';
+import 'package:markakalkan/features/customs_security/presentation/customs_security_detail_page.dart';
+import 'package:markakalkan/features/customs_security/presentation/customs_security_hub_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -412,6 +414,45 @@ abstract final class AppRouter {
   static Future<void> openTraceabilityCases(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const TraceabilityCasesPage()),
+    );
+  }
+
+  static Future<void> openCustomsSecurityHub(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/customs-security'),
+        builder: (_) => const CustomsSecurityHubPage(),
+      ),
+    );
+  }
+
+  static Future<void> openCustomsProtectionProfileDetail(
+    BuildContext context, {
+    required String profileId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/customs-security/protection-profile-detail',
+        ),
+        builder: (_) => CustomsSecurityDetailPage.profile(profileId: profileId),
+      ),
+    );
+  }
+
+  static Future<void> openCustomsBorderInterventionDetail(
+    BuildContext context, {
+    required String interventionId,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: '/customs-security/border-intervention-detail',
+        ),
+        builder: (_) => CustomsSecurityDetailPage.intervention(
+          interventionId: interventionId,
+        ),
+      ),
     );
   }
 
