@@ -5,9 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_review_tasks_page.dart';
 
 class _Repository implements CaseReviewTaskRepository {
-  _Repository(this.loader, {this.created});
+  _Repository(this.loader);
   final Future<CaseReviewTaskListResult> Function() loader;
-  final CaseReviewTaskMutation? created;
   Map<String, dynamic>? createRequest;
   @override
   Future<CaseReviewTaskListResult> list() => loader();
@@ -17,8 +16,10 @@ class _Repository implements CaseReviewTaskRepository {
   @override
   Future<CaseReviewTaskMutation> create(Map<String, dynamic> request) async {
     createRequest = request;
-    return created ??
-        const CaseReviewTaskMutation(taskId: 'task-created', duplicate: false);
+    return const CaseReviewTaskMutation(
+      taskId: 'task-created',
+      duplicate: false,
+    );
   }
 
   @override
