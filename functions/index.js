@@ -139,6 +139,16 @@ const {
   buildUpdateCustomsProtectionProfile,
 } = require("./customs_security/v1");
 const {
+  buildAppendCustomsAuthorityResponse,
+  buildCreateCustomsAuthoritySubmission,
+  buildGenerateCustomsSubmissionPackage,
+  buildGetCustomsAuthoritySubmissionDetail,
+  buildListCustomsAuthoritySubmissions,
+  buildRecordCustomsSubmissionReceipt,
+  buildTransitionCustomsAuthoritySubmission,
+  buildUpdateCustomsAuthoritySubmission,
+} = require("./customs_authority_submission/v1");
+const {
   buildPromoteRiskOperationToSharedRisk,
 } = require("./shared_risk/promotion/v1");
 const {
@@ -296,6 +306,22 @@ exports.listCustomsBorderInterventions =
     buildListCustomsBorderInterventions({db});
 exports.getCustomsBorderInterventionDetail =
     buildGetCustomsBorderInterventionDetail({db});
+exports.createCustomsAuthoritySubmission =
+    buildCreateCustomsAuthoritySubmission({db});
+exports.updateCustomsAuthoritySubmission =
+    buildUpdateCustomsAuthoritySubmission({db});
+exports.transitionCustomsAuthoritySubmission =
+    buildTransitionCustomsAuthoritySubmission({db});
+exports.generateCustomsSubmissionPackage =
+    buildGenerateCustomsSubmissionPackage({db});
+exports.recordCustomsSubmissionReceipt =
+    buildRecordCustomsSubmissionReceipt({db});
+exports.appendCustomsAuthorityResponse =
+    buildAppendCustomsAuthorityResponse({db});
+exports.listCustomsAuthoritySubmissions =
+    buildListCustomsAuthoritySubmissions({db});
+exports.getCustomsAuthoritySubmissionDetail =
+    buildGetCustomsAuthoritySubmissionDetail({db});
 exports.promoteRiskOperationToSharedRisk =
     buildPromoteRiskOperationToSharedRisk({db});
 exports.listCaseEvidenceCenter =
