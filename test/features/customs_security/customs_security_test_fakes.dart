@@ -135,10 +135,15 @@ class FakeCustomsSecurityRepository implements CustomsSecurityRepository {
   List<CustomsProtectionProfile> profiles;
   List<CustomsBorderIntervention> interventions;
   int createProfileCalls = 0;
+  int createAndActivateProfileCalls = 0;
   int createInterventionCalls = 0;
   int transitionProfileCalls = 0;
   int transitionInterventionCalls = 0;
   CustomsProtectionProfileDraft? lastProfileDraft;
+  final List<String> activationRequestIds = [];
+  Object? createAndActivateError;
+  bool createAndActivateFailsOnce = false;
+  bool createAndActivateDuplicate = false;
   CustomsBorderInterventionDraft? lastInterventionDraft;
   String? lastNextStatus;
   String? lastReason;
@@ -170,6 +175,32 @@ class FakeCustomsSecurityRepository implements CustomsSecurityRepository {
     );
     profiles = [...profiles, created];
     return created;
+  }
+
+  @override
+  Future<CustomsProtectionProfileCreateAndActivateResult>
+  createAndActivateProfile(
+    CustomsProtectionProfileDraft draft, {
+    required String requestId,
+  }) async {
+    createAndActivateProfileCalls++;
+    activationRequestIds.add(requestId);
+    lastProfileDraft = draft;
+    final error = createAndActivateError;
+    if (error != null &&
+        (!createAndActivateFailsOnce || createAndActivateProfileCalls == 1)) {
+      throw error;
+    }
+    final created = sampleProfile(
+      status: 'active',
+      profileId: 'profile-activated',
+    );
+    profiles = [...profiles, created];
+    return CustomsProtectionProfileCreateAndActivateResult(
+      profile: created,
+      duplicate: createAndActivateDuplicate,
+      transactionApplied: !createAndActivateDuplicate,
+    );
   }
 
   @override

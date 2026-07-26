@@ -20,6 +20,12 @@ abstract interface class CustomsSecurityRepository {
     CustomsProtectionProfileDraft draft,
   );
 
+  Future<CustomsProtectionProfileCreateAndActivateResult>
+  createAndActivateProfile(
+    CustomsProtectionProfileDraft draft, {
+    required String requestId,
+  });
+
   Future<CustomsProtectionProfileDetail> getProfileDetail(String profileId);
 
   Future<CustomsProtectionProfile> transitionProfile({
@@ -121,6 +127,50 @@ class CallableCustomsSecurityRepository implements CustomsSecurityRepository {
       'customs-protection-profile-create-result-v1',
     );
     return CustomsProtectionProfile.fromMap(_map(response['profile']));
+  }
+
+  @override
+  Future<CustomsProtectionProfileCreateAndActivateResult>
+  createAndActivateProfile(
+    CustomsProtectionProfileDraft draft, {
+    required String requestId,
+  }) async {
+    final response =
+        await _callProtected('createAndActivateCustomsProtectionProfile', {
+          'contractVersion':
+              'customs-protection-profile-create-and-activate-request-v1',
+          ...draft.toRequestMap(),
+          'activationConfirmation': true,
+          'activationConfirmationVersion':
+              'customs-profile-activation-confirmation-v1',
+          'activationReason':
+              'Profil sahibi, bilgilerin doğru ve güncel olduğunu onaylayarak '
+              'profili oluşturup aktifleştirdi.',
+          'requestId': requestId,
+        });
+    if (response['contractVersion'] !=
+            'customs-protection-profile-create-and-activate-result-v1' ||
+        response['ok'] != true ||
+        response['duplicate'] is! bool ||
+        response['transactionApplied'] is! bool) {
+      throw const FormatException('Geçersiz gümrük güvenliği işlem yanıtı.');
+    }
+    final duplicate = response['duplicate'] as bool;
+    final transactionApplied = response['transactionApplied'] as bool;
+    if (duplicate == transactionApplied) {
+      throw const FormatException('Geçersiz gümrük güvenliği işlem sonucu.');
+    }
+    final profile = CustomsProtectionProfile.fromMap(_map(response['profile']));
+    if (profile.status != 'active' || profile.eventCount != 3) {
+      throw const FormatException(
+        'Aktif profil yanıtı güvenli sözleşmeyle eşleşmedi.',
+      );
+    }
+    return CustomsProtectionProfileCreateAndActivateResult(
+      profile: profile,
+      duplicate: duplicate,
+      transactionApplied: transactionApplied,
+    );
   }
 
   @override
@@ -319,6 +369,18 @@ class CustomsProtectionProfileDraft {
     if (reviewDueAt != null)
       'reviewDueAt': reviewDueAt!.toUtc().toIso8601String(),
   };
+}
+
+class CustomsProtectionProfileCreateAndActivateResult {
+  const CustomsProtectionProfileCreateAndActivateResult({
+    required this.profile,
+    required this.duplicate,
+    required this.transactionApplied,
+  });
+
+  final CustomsProtectionProfile profile;
+  final bool duplicate;
+  final bool transactionApplied;
 }
 
 class CustomsBorderInterventionDraft {

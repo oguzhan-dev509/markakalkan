@@ -29,6 +29,14 @@ void main() {
     expect(find.text('Orijinal ürün doğrulama kiti'), findsOneWidget);
     expect(find.text('TR-MARKA-123'), findsOneWidget);
     expect(find.text('Hologram ve parti kodu'), findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const ValueKey('create-fsmh-authority-submission')),
+          )
+          .onPressed,
+      isNotNull,
+    );
   });
 
   testWidgets('profile transition requires a reason and updates status', (

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:markakalkan/app/router.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/customs_security/data/customs_authority_submission_repository.dart';
 import 'package:markakalkan/features/customs_security/data/customs_security_repository.dart';
@@ -141,29 +143,30 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
   }
 
   Future<void> _createProfile() async {
-    final draft = await showDialog<CustomsProtectionProfileDraft>(
+    final result = await showDialog<_ProfileCreationResult>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _CreateProfileDialog(),
+      builder: (_) => _CreateProfileDialog(repository: _repository),
     );
-    if (draft == null || !mounted) return;
-    setState(() => _submitting = true);
-    try {
-      final created = await _repository.createProfile(draft);
-      if (!mounted) return;
+    if (result == null || !mounted) return;
+    if (result.activated) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${created.profileNumber} taslak profili oluşturuldu.'),
+          content: Text(
+            '${result.profile.profileNumber} profili aktifleştirildi.',
+          ),
+        ),
+      );
+      await _openProfile(result.profile);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result.profile.profileNumber} taslak profili oluşturuldu.',
+          ),
         ),
       );
       await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(customsSecurityErrorMessage(error))),
-      );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -907,8 +910,20 @@ class _ErrorPanel extends StatelessWidget {
   }
 }
 
+class _ProfileCreationResult {
+  const _ProfileCreationResult({
+    required this.profile,
+    required this.activated,
+  });
+
+  final CustomsProtectionProfile profile;
+  final bool activated;
+}
+
 class _CreateProfileDialog extends StatefulWidget {
-  const _CreateProfileDialog();
+  const _CreateProfileDialog({required this.repository});
+
+  final CustomsSecurityRepository repository;
 
   @override
   State<_CreateProfileDialog> createState() => _CreateProfileDialogState();
@@ -938,6 +953,17 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
   String? _serialVerificationMethodError;
   String? _originCountryError;
   String? _authorizedImportCountryError;
+  late final String _activationRequestId;
+  bool _activationConfirmed = false;
+  bool _submitting = false;
+  String? _submissionError;
+  List<String> _activationMissing = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _activationRequestId = generateCustomsRequestId();
+  }
 
   @override
   void dispose() {
@@ -1045,37 +1071,104 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
     validationMessage: 'Ülke kodu iki harfli ISO biçiminde olmalıdır. Örn. TR',
   );
 
-  void _submit() {
+  bool _flushPendingValues() {
     var pendingValuesValid = true;
     pendingValuesValid = _addProductCategory() && pendingValuesValid;
     pendingValuesValid = _addSerialVerificationMethod() && pendingValuesValid;
     pendingValuesValid = _addOriginCountry() && pendingValuesValid;
     pendingValuesValid = _addAuthorizedImportCountry() && pendingValuesValid;
-    if (!pendingValuesValid || !_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop(
-      CustomsProtectionProfileDraft(
-        profileName: _name.text,
-        rightHolderName: _rightHolder.text,
-        rightHolderReferenceIds: _split(_rights.text),
-        protectedProductIds: _split(_products.text),
-        productCategories: List.unmodifiable(_productCategories),
-        hsCodes: _split(_hsCodes.text),
-        authenticationInstructions: _instructions.text,
-        serialVerificationMethods: List.unmodifiable(
-          _serialVerificationMethods,
-        ),
-        securityFeatureSummaries: _split(_features.text),
-        originCountries: List.unmodifiable(_originCountries),
-        authorizedImportCountries: List.unmodifiable(
-          _authorizedImportCountries,
-        ),
-        riskCountryCodes: _split(
-          _riskCountries.text,
-        ).map((value) => value.toUpperCase()).toList(growable: false),
-        riskRouteSummaries: _split(_riskRoutes.text),
-        validUntil: _date(_validUntil.text),
-      ),
-    );
+    return pendingValuesValid;
+  }
+
+  CustomsProtectionProfileDraft _draft() => CustomsProtectionProfileDraft(
+    profileName: _name.text,
+    rightHolderName: _rightHolder.text,
+    rightHolderReferenceIds: _split(_rights.text),
+    protectedProductIds: _split(_products.text),
+    productCategories: List.unmodifiable(_productCategories),
+    hsCodes: _split(_hsCodes.text),
+    authenticationInstructions: _instructions.text,
+    serialVerificationMethods: List.unmodifiable(_serialVerificationMethods),
+    securityFeatureSummaries: _split(_features.text),
+    originCountries: List.unmodifiable(_originCountries),
+    authorizedImportCountries: List.unmodifiable(_authorizedImportCountries),
+    riskCountryCodes: _split(
+      _riskCountries.text,
+    ).map((value) => value.toUpperCase()).toList(growable: false),
+    riskRouteSummaries: _split(_riskRoutes.text),
+    validUntil: _date(_validUntil.text),
+  );
+
+  List<String> _missingForActivation() {
+    final missing = <String>[];
+    if (_name.text.trim().isEmpty) missing.add('Profil adı');
+    if (_rightHolder.text.trim().isEmpty) missing.add('Hak sahibi adı');
+    if (_split(_rights.text).isEmpty) {
+      missing.add('En az bir hak/tescil referansı');
+    }
+    if (_split(_products.text).isEmpty) {
+      missing.add('En az bir korunan ürün');
+    }
+    if (_instructions.text.trim().isEmpty) {
+      missing.add('Doğrulama talimatı');
+    }
+    final validUntil = _date(_validUntil.text);
+    if (_validUntil.text.trim().isNotEmpty &&
+        (validUntil == null || validUntil.isBefore(DateTime.now().toUtc()))) {
+      missing.add('Geçerlilik sonu geçmiş tarih olmamalı');
+    }
+    if (!_activationConfirmed) missing.add('Aktivasyon onayı');
+    return missing;
+  }
+
+  Future<void> _submit({required bool activate}) async {
+    if (_submitting) return;
+    if (!_flushPendingValues()) return;
+    final formValid = _formKey.currentState!.validate();
+    if (activate) {
+      final missing = _missingForActivation();
+      if (missing.isNotEmpty) {
+        setState(() {
+          _activationMissing = missing;
+          _submissionError = !_activationConfirmed
+              ? 'Aktivasyon için bilgilerin doğruluğunu açıkça onaylamalısınız.'
+              : null;
+        });
+        return;
+      }
+    }
+    if (!formValid) return;
+    final draft = _draft();
+    setState(() {
+      _submitting = true;
+      _submissionError = null;
+      _activationMissing = const [];
+    });
+    try {
+      final profile = activate
+          ? (await widget.repository.createAndActivateProfile(
+              draft,
+              requestId: _activationRequestId,
+            )).profile
+          : await widget.repository.createProfile(draft);
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pop(_ProfileCreationResult(profile: profile, activated: activate));
+    } catch (error) {
+      if (!mounted) return;
+      final message =
+          !activate ||
+              error is AppCheckUnavailableException ||
+              (error is FirebaseFunctionsException &&
+                  error.code == 'unauthenticated')
+          ? customsSecurityErrorMessage(error)
+          : 'Profil oluşturulamadı ve hiçbir aktivasyon değişikliği '
+                'kaydedilmedi. Bilgilerinizi kontrol edip yeniden deneyin.';
+      setState(() => _submissionError = message);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -1084,6 +1177,7 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
       title: const Text('Yeni Gümrük Koruma Profili'),
       content: SizedBox(
         width: 680,
+        height: MediaQuery.sizeOf(context).height * 0.58,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -1095,24 +1189,28 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
                   controller: _name,
                   label: 'Profil adı',
                   minimum: 3,
+                  onChanged: (_) => setState(() {}),
                 ),
                 _field(
                   key: 'customs-right-holder-name',
                   controller: _rightHolder,
                   label: 'Hak sahibi adı',
                   minimum: 2,
+                  onChanged: (_) => setState(() {}),
                 ),
                 _field(
                   key: 'customs-right-holder-references',
                   controller: _rights,
                   label: 'Hak sahipliği/tescil referansları',
                   hint: 'Virgül veya yeni satırla ayırın',
+                  onChanged: (_) => setState(() {}),
                 ),
                 _field(
                   key: 'customs-protected-products',
                   controller: _products,
                   label: 'Korunan ürün kimlikleri',
                   hint: 'Aktivasyon için en az bir ürün gerekir',
+                  onChanged: (_) => setState(() {}),
                 ),
                 _chipListField(
                   keyName: 'customs-product-categories',
@@ -1136,6 +1234,7 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
                   label: 'Orijinal ürün doğrulama talimatı',
                   minimum: 10,
                   maxLines: 4,
+                  onChanged: (_) => setState(() {}),
                 ),
                 _chipListField(
                   keyName: 'customs-serial-verification-methods',
@@ -1198,7 +1297,41 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
                         ? 'Tarih YYYY-AA-GG olmalıdır.'
                         : null;
                   },
+                  onChanged: (_) => setState(() {}),
                 ),
+                _ActivationChecklist(missing: _missingForActivation().toSet()),
+                CheckboxListTile(
+                  key: const ValueKey(
+                    'customs-profile-activation-confirmation',
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  value: _activationConfirmed,
+                  onChanged: _submitting
+                      ? null
+                      : (value) => setState(() {
+                          _activationConfirmed = value == true;
+                          _activationMissing = const [];
+                          _submissionError = null;
+                        }),
+                  title: const Text(
+                    'Profil bilgilerinin doğru, güncel ve resmî başvuru '
+                    'hazırlığında kullanılmaya uygun olduğunu onaylıyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (_activationMissing.isNotEmpty)
+                  _ActivationMissingPanel(items: _activationMissing),
+                if (_submissionError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      _submissionError!,
+                      key: const ValueKey('customs-profile-submit-error'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1206,13 +1339,24 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _submitting ? null : () => Navigator.of(context).pop(),
           child: const Text('Vazgeç'),
         ),
-        FilledButton(
-          key: const ValueKey('confirm-create-customs-profile'),
-          onPressed: _submit,
-          child: const Text('Taslak oluştur'),
+        OutlinedButton(
+          key: const ValueKey('save-customs-profile-draft'),
+          onPressed: _submitting ? null : () => _submit(activate: false),
+          child: const Text('Taslak olarak sakla'),
+        ),
+        FilledButton.icon(
+          key: const ValueKey('create-and-activate-customs-profile'),
+          onPressed: _submitting ? null : () => _submit(activate: true),
+          icon: _submitting
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.verified_outlined),
+          label: const Text('Kaydet ve aktifleştir'),
         ),
       ],
     );
@@ -1285,6 +1429,82 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
       ),
     );
   }
+}
+
+class _ActivationChecklist extends StatelessWidget {
+  const _ActivationChecklist({required this.missing});
+
+  final Set<String> missing;
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      'Profil adı',
+      'Hak sahibi adı',
+      'En az bir hak/tescil referansı',
+      'En az bir korunan ürün',
+      'Doğrulama talimatı',
+      'Geçerlilik sonu geçmiş tarih olmamalı',
+      'Aktivasyon onayı',
+    ];
+    return Container(
+      key: const ValueKey('customs-profile-activation-checklist'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8, bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Aktivasyon kontrol listesi'),
+          const SizedBox(height: 6),
+          for (final item in items)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  missing.contains(item)
+                      ? Icons.radio_button_unchecked
+                      : Icons.check_circle,
+                  size: 18,
+                  color: missing.contains(item)
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Colors.green.shade700,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(item)),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivationMissingPanel extends StatelessWidget {
+  const _ActivationMissingPanel({required this.items});
+
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('customs-profile-activation-missing'),
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    color: Theme.of(context).colorScheme.errorContainer,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Profili aktifleştirmek için aşağıdaki bilgileri tamamlayın:',
+        ),
+        for (final item in items) Text('• $item'),
+      ],
+    ),
+  );
 }
 
 class _CreateInterventionDialog extends StatefulWidget {
@@ -1641,6 +1861,7 @@ Widget _field({
   int minimum = 0,
   int maxLines = 1,
   String? Function(String?)? validator,
+  ValueChanged<String>? onChanged,
 }) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 12),
@@ -1649,6 +1870,7 @@ Widget _field({
       controller: controller,
       maxLines: maxLines,
       decoration: InputDecoration(labelText: label, hintText: hint),
+      onChanged: onChanged,
       validator:
           validator ??
           (value) {

@@ -5,6 +5,21 @@ import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.d
 
 import 'customs_security_test_fakes.dart';
 
+Future<void> fillActivationProfile(WidgetTester tester) async {
+  for (final entry in {
+    'customs-profile-name': 'Bosch Gümrük Profili',
+    'customs-right-holder-name': 'Robert Bosch GmbH',
+    'customs-right-holder-references': 'TR-MARKA-123',
+    'customs-protected-products': 'product-1',
+    'customs-authentication-instructions':
+        'Seri numarası ve güvenlik işaretleri birlikte doğrulanır.',
+  }.entries) {
+    final field = find.byKey(ValueKey(entry.key));
+    await tester.ensureVisible(field);
+    await tester.enterText(field, entry.value);
+  }
+}
+
 void main() {
   testWidgets('hub renders legally neutral hero and both workspaces', (
     tester,
@@ -115,9 +130,7 @@ void main() {
       find.byKey(const ValueKey('customs-authentication-instructions')),
       'Seri numarası ve ambalaj güvenlik işaretleri birlikte doğrulanır.',
     );
-    await tester.tap(
-      find.byKey(const ValueKey('confirm-create-customs-profile')),
-    );
+    await tester.tap(find.byKey(const ValueKey('save-customs-profile-draft')));
     await tester.pumpAndSettle();
 
     expect(repository.createProfileCalls, 1);
@@ -149,7 +162,7 @@ void main() {
     final input = find.byKey(const ValueKey('customs-origin-countries-input'));
     await tester.ensureVisible(input);
     await tester.enterText(input, 'TUR');
-    final submit = find.byKey(const ValueKey('confirm-create-customs-profile'));
+    final submit = find.byKey(const ValueKey('save-customs-profile-draft'));
     await tester.ensureVisible(submit);
     await tester.tap(submit);
     await tester.pumpAndSettle();
@@ -158,6 +171,191 @@ void main() {
     expect(
       find.text('Ülke kodu iki harfli ISO biçiminde olmalıdır. Örn. TR'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'activation shows confirmation and all missing requirements without a call',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository(profiles: const []);
+      await tester.binding.setSurfaceSize(const Size(700, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('create-customs-profile')));
+      await tester.pumpAndSettle();
+      expect(find.text('Kaydet ve aktifleştir'), findsOneWidget);
+      expect(find.text('Taslak olarak sakla'), findsOneWidget);
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(
+                const ValueKey('customs-profile-activation-confirmation'),
+              ),
+            )
+            .value,
+        false,
+      );
+      final validUntil = find.byKey(const ValueKey('customs-valid-until'));
+      await tester.ensureVisible(validUntil);
+      await tester.enterText(validUntil, '2020-01-01');
+
+      final activate = find.byKey(
+        const ValueKey('create-and-activate-customs-profile'),
+      );
+      await tester.ensureVisible(activate);
+      await tester.tap(activate);
+      await tester.pumpAndSettle();
+
+      expect(repository.createAndActivateProfileCalls, 0);
+      expect(
+        find.text(
+          'Profili aktifleştirmek için aşağıdaki bilgileri tamamlayın:',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('• En az bir hak/tescil referansı'), findsOneWidget);
+      expect(find.text('• En az bir korunan ürün'), findsOneWidget);
+      expect(
+        find.text('• Geçerlilik sonu geçmiş tarih olmamalı'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Aktivasyon için bilgilerin doğruluğunu açıkça onaylamalısınız.',
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'confirmed activation invokes once and opens active detail once',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository(profiles: const []);
+      var opened = 0;
+      String? openedId;
+      await tester.binding.setSurfaceSize(const Size(900, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CustomsSecurityHubPage(
+            repository: repository,
+            profileDetailOpener: (context, profileId) async {
+              opened++;
+              openedId = profileId;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('create-customs-profile')));
+      await tester.pumpAndSettle();
+      await fillActivationProfile(tester);
+      final pendingCountry = find.byKey(
+        const ValueKey('customs-origin-countries-input'),
+      );
+      await tester.ensureVisible(pendingCountry);
+      await tester.enterText(pendingCountry, ' tr ');
+      final confirmation = find.byKey(
+        const ValueKey('customs-profile-activation-confirmation'),
+      );
+      await tester.ensureVisible(confirmation);
+      await tester.tap(confirmation);
+      await tester.pump();
+      final activate = find.byKey(
+        const ValueKey('create-and-activate-customs-profile'),
+      );
+      await tester.ensureVisible(activate);
+      final button = tester.widget<FilledButton>(activate);
+      button.onPressed!();
+      button.onPressed!();
+      await tester.pumpAndSettle();
+
+      expect(repository.createAndActivateProfileCalls, 1);
+      expect(repository.createProfileCalls, 0);
+      expect(repository.transitionProfileCalls, 0);
+      expect(repository.lastProfileDraft?.originCountries, ['TR']);
+      expect(opened, 1);
+      expect(openedId, 'profile-activated');
+      expect(repository.profiles.single.status, 'active');
+    },
+  );
+
+  testWidgets('transport retry keeps the workflow request id', (tester) async {
+    final repository = FakeCustomsSecurityRepository(profiles: const [])
+      ..createAndActivateError = Exception('timeout')
+      ..createAndActivateFailsOnce = true
+      ..createAndActivateDuplicate = true;
+    await tester.binding.setSurfaceSize(const Size(900, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomsSecurityHubPage(
+          repository: repository,
+          profileDetailOpener: (_, _) async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('create-customs-profile')));
+    await tester.pumpAndSettle();
+    await fillActivationProfile(tester);
+    final confirmation = find.byKey(
+      const ValueKey('customs-profile-activation-confirmation'),
+    );
+    await tester.ensureVisible(confirmation);
+    await tester.tap(confirmation);
+    final activate = find.byKey(
+      const ValueKey('create-and-activate-customs-profile'),
+    );
+    await tester.ensureVisible(activate);
+    await tester.tap(activate);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(repository.createAndActivateProfileCalls, 1);
+    expect(
+      find.text(
+        'Profil oluşturulamadı ve hiçbir aktivasyon değişikliği '
+        'kaydedilmedi. Bilgilerinizi kontrol edip yeniden deneyin.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(activate);
+    await tester.pumpAndSettle();
+
+    expect(repository.createAndActivateProfileCalls, 2);
+    expect(repository.activationRequestIds.toSet().length, 1);
+    expect(repository.profiles.single.status, 'active');
+
+    await tester.tap(find.byKey(const ValueKey('create-customs-profile')));
+    await tester.pumpAndSettle();
+    await fillActivationProfile(tester);
+    final nextConfirmation = find.byKey(
+      const ValueKey('customs-profile-activation-confirmation'),
+    );
+    await tester.ensureVisible(nextConfirmation);
+    await tester.tap(nextConfirmation);
+    final nextActivate = find.byKey(
+      const ValueKey('create-and-activate-customs-profile'),
+    );
+    await tester.ensureVisible(nextActivate);
+    await tester.tap(nextActivate);
+    await tester.pumpAndSettle();
+
+    expect(repository.createAndActivateProfileCalls, 3);
+    expect(
+      repository.activationRequestIds[0],
+      repository.activationRequestIds[1],
+    );
+    expect(
+      repository.activationRequestIds[2],
+      isNot(repository.activationRequestIds[0]),
     );
   });
 

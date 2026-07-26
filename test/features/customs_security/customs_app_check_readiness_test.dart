@@ -10,6 +10,35 @@ import 'package:markakalkan/features/customs_security/presentation/customs_secur
 
 void main() {
   test(
+    'atomic profile activation waits for readiness before one invocation',
+    () async {
+      final readiness = Completer<void>();
+      var invocations = 0;
+      final repository = CallableCustomsSecurityRepository(
+        ensureAppCheckReady: () => readiness.future,
+        callable: (name, _) async {
+          expect(name, 'createAndActivateCustomsProtectionProfile');
+          invocations++;
+          return <String, dynamic>{};
+        },
+      );
+      final operation = repository.createAndActivateProfile(
+        const CustomsProtectionProfileDraft(
+          profileName: 'Profil',
+          rightHolderName: 'Hak sahibi',
+          authenticationInstructions: 'Doğrulama talimatı yeterince uzundur.',
+        ),
+        requestId: '123e4567-e89b-42d3-a456-426614174000',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(invocations, 0);
+      readiness.complete();
+      await expectLater(operation, throwsFormatException);
+      expect(invocations, 1);
+    },
+  );
+
+  test(
     'protected transition waits for readiness before one invocation',
     () async {
       final readiness = Completer<void>();
