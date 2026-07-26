@@ -43,6 +43,9 @@ const PACKAGE_COLLECTION = "customs_submission_packages";
 const RESPONSE_COLLECTION = "customs_submission_responses";
 const EVENT_COLLECTION = "customs_submission_events";
 const MAX_SCOPE = 200;
+const ARTIFACT_SCOPE_CONTRACT =
+  "customs-authority-submission-artifact-scope-v1";
+const MAX_ARTIFACT_SCOPE_ID = 128;
 const MAX_SUBMITTED_AT_FUTURE_MS = 5 * 60 * 1000;
 const MAX_SUBMITTED_AT_AGE_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 const MAX_OFFICIAL_DATE_AFTER_RECEIPT_MS = 24 * 60 * 60 * 1000;
@@ -263,6 +266,37 @@ function safePackage(id, data) {
     generatedByUid: data.generatedByUid,
     immutable: data.immutable === true,
     ...safeArtifactSummary(data),
+  };
+}
+
+function validArtifactScopeId(value) {
+  return typeof value === "string" &&
+    value.length <= MAX_ARTIFACT_SCOPE_ID &&
+    value.trim().length > 0 &&
+    value === value.trim() &&
+    !/[\r\n]/.test(value);
+}
+
+function artifactScope(data, context) {
+  const tenantValid = validArtifactScopeId(data.tenantId);
+  const brandValid = validArtifactScopeId(data.canonicalBrandId);
+  if (tenantValid && data.tenantId !== context.tenantId) {
+    throw new AuthoritySubmissionError(
+        "submission.not_found",
+        "submission not found",
+    );
+  }
+  if (brandValid && data.canonicalBrandId !== context.brandId) {
+    throw new AuthoritySubmissionError(
+        "submission.not_found",
+        "submission not found",
+    );
+  }
+  if (!tenantValid || !brandValid) return null;
+  return {
+    contractVersion: ARTIFACT_SCOPE_CONTRACT,
+    tenantId: context.tenantId,
+    canonicalBrandId: context.brandId,
   };
 }
 
@@ -1558,7 +1592,20 @@ function createAuthoritySubmissionService({
     async submissionDetail(raw, invocation) {
       const request = detailRequest(raw);
       const context = await contextFor(request, invocation, false);
-      const submission = await submissionSnapshot({submissionId: request.submissionId, context});
+      const submissionRef = db.collection(SUBMISSION_COLLECTION)
+          .doc(request.submissionId);
+      const submissionSnapshot = await submissionRef.get();
+      if (!submissionSnapshot.exists) {
+        throw new AuthoritySubmissionError(
+            "submission.not_found",
+            "submission not found",
+        );
+      }
+      const submission = {
+        ref: submissionRef,
+        data: submissionSnapshot.data() || {},
+      };
+      const scope = artifactScope(submission.data, context);
       const [events, packages, responses] = await Promise.all([
         boundedQuery(db.collection(EVENT_COLLECTION).where("submissionId", "==", request.submissionId), "submission event scope too large"),
         boundedQuery(db.collection(PACKAGE_COLLECTION).where("submissionId", "==", request.submissionId), "submission package scope too large"),
@@ -1584,6 +1631,7 @@ function createAuthoritySubmissionService({
         "verified" : "record_count_or_hash_mismatch";
       return {
         contractVersion: "customs-authority-submission-detail-v1",
+        scope,
         submission: safeSubmission(request.submissionId, submission.data),
         packages: safePackages,
         responses: safeResponses,
@@ -1597,12 +1645,14 @@ function createAuthoritySubmissionService({
 }
 
 module.exports = {
+  ARTIFACT_SCOPE_CONTRACT,
   EVENT_COLLECTION,
   PACKAGE_COLLECTION,
   RESPONSE_COLLECTION,
   SUBMISSION_COLLECTION,
   SUBMISSION_TRANSITIONS,
   createAuthoritySubmissionService,
+  artifactScope,
   duplicateCheckKey,
   paginate,
   requireTransition,

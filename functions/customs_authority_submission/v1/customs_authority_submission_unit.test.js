@@ -9,7 +9,10 @@ const {
   packageRequest,
 } = require("./contracts");
 const {
+  ARTIFACT_SCOPE_CONTRACT,
+  artifactScope,
   createAuthoritySubmissionService,
+  safePackage,
 } = require("./service");
 
 class Snapshot {
@@ -1037,6 +1040,8 @@ test("list and detail are tenant-scoped read-only with verified chain", async ()
   assert.equal(list.readOnly, true);
   assert.equal(list.writesPerformed, 0);
   assert.equal(list.items.length, 1);
+  assert.equal(Object.hasOwn(list, "scope"), false);
+  assert.equal(Object.hasOwn(list.items[0], "scope"), false);
   const detail = await service.submissionDetail({
     contractVersion: CONTRACT.detailRequest,
     submissionId,
@@ -1045,12 +1050,136 @@ test("list and detail are tenant-scoped read-only with verified chain", async ()
   assert.equal(detail.integrityStatus, "verified");
   assert.equal(detail.packages.length, 1);
   assert.equal(detail.events.length, 6);
+  assert.deepEqual(detail.scope, {
+    contractVersion: ARTIFACT_SCOPE_CONTRACT,
+    tenantId: "tenant-1",
+    canonicalBrandId: "brand-1",
+  });
 
   db.collections.customs_authority_submissions[0].data.tenantId = "tenant-other";
   await assert.rejects(() => service.submissionDetail({
     contractVersion: CONTRACT.detailRequest,
     submissionId,
   }, {uid: "user-1"}), /not found/);
+});
+
+test("detail artifact scope is server-derived, strict and isolated", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const submissionId = await approvedSubmission(service);
+  const record = db.collections.customs_authority_submissions[0].data;
+
+  for (const spoof of [
+    {tenantId: "tenant-spoof"},
+    {canonicalBrandId: "brand-spoof"},
+  ]) {
+    const detail = await service.submissionDetail({
+      contractVersion: CONTRACT.detailRequest,
+      submissionId,
+      ...spoof,
+    }, {uid: "user-1"});
+    assert.deepEqual(detail.scope, {
+      contractVersion: ARTIFACT_SCOPE_CONTRACT,
+      tenantId: "tenant-1",
+      canonicalBrandId: "brand-1",
+    });
+  }
+
+  await assert.rejects(
+      () => service.submissionDetail({
+        contractVersion: CONTRACT.detailRequest,
+        submissionId,
+      }, {}),
+      /authentication/,
+  );
+
+  record.tenantId = "tenant-other";
+  await assert.rejects(
+      () => service.submissionDetail({
+        contractVersion: CONTRACT.detailRequest,
+        submissionId,
+      }, {uid: "user-1"}),
+      /not found/,
+  );
+  record.tenantId = "tenant-1";
+  record.canonicalBrandId = "brand-other";
+  await assert.rejects(
+      () => service.submissionDetail({
+        contractVersion: CONTRACT.detailRequest,
+        submissionId,
+      }, {uid: "user-1"}),
+      /not found/,
+  );
+});
+
+test("legacy and invalid artifact scope is wholly null", async () => {
+  const context = {
+    tenantId: "tenant-1",
+    brandId: "brand-1",
+  };
+  const invalidValues = [
+    null,
+    42,
+    {},
+    [],
+    "",
+    " ",
+    "tenant\rvalue",
+    "tenant\nvalue",
+    "x".repeat(129),
+    " tenant-1",
+  ];
+  for (const value of invalidValues) {
+    assert.equal(artifactScope({
+      tenantId: value,
+      canonicalBrandId: "brand-1",
+    }, context), null);
+    assert.equal(artifactScope({
+      tenantId: "tenant-1",
+      canonicalBrandId: value,
+    }, context), null);
+  }
+
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const submissionId = await approvedSubmission(service);
+  const record = db.collections.customs_authority_submissions[0].data;
+  delete record.tenantId;
+  let detail = await service.submissionDetail({
+    contractVersion: CONTRACT.detailRequest,
+    submissionId,
+  }, {uid: "user-1"});
+  assert.equal(detail.scope, null);
+
+  record.tenantId = "tenant-1";
+  delete record.canonicalBrandId;
+  detail = await service.submissionDetail({
+    contractVersion: CONTRACT.detailRequest,
+    submissionId,
+  }, {uid: "user-1"});
+  assert.equal(detail.scope, null);
+});
+
+test("safe package artifact response remains unchanged by scope bridge", () => {
+  const value = safePackage("package-1", {
+    submissionId: "submission-1",
+    version: 1,
+    packageType: "fsmh_application_package",
+    sourceSnapshot: {},
+    documentManifest: [],
+    evidenceManifest: [],
+    redactionManifest: [],
+    coverLetterText: "Üst yazı",
+    authoritySummary: "Özet",
+    legalNeutralityStatement: "Tarafsızlık",
+    aggregateHashAlgorithm: "SHA-256",
+    aggregateHash: "a".repeat(64),
+    generatedAt: "2026-07-25T10:00:00.000Z",
+    generatedByUid: "user-1",
+    immutable: true,
+  });
+  assert.equal(value.artifactStatus, "legacy_not_materialized");
+  assert.equal(Object.hasOwn(value, "scope"), false);
 });
 
 test("transaction failure leaves no partial authority-submission writes", async () => {
