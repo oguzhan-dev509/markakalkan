@@ -10,7 +10,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await AppCheckBootstrap.instance.initialize();
+  try {
+    await AppCheckBootstrap.instance.initialize();
+  } on AppCheckUnavailableException {
+    // Protected writes remain gated and can be retried without exposing details.
+  }
 
   final riskLifecycle = RiskOperationsLifecycleProvider.instance;
   riskLifecycle.observeAuthentication(

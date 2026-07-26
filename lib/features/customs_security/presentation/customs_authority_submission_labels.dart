@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 
 const customsAuthoritySubmissionStatuses = <String>[
   'draft',
@@ -145,6 +146,10 @@ Color customsAuthoritySubmissionStatusColor(String status) {
 }
 
 String customsAuthoritySubmissionErrorMessage(Object error) {
+  if (error is AppCheckUnavailableException) {
+    return 'Uygulama güvenlik doğrulaması tamamlanamadı. '
+        'Bağlantınızı kontrol edip yeniden deneyin.';
+  }
   if (error is FirebaseFunctionsException) {
     return switch (error.code) {
       'unauthenticated' => 'Devam etmek için oturum açmanız gerekir.',

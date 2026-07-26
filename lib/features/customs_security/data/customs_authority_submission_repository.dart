@@ -1,6 +1,13 @@
 import 'dart:math';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
+
+typedef CustomsAuthorityCallable =
+    Future<Map<String, dynamic>> Function(
+      String name,
+      Map<String, dynamic> request,
+    );
 
 abstract interface class CustomsAuthoritySubmissionRepository {
   Future<CustomsAuthoritySubmissionList> listSubmissions({
@@ -37,20 +44,38 @@ class CallableCustomsAuthoritySubmissionRepository
   CallableCustomsAuthoritySubmissionRepository({
     FirebaseFunctions? functions,
     String Function()? requestIdFactory,
-  }) : _functions =
-           functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3'),
+    Future<void> Function()? ensureAppCheckReady,
+    CustomsAuthorityCallable? callable,
+  }) : _functions = callable == null
+           ? functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3')
+           : null,
        _requestIdFactory =
-           requestIdFactory ?? generateCustomsAuthoritySubmissionRequestId;
+           requestIdFactory ?? generateCustomsAuthoritySubmissionRequestId,
+       _ensureAppCheckReady =
+           ensureAppCheckReady ?? AppCheckBootstrap.instance.ensureReady,
+       _callable = callable;
 
-  final FirebaseFunctions _functions;
+  final FirebaseFunctions? _functions;
   final String Function() _requestIdFactory;
+  final Future<void> Function() _ensureAppCheckReady;
+  final CustomsAuthorityCallable? _callable;
 
   Future<Map<String, dynamic>> _call(
     String name,
     Map<String, dynamic> request,
   ) async {
-    final result = await _functions.httpsCallable(name).call(request);
+    final injected = _callable;
+    if (injected != null) return injected(name, request);
+    final result = await _functions!.httpsCallable(name).call(request);
     return _map(_normalize(result.data));
+  }
+
+  Future<Map<String, dynamic>> _callProtected(
+    String name,
+    Map<String, dynamic> request,
+  ) async {
+    await _ensureAppCheckReady();
+    return _call(name, request);
   }
 
   @override
@@ -81,7 +106,7 @@ class CallableCustomsAuthoritySubmissionRepository
   Future<CustomsAuthoritySubmission> createSubmission(
     CustomsAuthoritySubmissionDraft draft,
   ) async {
-    final response = await _call('createCustomsAuthoritySubmission', {
+    final response = await _callProtected('createCustomsAuthoritySubmission', {
       'contractVersion': 'customs-authority-submission-create-request-v1',
       ...draft.toRequestMap(),
       'requestId': _requestIdFactory(),
@@ -98,7 +123,7 @@ class CallableCustomsAuthoritySubmissionRepository
     required String submissionId,
     required CustomsAuthoritySubmissionUpdateDraft draft,
   }) async {
-    final response = await _call('updateCustomsAuthoritySubmission', {
+    final response = await _callProtected('updateCustomsAuthoritySubmission', {
       'contractVersion': 'customs-authority-submission-update-request-v1',
       'submissionId': submissionId,
       ...draft.toRequestMap(),
@@ -132,7 +157,7 @@ class CallableCustomsAuthoritySubmissionRepository
       'externalSubmissionStatement',
       externalSubmissionStatement,
     );
-    final response = await _call(
+    final response = await _callProtected(
       'transitionCustomsAuthoritySubmission',
       request,
     );

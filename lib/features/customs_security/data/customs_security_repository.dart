@@ -1,6 +1,13 @@
 import 'dart:math';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
+
+typedef CustomsCallable =
+    Future<Map<String, dynamic>> Function(
+      String name,
+      Map<String, dynamic> request,
+    );
 
 abstract interface class CustomsSecurityRepository {
   Future<CustomsProtectionProfileList> listProfiles({
@@ -50,19 +57,37 @@ class CallableCustomsSecurityRepository implements CustomsSecurityRepository {
   CallableCustomsSecurityRepository({
     FirebaseFunctions? functions,
     String Function()? requestIdFactory,
-  }) : _functions =
-           functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3'),
-       _requestIdFactory = requestIdFactory ?? generateCustomsRequestId;
+    Future<void> Function()? ensureAppCheckReady,
+    CustomsCallable? callable,
+  }) : _functions = callable == null
+           ? functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3')
+           : null,
+       _requestIdFactory = requestIdFactory ?? generateCustomsRequestId,
+       _ensureAppCheckReady =
+           ensureAppCheckReady ?? AppCheckBootstrap.instance.ensureReady,
+       _callable = callable;
 
-  final FirebaseFunctions _functions;
+  final FirebaseFunctions? _functions;
   final String Function() _requestIdFactory;
+  final Future<void> Function() _ensureAppCheckReady;
+  final CustomsCallable? _callable;
 
   Future<Map<String, dynamic>> _call(
     String name,
     Map<String, dynamic> request,
   ) async {
-    final result = await _functions.httpsCallable(name).call(request);
+    final injected = _callable;
+    if (injected != null) return injected(name, request);
+    final result = await _functions!.httpsCallable(name).call(request);
     return _map(_normalize(result.data));
+  }
+
+  Future<Map<String, dynamic>> _callProtected(
+    String name,
+    Map<String, dynamic> request,
+  ) async {
+    await _ensureAppCheckReady();
+    return _call(name, request);
   }
 
   @override
@@ -86,7 +111,7 @@ class CallableCustomsSecurityRepository implements CustomsSecurityRepository {
   Future<CustomsProtectionProfile> createProfile(
     CustomsProtectionProfileDraft draft,
   ) async {
-    final response = await _call('createCustomsProtectionProfile', {
+    final response = await _callProtected('createCustomsProtectionProfile', {
       'contractVersion': 'customs-protection-profile-create-request-v1',
       ...draft.toRequestMap(),
       'requestId': _requestIdFactory(),
@@ -116,13 +141,14 @@ class CallableCustomsSecurityRepository implements CustomsSecurityRepository {
     required String nextStatus,
     required String reason,
   }) async {
-    final response = await _call('transitionCustomsProtectionProfile', {
-      'contractVersion': 'customs-protection-profile-transition-request-v1',
-      'profileId': profileId,
-      'nextStatus': nextStatus,
-      'reason': reason,
-      'requestId': _requestIdFactory(),
-    });
+    final response =
+        await _callProtected('transitionCustomsProtectionProfile', {
+          'contractVersion': 'customs-protection-profile-transition-request-v1',
+          'profileId': profileId,
+          'nextStatus': nextStatus,
+          'reason': reason,
+          'requestId': _requestIdFactory(),
+        });
     _requireWriteResult(
       response,
       'customs-protection-profile-transition-result-v1',
@@ -158,7 +184,7 @@ class CallableCustomsSecurityRepository implements CustomsSecurityRepository {
   Future<CustomsBorderIntervention> createIntervention(
     CustomsBorderInterventionDraft draft,
   ) async {
-    final response = await _call('createCustomsBorderIntervention', {
+    final response = await _callProtected('createCustomsBorderIntervention', {
       'contractVersion': 'customs-border-intervention-create-request-v1',
       ...draft.toRequestMap(),
       'requestId': _requestIdFactory(),
@@ -207,7 +233,7 @@ class CallableCustomsSecurityRepository implements CustomsSecurityRepository {
     if (_present(authorityReference)) {
       request['authorityReference'] = authorityReference!.trim();
     }
-    final response = await _call(
+    final response = await _callProtected(
       'transitionCustomsBorderIntervention',
       request,
     );
