@@ -20,6 +20,7 @@ const {
   transitionRequest,
   updateRequest,
 } = require("./contracts");
+const {safeArtifactSummary} = require("./artifact");
 
 const SUBMISSION_TRANSITIONS = Object.freeze({
   draft: Object.freeze(["awaiting_human_review", "archived"]),
@@ -261,6 +262,7 @@ function safePackage(id, data) {
     generatedAt: data.generatedAt,
     generatedByUid: data.generatedByUid,
     immutable: data.immutable === true,
+    ...safeArtifactSummary(data),
   };
 }
 

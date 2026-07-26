@@ -141,10 +141,12 @@ const {
 } = require("./customs_security/v1");
 const {
   buildAppendCustomsAuthorityResponse,
+  buildAuthorizeCustomsSubmissionPackageDownload,
   buildCreateCustomsAuthoritySubmission,
   buildGenerateCustomsSubmissionPackage,
   buildGetCustomsAuthoritySubmissionDetail,
   buildListCustomsAuthoritySubmissions,
+  buildMaterializeCustomsSubmissionPackageArtifact,
   buildRecordCustomsSubmissionReceipt,
   buildRecordCustomsExternalSubmission,
   buildRecordCustomsAuthorityOutcome,
@@ -331,6 +333,10 @@ exports.listCustomsAuthoritySubmissions =
     buildListCustomsAuthoritySubmissions({db});
 exports.getCustomsAuthoritySubmissionDetail =
     buildGetCustomsAuthoritySubmissionDetail({db});
+exports.materializeCustomsSubmissionPackageArtifact =
+    buildMaterializeCustomsSubmissionPackageArtifact({db, admin});
+exports.authorizeCustomsSubmissionPackageDownload =
+    buildAuthorizeCustomsSubmissionPackageDownload({db, admin});
 exports.promoteRiskOperationToSharedRisk =
     buildPromoteRiskOperationToSharedRisk({db});
 exports.listCaseEvidenceCenter =
