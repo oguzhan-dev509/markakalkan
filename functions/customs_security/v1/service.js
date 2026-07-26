@@ -12,6 +12,7 @@ const {
   interventionTransitionRequest,
   interventionUpdateRequest,
   profileCreateRequest,
+  profileCreateAndActivateRequest,
   profileDetailRequest,
   profileListRequest,
   profileTransitionRequest,
@@ -153,6 +154,9 @@ function profileData(request) {
   delete result.canonicalBrandId;
   delete result.profileId;
   delete result.requestId;
+  delete result.activationConfirmation;
+  delete result.activationConfirmationVersion;
+  delete result.activationReason;
   return result;
 }
 
@@ -396,6 +400,121 @@ function createCustomsSecurityService({
   }
 
   return Object.freeze({
+    async createAndActivateProfile(raw, invocation) {
+      const request = profileCreateAndActivateRequest(raw);
+      const context = await contextFor(request, invocation, true);
+      const recordedAt = nowIso(clock);
+      const requestFingerprint = fingerprint(request);
+      const profileId = sha256(`${context.tenantId}|${context.brandId}|customs-profile|${request.requestId}`);
+      const profileRef = db.collection(PROFILE_COLLECTION).doc(profileId);
+      const events = [1, 2, 3].map((sequence) =>
+        eventRef(db, context, "protection_profile", profileId, `${request.requestId}|${sequence}`),
+      );
+      return db.runTransaction(async (transaction) => {
+        const [existing, ...existingEvents] = await Promise.all([
+          transaction.get(profileRef),
+          ...events.map((event) => transaction.get(event.ref)),
+        ]);
+        if (existing.exists) {
+          const data = scoped(existing, context, "profile.not_found");
+          assertFingerprint(data, requestFingerprint);
+          if (data.status !== "active" || existingEvents.some((snapshot) => !snapshot.exists)) {
+            throw new CustomsSecurityError("internal", "incomplete create-and-activate state");
+          }
+          for (const snapshot of existingEvents) {
+            assertFingerprint(snapshot.data() || {}, requestFingerprint);
+          }
+          return {
+            contractVersion: "customs-protection-profile-create-and-activate-result-v1",
+            ok: true,
+            duplicate: true,
+            transactionApplied: false,
+            profile: safeProfile(profileId, data),
+          };
+        }
+        if (existingEvents.some((snapshot) => snapshot.exists)) {
+          throw new CustomsSecurityError("internal", "orphan customs event");
+        }
+
+        const base = profileData(request);
+        requireProfileTransition("draft", "under_review", base, recordedAt);
+        requireProfileTransition("under_review", "active", base, recordedAt);
+        const profileNumber = `GKP-${recordedAt.slice(0, 4)}-${profileId.slice(0, 8).toUpperCase()}`;
+        const data = {
+          contractVersion: "customs-protection-profile-v1",
+          schemaVersion: "customs-protection-profile-schema-v1",
+          tenantId: context.tenantId,
+          canonicalBrandId: context.brandId,
+          profileNumber,
+          status: "active",
+          ...base,
+          requestId: request.requestId,
+          requestFingerprint,
+          createdByUid: invocation.uid,
+          createdAt: recordedAt,
+          statusReason: request.activationReason,
+          statusChangedAt: recordedAt,
+          statusChangedByUid: invocation.uid,
+          updatedByUid: invocation.uid,
+          updatedAt: recordedAt,
+          eventCount: 3,
+          lastEventId: events[2].id,
+          lastEventType: "protection_profile_status_transitioned",
+          lastEventAt: recordedAt,
+        };
+        const eventInputs = [
+          {
+            sequence: 1,
+            previousStatus: null,
+            nextStatus: "draft",
+            eventType: "protection_profile_created",
+            summary: `${profileNumber} gümrük koruma profili oluşturuldu.`,
+            reason: "Gümrük koruma profili ilk taslak kaydı.",
+            previousEventId: null,
+          },
+          {
+            sequence: 2,
+            previousStatus: "draft",
+            nextStatus: "under_review",
+            eventType: "protection_profile_status_transitioned",
+            summary: `${profileNumber} profil durumu under_review olarak değiştirildi.`,
+            reason: "owner_confirmed_create_and_activate (customs-profile-activation-confirmation-v1): Hak sahibi/yetkili kullanıcı beyanıyla inceleme adımı kaydedildi.",
+            previousEventId: events[0].id,
+          },
+          {
+            sequence: 3,
+            previousStatus: "under_review",
+            nextStatus: "active",
+            eventType: "protection_profile_status_transitioned",
+            summary: `${profileNumber} profil durumu active olarak değiştirildi.`,
+            reason: request.activationReason,
+            previousEventId: events[1].id,
+          },
+        ];
+        transaction.create(profileRef, data);
+        for (let index = 0; index < events.length; index += 1) {
+          transaction.create(events[index].ref, eventDocument({
+            context,
+            entityType: "protection_profile",
+            entityId: profileId,
+            profileId,
+            ...eventInputs[index],
+            actorUid: invocation.uid,
+            recordedAt,
+            requestId: request.requestId,
+            requestFingerprint,
+          }));
+        }
+        return {
+          contractVersion: "customs-protection-profile-create-and-activate-result-v1",
+          ok: true,
+          duplicate: false,
+          transactionApplied: true,
+          profile: safeProfile(profileId, data),
+        };
+      });
+    },
+
     async createProfile(raw, invocation) {
       const request = profileCreateRequest(raw);
       const context = await contextFor(request, invocation, true);

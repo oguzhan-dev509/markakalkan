@@ -129,6 +129,7 @@ const {
 const {
   buildCreateCustomsBorderIntervention,
   buildCreateCustomsProtectionProfile,
+  buildCreateAndActivateCustomsProtectionProfile,
   buildGetCustomsBorderInterventionDetail,
   buildGetCustomsProtectionProfileDetail,
   buildListCustomsBorderInterventions,
@@ -288,6 +289,8 @@ exports.listRiskOperationsReadModel =
     buildListRiskOperationsReadModel({db});
 exports.createCustomsProtectionProfile =
     buildCreateCustomsProtectionProfile({db});
+exports.createAndActivateCustomsProtectionProfile =
+    buildCreateAndActivateCustomsProtectionProfile({db});
 exports.updateCustomsProtectionProfile =
     buildUpdateCustomsProtectionProfile({db});
 exports.transitionCustomsProtectionProfile =

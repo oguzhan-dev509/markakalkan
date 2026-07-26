@@ -83,6 +83,7 @@ const DECLARED_UNITS = Object.freeze([
 ]);
 const CONTRACT = Object.freeze({
   profileCreateRequest: "customs-protection-profile-create-request-v1",
+  profileCreateAndActivateRequest: "customs-protection-profile-create-and-activate-request-v1",
   profileUpdateRequest: "customs-protection-profile-update-request-v1",
   profileTransitionRequest: "customs-protection-profile-transition-request-v1",
   profileListRequest: "customs-protection-profile-list-request-v1",
@@ -319,6 +320,31 @@ function profileCreateRequest(raw) {
     tenantId: cleanText(raw.tenantId, "tenantId", 1, 128, true),
     canonicalBrandId: cleanText(raw.canonicalBrandId, "canonicalBrandId", 1, 128, true),
     ...profilePayload(raw),
+    requestId: uuid(raw.requestId),
+  });
+}
+
+function profileCreateAndActivateRequest(raw) {
+  strict(raw, CONTRACT.profileCreateAndActivateRequest, [
+    ...PROFILE_FIELDS,
+    "activationConfirmation",
+    "activationConfirmationVersion",
+    "activationReason",
+  ]);
+  if (raw.activationConfirmation !== true) {
+    throw new CustomsSecurityError("invalid-argument", "activationConfirmation must be true");
+  }
+  if (raw.activationConfirmationVersion !== "customs-profile-activation-confirmation-v1") {
+    throw new CustomsSecurityError("invalid-argument", "activationConfirmationVersion invalid");
+  }
+  return Object.freeze({
+    contractVersion: raw.contractVersion,
+    tenantId: cleanText(raw.tenantId, "tenantId", 1, 128, true),
+    canonicalBrandId: cleanText(raw.canonicalBrandId, "canonicalBrandId", 1, 128, true),
+    ...profilePayload(raw),
+    activationConfirmation: true,
+    activationConfirmationVersion: raw.activationConfirmationVersion,
+    activationReason: cleanText(raw.activationReason, "activationReason", 10, 2000),
     requestId: uuid(raw.requestId),
   });
 }
@@ -629,6 +655,7 @@ module.exports = {
   interventionTransitionRequest,
   interventionUpdateRequest,
   profileCreateRequest,
+  profileCreateAndActivateRequest,
   profileDetailRequest,
   profileListRequest,
   profileTransitionRequest,

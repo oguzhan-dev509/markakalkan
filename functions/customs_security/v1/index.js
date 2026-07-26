@@ -1,6 +1,7 @@
 const {
   buildCreateCustomsBorderIntervention,
   buildCreateCustomsProtectionProfile,
+  buildCreateAndActivateCustomsProtectionProfile,
   buildGetCustomsBorderInterventionDetail,
   buildGetCustomsProtectionProfileDetail,
   buildListCustomsBorderInterventions,
@@ -14,6 +15,7 @@ const {
 module.exports = {
   buildCreateCustomsBorderIntervention,
   buildCreateCustomsProtectionProfile,
+  buildCreateAndActivateCustomsProtectionProfile,
   buildGetCustomsBorderInterventionDetail,
   buildGetCustomsProtectionProfileDetail,
   buildListCustomsBorderInterventions,

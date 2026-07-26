@@ -65,6 +65,7 @@ function createHandler(method, {
       log.info("customs security callable completed", {
         method,
         duplicate: result.duplicate === true,
+        transactionApplied: result.transactionApplied === true,
         transactionCommitted: result.transactionCommitted === true,
         readOnly: result.readOnly === true,
       });
@@ -89,6 +90,9 @@ function build(method, options, dependencies) {
 
 function buildCreateCustomsProtectionProfile({db}) {
   return build("createProfile", WRITE_OPTIONS, {db});
+}
+function buildCreateAndActivateCustomsProtectionProfile({db}) {
+  return build("createAndActivateProfile", WRITE_OPTIONS, {db});
 }
 function buildUpdateCustomsProtectionProfile({db}) {
   return build("updateProfile", WRITE_OPTIONS, {db});
@@ -123,6 +127,7 @@ module.exports = {
   WRITE_OPTIONS,
   buildCreateCustomsBorderIntervention,
   buildCreateCustomsProtectionProfile,
+  buildCreateAndActivateCustomsProtectionProfile,
   buildGetCustomsBorderInterventionDetail,
   buildGetCustomsProtectionProfileDetail,
   buildListCustomsBorderInterventions,

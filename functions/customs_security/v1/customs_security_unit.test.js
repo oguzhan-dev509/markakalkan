@@ -7,9 +7,15 @@ const {
   fingerprint,
   interventionCreateRequest,
   interventionTransitionRequest,
+  profileCreateAndActivateRequest,
   profileCreateRequest,
 } = require("./contracts");
-const {READ_OPTIONS, WRITE_OPTIONS, createHandler} = require("./callable");
+const {
+  READ_OPTIONS,
+  WRITE_OPTIONS,
+  buildCreateAndActivateCustomsProtectionProfile,
+  createHandler,
+} = require("./callable");
 const {createCustomsSecurityService} = require("./service");
 
 function assertNoUndefined(value, path = "root") {
@@ -205,6 +211,16 @@ const profilePayload = (requestId = "123e4567-e89b-42d3-a456-426614174301") => (
   requestId,
 });
 
+const createAndActivatePayload = (
+    requestId = "123e4567-e89b-42d3-a456-426614174311",
+) => ({
+  ...profilePayload(requestId),
+  contractVersion: CONTRACT.profileCreateAndActivateRequest,
+  activationConfirmation: true,
+  activationConfirmationVersion: "customs-profile-activation-confirmation-v1",
+  activationReason: "Hak ve ürün dayanakları yetkili kullanıcı tarafından doğrulandı.",
+});
+
 function interventionPayload(profileId, requestId = "123e4567-e89b-42d3-a456-426614174401") {
   return {
     contractVersion: CONTRACT.interventionCreateRequest,
@@ -338,6 +354,111 @@ test("profile lifecycle requires review rights and product basis", async () => {
   }, {uid: "user-1"});
   assert.equal(active.profile.status, "active");
   assert.equal(db.collections.customs_intervention_events.length, 3);
+});
+
+test("create-and-activate contract requires explicit versioned confirmation", async () => {
+  assert.equal(
+      profileCreateAndActivateRequest(createAndActivatePayload()).activationConfirmation,
+      true,
+  );
+  for (const invalid of [
+    {...createAndActivatePayload(), activationConfirmation: false},
+    {...createAndActivatePayload(), activationConfirmation: undefined},
+    {...createAndActivatePayload(), activationConfirmationVersion: "old-version"},
+    {...createAndActivatePayload(), activationReason: "short"},
+  ]) {
+    assert.throws(() => profileCreateAndActivateRequest(invalid), /activation|contract/);
+    const db = new FakeDb(baseCollections());
+    const service = createCustomsSecurityService({db, clock: clock(), resolveContext});
+    await assert.rejects(
+        () => service.createAndActivateProfile(invalid, {uid: "user-1"}),
+        /activation|contract/,
+    );
+    assert.equal(db.writes, 0);
+  }
+});
+
+test("create-and-activate rejects unmet activation prerequisites without writes", async () => {
+  const variants = [
+    {...createAndActivatePayload(), rightHolderReferenceIds: []},
+    {...createAndActivatePayload(), protectedProductIds: []},
+    {
+      ...createAndActivatePayload(),
+      validFrom: "2026-07-01T00:00:00.000Z",
+      validUntil: "2026-07-24T23:59:59.000Z",
+    },
+  ];
+  for (const payload of variants) {
+    const db = new FakeDb(baseCollections());
+    const service = createCustomsSecurityService({db, clock: clock(), resolveContext});
+    await assert.rejects(
+        () => service.createAndActivateProfile(payload, {uid: "user-1"}),
+        /rights and products|validity expired/,
+    );
+    assert.equal(db.writes, 0);
+    assert.equal(db.collections.customs_protection_profiles.length, 0);
+    assert.equal(db.collections.customs_intervention_events.length, 0);
+  }
+});
+
+test("create-and-activate atomically records the complete audited lifecycle", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = createCustomsSecurityService({db, clock: clock(), resolveContext});
+  const result = await service.createAndActivateProfile(createAndActivatePayload(), {uid: "user-1"});
+  assert.equal(result.ok, true);
+  assert.equal(result.duplicate, false);
+  assert.equal(result.transactionApplied, true);
+  assert.equal(result.profile.status, "active");
+  assert.equal(result.profile.eventCount, 3);
+  assert.equal(db.collections.customs_protection_profiles.length, 1);
+  assert.equal(db.collections.customs_intervention_events.length, 3);
+  const events = db.collections.customs_intervention_events
+      .map((entry) => entry.data)
+      .sort((a, b) => a.sequence - b.sequence);
+  assert.deepEqual(events.map((event) => event.sequence), [1, 2, 3]);
+  assert.deepEqual(events.map((event) => [event.previousStatus || null, event.nextStatus]), [
+    [null, "draft"],
+    ["draft", "under_review"],
+    ["under_review", "active"],
+  ]);
+  assert.equal(events[1].reason.includes("owner_confirmed_create_and_activate"), true);
+  assert.equal(events[1].previousEventId, db.collections.customs_intervention_events[0].id);
+  assert.equal(events[2].previousEventId, db.collections.customs_intervention_events[1].id);
+  assert.equal(result.profile.lastEventType, "protection_profile_status_transitioned");
+});
+
+test("create-and-activate retry is idempotent and fingerprint protected", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = createCustomsSecurityService({db, clock: clock(), resolveContext});
+  const payload = createAndActivatePayload();
+  const first = await service.createAndActivateProfile(payload, {uid: "user-1"});
+  const writes = db.writes;
+  const duplicate = await service.createAndActivateProfile(payload, {uid: "user-1"});
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.transactionApplied, false);
+  assert.equal(duplicate.profile.profileId, first.profile.profileId);
+  assert.equal(db.writes, writes);
+  assert.equal(db.collections.customs_protection_profiles.length, 1);
+  assert.equal(db.collections.customs_intervention_events.length, 3);
+  await assert.rejects(
+      () => service.createAndActivateProfile(
+          {...payload, profileName: "Farklı profil"},
+          {uid: "user-1"},
+      ),
+      /fingerprint/,
+  );
+});
+
+test("create-and-activate transaction failure leaves no partial writes", async () => {
+  const db = new FakeDb(baseCollections(), {transactionFailure: true});
+  const before = structuredClone(db.collections);
+  const service = createCustomsSecurityService({db, clock: clock(), resolveContext});
+  await assert.rejects(
+      () => service.createAndActivateProfile(createAndActivatePayload(), {uid: "user-1"}),
+      /simulated transaction failure/,
+  );
+  assert.deepEqual(db.collections, before);
+  assert.equal(db.writes, 0);
 });
 
 test("border intervention requires active scoped profile", async () => {
@@ -487,6 +608,7 @@ test("owner and App Check gates fail closed", async () => {
     enforceAppCheck: true,
     maxInstances: 1,
   });
+  assert.equal(typeof buildCreateAndActivateCustomsProtectionProfile, "function");
   const db = new FakeDb(baseCollections());
   const log = {info: () => {}, error: () => {}};
   const writeHandler = createHandler("createProfile", {
@@ -513,6 +635,31 @@ test("owner and App Check gates fail closed", async () => {
       }),
       (error) => error instanceof HttpsError && error.code === "permission-denied",
   );
+  const activateHandler = createHandler("createAndActivateProfile", {
+    db: new FakeDb(baseCollections()),
+    clock: clock(),
+    resolveContext,
+    appCheck: true,
+    log,
+  });
+  await assert.rejects(
+      () => activateHandler({
+        auth: {uid: "user-1"},
+        data: createAndActivatePayload(),
+      }),
+      (error) => error instanceof HttpsError && error.code === "failed-precondition",
+  );
+  const memberDb = new FakeDb(baseCollections());
+  memberDb.collections.tenant_memberships[0].data.role = "member";
+  await assert.rejects(
+      () => createCustomsSecurityService({
+        db: memberDb,
+        clock: clock(),
+        resolveContext,
+      }).createAndActivateProfile(createAndActivatePayload(), {uid: "user-1"}),
+      /owner/,
+  );
+  assert.equal(memberDb.writes, 0);
 });
 
 test("transaction failure leaves no partial KTG writes", async () => {
