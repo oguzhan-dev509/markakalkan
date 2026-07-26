@@ -46,6 +46,180 @@ Map<String, dynamic> _submissionMap() => {
 };
 
 void main() {
+  test('artifact scope and package fields parse backward compatibly', () {
+    Map<String, dynamic> detailMap(Object? scope, Object? status) => {
+      'contractVersion': 'customs-authority-submission-detail-v1',
+      'submission': _submissionMap(),
+      'packages': [
+        {
+          'packageId': 'package-1',
+          'submissionId': 'submission-1',
+          'version': 1,
+          'packageType': 'fsmh_application_package',
+          'sourceSnapshot': <String, dynamic>{},
+          'documentManifest': <Object>[],
+          'evidenceManifest': <Object>[],
+          'redactionManifest': <Object>[],
+          'coverLetterText': 'Üst yazı',
+          'authoritySummary': 'Özet',
+          'legalNeutralityStatement': 'Nötr',
+          'aggregateHashAlgorithm': 'SHA-256',
+          'aggregateHash': _hash('b'),
+          'generatedAt': '2026-07-25T16:10:00.000Z',
+          'generatedByUid': 'user-1',
+          'immutable': true,
+          'artifactStatus': ?status,
+          'pdfArtifact': {
+            'ready': true,
+            'contentType': 'application/pdf',
+            'sizeBytes': 1200,
+            'sha256': _hash('c'),
+            'safeFileName': 'paket.pdf',
+            'bucket': 'ignored',
+            'objectName': 'ignored',
+            'generation': 'ignored',
+          },
+        },
+      ],
+      'responses': <Object>[],
+      'events': <Object>[],
+      'integrityStatus': 'verified',
+      'scope': scope,
+      'readOnly': true,
+      'writesPerformed': 0,
+    };
+
+    final valid = CustomsAuthoritySubmissionDetail.fromMap(
+      detailMap({
+        'contractVersion': 'customs-authority-submission-artifact-scope-v1',
+        'tenantId': 'tenant-1',
+        'canonicalBrandId': 'brand-1',
+      }, 'ready'),
+    );
+    expect(valid.artifactScope?.tenantId, 'tenant-1');
+    expect(
+      valid.packages.single.artifactStatus,
+      CustomsSubmissionArtifactStatus.ready,
+    );
+    expect(valid.packages.single.pdfArtifact?.safeFileName, 'paket.pdf');
+
+    final legacy = CustomsAuthoritySubmissionDetail.fromMap(
+      detailMap(null, null),
+    );
+    expect(legacy.artifactScope, isNull);
+    expect(
+      legacy.packages.single.artifactStatus,
+      CustomsSubmissionArtifactStatus.legacyNotMaterialized,
+    );
+    final invalid = CustomsAuthoritySubmissionDetail.fromMap(
+      detailMap({
+        'contractVersion': 'wrong',
+        'tenantId': '',
+        'canonicalBrandId': 'brand-1',
+      }, 'future_status'),
+    );
+    expect(invalid.artifactScope, isNull);
+    expect(
+      invalid.packages.single.artifactStatus,
+      CustomsSubmissionArtifactStatus.unknown,
+    );
+  });
+
+  test('artifact callable contracts preserve caller request ids', () async {
+    final calls = <MapEntry<String, Map<String, dynamic>>>[];
+    final repository = CallableCustomsAuthoritySubmissionRepository(
+      ensureAppCheckReady: () async {},
+      callable: (name, request) async {
+        calls.add(MapEntry(name, request));
+        if (name == 'materializeCustomsSubmissionPackageArtifact') {
+          return {
+            'contractVersion':
+                'customs-submission-package-artifact-materialize-result-v1',
+            'ok': true,
+            'duplicate': true,
+            'transactionApplied': false,
+            'recovered': true,
+            'artifactStatus': 'ready',
+            'submissionId': 'submission-1',
+            'packageId': 'package-1',
+            'packageVersion': 1,
+            'sourcePackageHash': _hash('b'),
+          };
+        }
+        return {
+          'contractVersion':
+              'customs-submission-package-download-authorize-result-v1',
+          'ok': true,
+          'artifactType': request['artifactType'],
+          'downloadUrl': 'https://storage.example.invalid/token',
+          'expiresAt': '2026-07-25T16:15:00.000Z',
+          'safeFileName': 'paket',
+          'contentType': 'application/octet-stream',
+          'sizeBytes': 1200,
+          'sha256': _hash('c'),
+          'generation': '1',
+          'sourcePackageHash': _hash('b'),
+        };
+      },
+    );
+
+    final result = await repository.materializePackageArtifact(
+      tenantId: 'tenant-1',
+      canonicalBrandId: 'brand-1',
+      submissionId: 'submission-1',
+      packageId: 'package-1',
+      requestId: 'stable-materialize',
+    );
+    expect(result.duplicate, isTrue);
+    for (final type in CustomsArtifactType.values) {
+      await repository.authorizePackageDownload(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        packageId: 'package-1',
+        artifactType: type,
+        requestId: 'stable-${type.wireValue}',
+      );
+    }
+    expect(calls[0].value['requestId'], 'stable-materialize');
+    expect(calls[1].value['artifactType'], 'pdf');
+    expect(calls[2].value['artifactType'], 'json_manifest');
+    expect(
+      calls[0].value['contractVersion'],
+      'customs-submission-package-artifact-materialize-request-v1',
+    );
+  });
+
+  test('download authorization rejects unsafe or mismatched responses', () {
+    Map<String, dynamic> response(String url) => {
+      'contractVersion':
+          'customs-submission-package-download-authorize-result-v1',
+      'ok': true,
+      'artifactType': 'pdf',
+      'downloadUrl': url,
+      'expiresAt': '2026-07-25T16:15:00.000Z',
+      'safeFileName': 'paket.pdf',
+      'contentType': 'application/pdf',
+      'sizeBytes': 1200,
+      'sha256': _hash('c'),
+      'generation': '1',
+      'sourcePackageHash': _hash('b'),
+    };
+    expect(
+      () => CustomsPackageDownloadAuthorization.fromMap(
+        response('http://unsafe.invalid/file'),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => CustomsPackageDownloadAuthorization.fromMap({
+        ...response('https://safe.invalid/file'),
+        'contractVersion': 'wrong',
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('list accepts only the read-only authority submission contract', () {
     final result = CustomsAuthoritySubmissionList.fromMap({
       'contractVersion': 'customs-authority-submission-list-v1',

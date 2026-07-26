@@ -137,6 +137,54 @@ void main() {
     expect(readinessCalls, 0);
   });
 
+  test('artifact protected calls wait for readiness', () async {
+    final readiness = Completer<void>();
+    var invocations = 0;
+    final repository = CallableCustomsAuthoritySubmissionRepository(
+      ensureAppCheckReady: () => readiness.future,
+      callable: (_, _) async {
+        invocations++;
+        return <String, dynamic>{};
+      },
+    );
+    final operation = repository.materializePackageArtifact(
+      tenantId: 'tenant-1',
+      canonicalBrandId: 'brand-1',
+      submissionId: 'submission-1',
+      packageId: 'package-1',
+      requestId: 'request-1',
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(invocations, 0);
+    readiness.complete();
+    await expectLater(operation, throwsFormatException);
+    expect(invocations, 1);
+  });
+
+  test('App Check failure prevents artifact callable invocation', () async {
+    var invocations = 0;
+    final repository = CallableCustomsAuthoritySubmissionRepository(
+      ensureAppCheckReady: () async =>
+          throw const AppCheckUnavailableException(),
+      callable: (_, _) async {
+        invocations++;
+        return <String, dynamic>{};
+      },
+    );
+    await expectLater(
+      repository.authorizePackageDownload(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        packageId: 'package-1',
+        artifactType: CustomsArtifactType.pdf,
+        requestId: 'request-1',
+      ),
+      throwsA(isA<AppCheckUnavailableException>()),
+    );
+    expect(invocations, 0);
+  });
+
   test('Auth and App Check failures have different user messages', () {
     final auth = FirebaseFunctionsException(
       code: 'unauthenticated',

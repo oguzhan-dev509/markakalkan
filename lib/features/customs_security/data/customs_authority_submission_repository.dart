@@ -37,6 +37,23 @@ abstract interface class CustomsAuthoritySubmissionRepository {
   Future<CustomsAuthoritySubmissionDetail> getSubmissionDetail(
     String submissionId,
   );
+
+  Future<CustomsPackageMaterializationResult> materializePackageArtifact({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required String requestId,
+  });
+
+  Future<CustomsPackageDownloadAuthorization> authorizePackageDownload({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required CustomsArtifactType artifactType,
+    required String requestId,
+  });
 }
 
 class CallableCustomsAuthoritySubmissionRepository
@@ -179,6 +196,54 @@ class CallableCustomsAuthoritySubmissionRepository
       }),
     );
   }
+
+  @override
+  Future<CustomsPackageMaterializationResult> materializePackageArtifact({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required String requestId,
+  }) async {
+    final response =
+        await _callProtected('materializeCustomsSubmissionPackageArtifact', {
+          'contractVersion':
+              'customs-submission-package-artifact-materialize-request-v1',
+          'tenantId': tenantId,
+          'canonicalBrandId': canonicalBrandId,
+          'submissionId': submissionId,
+          'packageId': packageId,
+          'requestId': requestId,
+        });
+    return CustomsPackageMaterializationResult.fromMap(response);
+  }
+
+  @override
+  Future<CustomsPackageDownloadAuthorization> authorizePackageDownload({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required CustomsArtifactType artifactType,
+    required String requestId,
+  }) async {
+    final response =
+        await _callProtected('authorizeCustomsSubmissionPackageDownload', {
+          'contractVersion':
+              'customs-submission-package-download-authorize-request-v1',
+          'tenantId': tenantId,
+          'canonicalBrandId': canonicalBrandId,
+          'submissionId': submissionId,
+          'packageId': packageId,
+          'artifactType': artifactType.wireValue,
+          'requestId': requestId,
+        });
+    final authorization = CustomsPackageDownloadAuthorization.fromMap(response);
+    if (authorization.artifactType != artifactType) {
+      throw const FormatException('İndirme artifact türü eşleşmiyor.');
+    }
+    return authorization;
+  }
 }
 
 class EmptyCustomsAuthoritySubmissionRepository
@@ -207,6 +272,25 @@ class EmptyCustomsAuthoritySubmissionRepository
   Future<CustomsAuthoritySubmissionDetail> getSubmissionDetail(
     String submissionId,
   ) async => _unsupported();
+
+  @override
+  Future<CustomsPackageMaterializationResult> materializePackageArtifact({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required String requestId,
+  }) async => _unsupported();
+
+  @override
+  Future<CustomsPackageDownloadAuthorization> authorizePackageDownload({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required CustomsArtifactType artifactType,
+    required String requestId,
+  }) async => _unsupported();
 
   @override
   Future<CustomsAuthoritySubmission> transitionSubmission({
@@ -350,6 +434,205 @@ class CustomsAuthoritySubmissionList {
   }
 }
 
+enum CustomsArtifactType {
+  pdf('pdf'),
+  jsonManifest('json_manifest');
+
+  const CustomsArtifactType(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsSubmissionArtifactStatus {
+  legacyNotMaterialized,
+  materializationPending,
+  materializing,
+  ready,
+  failedRecoverable,
+  integrityFailed,
+  disabled,
+  unknown;
+
+  static CustomsSubmissionArtifactStatus parse(Object? value) =>
+      switch (value) {
+        'legacy_not_materialized' => legacyNotMaterialized,
+        'materialization_pending' => materializationPending,
+        'materializing' => materializing,
+        'ready' => ready,
+        'failed_recoverable' => failedRecoverable,
+        'integrity_failed' => integrityFailed,
+        'disabled' => disabled,
+        null => legacyNotMaterialized,
+        _ => unknown,
+      };
+}
+
+class CustomsAuthoritySubmissionArtifactScope {
+  const CustomsAuthoritySubmissionArtifactScope({
+    required this.contractVersion,
+    required this.tenantId,
+    required this.canonicalBrandId,
+  });
+
+  final String contractVersion;
+  final String tenantId;
+  final String canonicalBrandId;
+
+  static CustomsAuthoritySubmissionArtifactScope? tryParse(Object? value) {
+    if (value is! Map) return null;
+    final map = _map(value);
+    if (map['contractVersion'] !=
+        'customs-authority-submission-artifact-scope-v1') {
+      return null;
+    }
+    final tenantId = _safeBoundedText(map['tenantId']);
+    final brandId = _safeBoundedText(map['canonicalBrandId']);
+    if (tenantId == null || brandId == null) return null;
+    return CustomsAuthoritySubmissionArtifactScope(
+      contractVersion: map['contractVersion'] as String,
+      tenantId: tenantId,
+      canonicalBrandId: brandId,
+    );
+  }
+}
+
+class CustomsSubmissionArtifactDescriptor {
+  const CustomsSubmissionArtifactDescriptor({
+    required this.ready,
+    this.contentType,
+    this.sizeBytes,
+    this.sha256,
+    this.safeFileName,
+  });
+
+  final bool ready;
+  final String? contentType;
+  final int? sizeBytes;
+  final String? sha256;
+  final String? safeFileName;
+
+  static CustomsSubmissionArtifactDescriptor? tryParse(Object? value) {
+    if (value is! Map) return null;
+    final map = _map(value);
+    return CustomsSubmissionArtifactDescriptor(
+      ready: map['ready'] == true,
+      contentType: _nullableString(map['contentType']),
+      sizeBytes: _nullableInteger(map['sizeBytes']),
+      sha256: _nullableString(map['sha256']),
+      safeFileName: _nullableString(map['safeFileName']),
+    );
+  }
+}
+
+class CustomsPackageMaterializationResult {
+  const CustomsPackageMaterializationResult({
+    required this.contractVersion,
+    required this.ok,
+    required this.duplicate,
+    required this.transactionApplied,
+    required this.recovered,
+    required this.artifactStatus,
+    required this.submissionId,
+    required this.packageId,
+    required this.packageVersion,
+    required this.sourcePackageHash,
+  });
+
+  final String contractVersion;
+  final bool ok;
+  final bool duplicate;
+  final bool transactionApplied;
+  final bool recovered;
+  final CustomsSubmissionArtifactStatus artifactStatus;
+  final String submissionId;
+  final String packageId;
+  final int packageVersion;
+  final String sourcePackageHash;
+
+  factory CustomsPackageMaterializationResult.fromMap(
+    Map<String, dynamic> map,
+  ) {
+    const version = 'customs-submission-package-artifact-materialize-result-v1';
+    final status = CustomsSubmissionArtifactStatus.parse(map['artifactStatus']);
+    if (map['contractVersion'] != version ||
+        map['ok'] != true ||
+        map['duplicate'] is! bool ||
+        map['transactionApplied'] is! bool ||
+        map['recovered'] is! bool ||
+        status == CustomsSubmissionArtifactStatus.unknown ||
+        status == CustomsSubmissionArtifactStatus.legacyNotMaterialized) {
+      throw const FormatException('Geçersiz paket oluşturma yanıtı.');
+    }
+    return CustomsPackageMaterializationResult(
+      contractVersion: version,
+      ok: true,
+      duplicate: map['duplicate'] == true,
+      transactionApplied: map['transactionApplied'] == true,
+      recovered: map['recovered'] == true,
+      artifactStatus: status,
+      submissionId: _string(map, 'submissionId'),
+      packageId: _string(map, 'packageId'),
+      packageVersion: _integer(map, 'packageVersion'),
+      sourcePackageHash: _string(map, 'sourcePackageHash'),
+    );
+  }
+}
+
+class CustomsPackageDownloadAuthorization {
+  const CustomsPackageDownloadAuthorization({
+    required this.contractVersion,
+    required this.artifactType,
+    required this.downloadUri,
+    required this.expiresAt,
+    required this.safeFileName,
+    required this.contentType,
+    required this.sizeBytes,
+    required this.sha256,
+    required this.generation,
+    required this.sourcePackageHash,
+  });
+
+  final String contractVersion;
+  final CustomsArtifactType artifactType;
+  final Uri downloadUri;
+  final String expiresAt;
+  final String safeFileName;
+  final String contentType;
+  final int sizeBytes;
+  final String generation;
+  final String sha256;
+  final String sourcePackageHash;
+
+  factory CustomsPackageDownloadAuthorization.fromMap(
+    Map<String, dynamic> map,
+  ) {
+    const version = 'customs-submission-package-download-authorize-result-v1';
+    if (map['contractVersion'] != version || map['ok'] != true) {
+      throw const FormatException('Geçersiz paket indirme yanıtı.');
+    }
+    final type = switch (map['artifactType']) {
+      'pdf' => CustomsArtifactType.pdf,
+      'json_manifest' => CustomsArtifactType.jsonManifest,
+      _ => throw const FormatException('Artifact türü geçersiz.'),
+    };
+    final uri = Uri.tryParse(_string(map, 'downloadUrl'));
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      throw const FormatException('İndirme bağlantısı geçersiz.');
+    }
+    return CustomsPackageDownloadAuthorization(
+      contractVersion: version,
+      artifactType: type,
+      downloadUri: uri,
+      expiresAt: _string(map, 'expiresAt'),
+      safeFileName: _string(map, 'safeFileName'),
+      contentType: _string(map, 'contentType'),
+      sizeBytes: _integer(map, 'sizeBytes'),
+      sha256: _string(map, 'sha256'),
+      generation: _string(map, 'generation'),
+      sourcePackageHash: _string(map, 'sourcePackageHash'),
+    );
+  }
+}
+
 class CustomsAuthoritySubmissionDetail {
   const CustomsAuthoritySubmissionDetail({
     required this.submission,
@@ -357,6 +640,7 @@ class CustomsAuthoritySubmissionDetail {
     required this.responses,
     required this.events,
     required this.integrityStatus,
+    this.artifactScope,
   });
 
   final CustomsAuthoritySubmission submission;
@@ -364,6 +648,7 @@ class CustomsAuthoritySubmissionDetail {
   final List<CustomsAuthorityResponse> responses;
   final List<CustomsAuthoritySubmissionEvent> events;
   final String integrityStatus;
+  final CustomsAuthoritySubmissionArtifactScope? artifactScope;
 
   factory CustomsAuthoritySubmissionDetail.fromMap(Map<String, dynamic> map) {
     _requireReadResult(map, 'customs-authority-submission-detail-v1');
@@ -379,6 +664,9 @@ class CustomsAuthoritySubmissionDetail {
           .map((item) => CustomsAuthoritySubmissionEvent.fromMap(_map(item)))
           .toList(growable: false),
       integrityStatus: _string(map, 'integrityStatus'),
+      artifactScope: CustomsAuthoritySubmissionArtifactScope.tryParse(
+        map['scope'],
+      ),
     );
   }
 }
@@ -529,6 +817,11 @@ class CustomsSubmissionPackage {
     required this.generatedAt,
     required this.generatedByUid,
     required this.immutable,
+    this.artifactStatus = CustomsSubmissionArtifactStatus.legacyNotMaterialized,
+    this.artifactFormatVersion,
+    this.sourcePackageHash,
+    this.pdfArtifact,
+    this.jsonManifestArtifact,
   });
 
   final String packageId;
@@ -547,6 +840,11 @@ class CustomsSubmissionPackage {
   final String generatedAt;
   final String generatedByUid;
   final bool immutable;
+  final CustomsSubmissionArtifactStatus artifactStatus;
+  final String? artifactFormatVersion;
+  final String? sourcePackageHash;
+  final CustomsSubmissionArtifactDescriptor? pdfArtifact;
+  final CustomsSubmissionArtifactDescriptor? jsonManifestArtifact;
 
   factory CustomsSubmissionPackage.fromMap(Map<String, dynamic> map) =>
       CustomsSubmissionPackage(
@@ -572,6 +870,17 @@ class CustomsSubmissionPackage {
         generatedAt: _string(map, 'generatedAt'),
         generatedByUid: _string(map, 'generatedByUid'),
         immutable: map['immutable'] == true,
+        artifactStatus: CustomsSubmissionArtifactStatus.parse(
+          map['artifactStatus'],
+        ),
+        artifactFormatVersion: _nullableString(map['artifactFormatVersion']),
+        sourcePackageHash: _nullableString(map['sourcePackageHash']),
+        pdfArtifact: CustomsSubmissionArtifactDescriptor.tryParse(
+          map['pdfArtifact'],
+        ),
+        jsonManifestArtifact: CustomsSubmissionArtifactDescriptor.tryParse(
+          map['jsonManifestArtifact'],
+        ),
       );
 }
 
@@ -732,6 +1041,13 @@ void _requireWriteResult(Map<String, dynamic> map, String version) {
 }
 
 bool _present(String? value) => value != null && value.trim().isNotEmpty;
+
+String? _safeBoundedText(Object? value) {
+  if (value is! String) return null;
+  final trimmed = value.trim();
+  if (trimmed.isEmpty || trimmed.length > 256) return null;
+  return trimmed;
+}
 
 void _optionalText(Map<String, dynamic> map, String key, String? value) {
   if (_present(value)) map[key] = value!.trim();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:markakalkan/features/customs_security/data/customs_authority_submission_repository.dart';
 
 Map<String, dynamic> _submissionMap({
@@ -75,10 +77,55 @@ CustomsAuthoritySubmission sampleAuthoritySubmission({
 
 CustomsAuthoritySubmissionDetail sampleAuthoritySubmissionDetail({
   String submissionId = 'submission-1',
+  bool includePackage = false,
+  bool includeScope = false,
+  String artifactStatus = 'legacy_not_materialized',
+  bool pdfReady = false,
+  bool manifestReady = false,
 }) => CustomsAuthoritySubmissionDetail.fromMap(<String, dynamic>{
   'contractVersion': 'customs-authority-submission-detail-v1',
   'submission': _submissionMap(submissionId: submissionId),
-  'packages': const <Map<String, dynamic>>[],
+  'packages': includePackage
+      ? <Map<String, dynamic>>[
+          <String, dynamic>{
+            'packageId': 'package-1',
+            'submissionId': submissionId,
+            'version': 1,
+            'packageType': 'fsmh_application_package',
+            'sourceSnapshot': const <String, dynamic>{},
+            'documentManifest': const <Object>[],
+            'evidenceManifest': const <Object>[],
+            'redactionManifest': const <Object>[],
+            'coverLetterText': 'Resmî üst yazı',
+            'authoritySummary': 'Resmî paket özeti',
+            'legalNeutralityStatement': 'Hukuken nötr ifade',
+            'aggregateHashAlgorithm': 'SHA-256',
+            'aggregateHash': List<String>.filled(64, 'a').join(),
+            'generatedAt': '2026-07-25T10:00:00.000Z',
+            'generatedByUid': 'user-1',
+            'immutable': true,
+            'artifactStatus': artifactStatus,
+            'artifactFormatVersion': 'customs-submission-package-artifact-v1',
+            'sourcePackageHash': List<String>.filled(64, 'b').join(),
+            if (pdfReady)
+              'pdfArtifact': <String, dynamic>{
+                'ready': true,
+                'contentType': 'application/pdf',
+                'sizeBytes': 2048,
+                'sha256': List<String>.filled(64, 'c').join(),
+                'safeFileName': 'resmi-paket.pdf',
+              },
+            if (manifestReady)
+              'jsonManifestArtifact': <String, dynamic>{
+                'ready': true,
+                'contentType': 'application/json',
+                'sizeBytes': 1024,
+                'sha256': List<String>.filled(64, 'd').join(),
+                'safeFileName': 'resmi-paket.json',
+              },
+          },
+        ]
+      : const <Map<String, dynamic>>[],
   'responses': const <Map<String, dynamic>>[],
   'events': <Map<String, dynamic>>[
     <String, dynamic>{
@@ -96,6 +143,13 @@ CustomsAuthoritySubmissionDetail sampleAuthoritySubmissionDetail({
   'integrityStatus': 'verified',
   'readOnly': true,
   'writesPerformed': 0,
+  'scope': includeScope
+      ? const <String, dynamic>{
+          'contractVersion': 'customs-authority-submission-artifact-scope-v1',
+          'tenantId': 'tenant-1',
+          'canonicalBrandId': 'brand-1',
+        }
+      : null,
 });
 
 class FakeCustomsAuthoritySubmissionRepository
@@ -103,7 +157,19 @@ class FakeCustomsAuthoritySubmissionRepository
   List<CustomsAuthoritySubmission> submissions = [sampleAuthoritySubmission()];
 
   int createCalls = 0;
+  int detailCalls = 0;
+  int materializeCalls = 0;
+  int pdfAuthorizationCalls = 0;
+  int manifestAuthorizationCalls = 0;
   CustomsAuthoritySubmissionDraft? lastDraft;
+  CustomsAuthoritySubmissionDetail? detail;
+  Object? materializationError;
+  Object? authorizationError;
+  Completer<void>? materializationGate;
+  Completer<void>? pdfAuthorizationGate;
+  Completer<void>? manifestAuthorizationGate;
+  final List<String> materializationRequestIds = [];
+  final List<String> authorizationRequestIds = [];
 
   @override
   Future<CustomsAuthoritySubmissionList> listSubmissions({
@@ -144,7 +210,78 @@ class FakeCustomsAuthoritySubmissionRepository
   @override
   Future<CustomsAuthoritySubmissionDetail> getSubmissionDetail(
     String submissionId,
-  ) async => sampleAuthoritySubmissionDetail(submissionId: submissionId);
+  ) async {
+    detailCalls++;
+    return detail ??
+        sampleAuthoritySubmissionDetail(submissionId: submissionId);
+  }
+
+  @override
+  Future<CustomsPackageMaterializationResult> materializePackageArtifact({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required String requestId,
+  }) async {
+    materializeCalls++;
+    materializationRequestIds.add(requestId);
+    await materializationGate?.future;
+    final error = materializationError;
+    if (error != null) throw error;
+    return CustomsPackageMaterializationResult.fromMap(<String, dynamic>{
+      'contractVersion':
+          'customs-submission-package-artifact-materialize-result-v1',
+      'ok': true,
+      'duplicate': false,
+      'transactionApplied': true,
+      'recovered': false,
+      'artifactStatus': 'ready',
+      'submissionId': submissionId,
+      'packageId': packageId,
+      'packageVersion': 1,
+      'sourcePackageHash': List<String>.filled(64, 'b').join(),
+    });
+  }
+
+  @override
+  Future<CustomsPackageDownloadAuthorization> authorizePackageDownload({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required CustomsArtifactType artifactType,
+    required String requestId,
+  }) async {
+    if (artifactType == CustomsArtifactType.pdf) {
+      pdfAuthorizationCalls++;
+      await pdfAuthorizationGate?.future;
+    } else {
+      manifestAuthorizationCalls++;
+      await manifestAuthorizationGate?.future;
+    }
+    authorizationRequestIds.add(requestId);
+    final error = authorizationError;
+    if (error != null) throw error;
+    return CustomsPackageDownloadAuthorization.fromMap(<String, dynamic>{
+      'contractVersion':
+          'customs-submission-package-download-authorize-result-v1',
+      'ok': true,
+      'artifactType': artifactType.wireValue,
+      'downloadUrl': 'https://storage.example.invalid/short-lived',
+      'expiresAt': '2026-07-25T10:05:00.000Z',
+      'safeFileName': artifactType == CustomsArtifactType.pdf
+          ? 'resmi-paket.pdf'
+          : 'resmi-paket.json',
+      'contentType': artifactType == CustomsArtifactType.pdf
+          ? 'application/pdf'
+          : 'application/json',
+      'sizeBytes': 1024,
+      'sha256': List<String>.filled(64, 'c').join(),
+      'generation': '1',
+      'sourcePackageHash': List<String>.filled(64, 'b').join(),
+    });
+  }
 
   @override
   Future<CustomsAuthoritySubmission> transitionSubmission({

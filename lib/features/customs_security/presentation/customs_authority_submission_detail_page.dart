@@ -2,16 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/customs_security/data/customs_authority_submission_repository.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_labels.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+typedef CustomsArtifactUrlOpener = Future<bool> Function(Uri uri);
 
 class CustomsAuthoritySubmissionDetailPage extends StatefulWidget {
   const CustomsAuthoritySubmissionDetailPage({
     super.key,
     required this.submissionId,
     this.repository,
+    this.urlOpener,
+    this.requestIdFactory,
   });
 
   final String submissionId;
   final CustomsAuthoritySubmissionRepository? repository;
+  final CustomsArtifactUrlOpener? urlOpener;
+  final String Function()? requestIdFactory;
 
   @override
   State<CustomsAuthoritySubmissionDetailPage> createState() =>
@@ -24,6 +31,10 @@ class _CustomsAuthoritySubmissionDetailPageState
   bool _loading = true;
   String? _error;
   CustomsAuthoritySubmissionDetail? _detail;
+  bool _materializing = false;
+  bool _downloadingPdf = false;
+  bool _downloadingManifest = false;
+  String? _materializationRequestId;
 
   @override
   void initState() {
@@ -33,7 +44,8 @@ class _CustomsAuthoritySubmissionDetailPageState
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool newOperation = true}) async {
+    if (newOperation) _materializationRequestId = null;
     setState(() {
       _loading = true;
       _error = null;
@@ -52,6 +64,132 @@ class _CustomsAuthoritySubmissionDetailPageState
         _error = customsAuthoritySubmissionErrorMessage(error);
       });
     }
+  }
+
+  Future<bool> _defaultUrlOpener(Uri uri) =>
+      launchUrl(uri, webOnlyWindowName: '_self');
+
+  String _newRequestId() =>
+      (widget.requestIdFactory ??
+      generateCustomsAuthoritySubmissionRequestId)();
+
+  Future<void> _materialize(CustomsSubmissionPackage package) async {
+    if (_materializing) return;
+    final scope = _detail?.artifactScope;
+    if (scope == null) return;
+    setState(() => _materializing = true);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(materializePackage),
+        content: const Text(
+          'Güncel resmî paket güvenli indirme dosyalarına dönüştürülsün mü?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-materialize-package'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Oluştur'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirmed != true) {
+      setState(() => _materializing = false);
+      return;
+    }
+    _materializationRequestId ??= _newRequestId();
+    try {
+      final result = await _repository.materializePackageArtifact(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: detail.submission.submissionId,
+        packageId: package.packageId,
+        requestId: _materializationRequestId!,
+      );
+      if (!mounted) return;
+      if (result.artifactStatus == CustomsSubmissionArtifactStatus.ready) {
+        _materializationRequestId = null;
+      } else if (result.artifactStatus ==
+              CustomsSubmissionArtifactStatus.integrityFailed ||
+          result.artifactStatus == CustomsSubmissionArtifactStatus.disabled) {
+        _materializationRequestId = null;
+      }
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) return;
+      if (!customsArtifactErrorIsRetryable(error)) {
+        _materializationRequestId = null;
+      }
+      _showMessage(customsArtifactErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => _materializing = false);
+    }
+  }
+
+  CustomsAuthoritySubmissionDetail get detail => _detail!;
+
+  Future<void> _download(
+    CustomsSubmissionPackage package,
+    CustomsArtifactType type,
+  ) async {
+    final isPdf = type == CustomsArtifactType.pdf;
+    if ((isPdf ? _downloadingPdf : _downloadingManifest)) return;
+    final scope = _detail?.artifactScope;
+    final descriptor = isPdf
+        ? package.pdfArtifact
+        : package.jsonManifestArtifact;
+    if (scope == null ||
+        package.artifactStatus != CustomsSubmissionArtifactStatus.ready ||
+        descriptor?.ready != true) {
+      return;
+    }
+    setState(() {
+      if (isPdf) {
+        _downloadingPdf = true;
+      } else {
+        _downloadingManifest = true;
+      }
+    });
+    try {
+      final authorization = await _repository.authorizePackageDownload(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: detail.submission.submissionId,
+        packageId: package.packageId,
+        artifactType: type,
+        requestId: _newRequestId(),
+      );
+      final opened = await (widget.urlOpener ?? _defaultUrlOpener)(
+        authorization.downloadUri,
+      );
+      if (!mounted) return;
+      _showMessage(opened ? 'İndirme bağlantısı açıldı.' : downloadOpenFailed);
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(customsArtifactErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (isPdf) {
+            _downloadingPdf = false;
+          } else {
+            _downloadingManifest = false;
+          }
+        });
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -76,15 +214,38 @@ class _CustomsAuthoritySubmissionDetailPageState
             )
           : _error != null
           ? _AuthorityDetailError(message: _error!, onRetry: _load)
-          : _AuthoritySubmissionDetailView(detail: _detail!),
+          : _AuthoritySubmissionDetailView(
+              detail: _detail!,
+              materializing: _materializing,
+              downloadingPdf: _downloadingPdf,
+              downloadingManifest: _downloadingManifest,
+              onMaterialize: _materialize,
+              onDownload: _download,
+            ),
     );
   }
 }
 
 class _AuthoritySubmissionDetailView extends StatelessWidget {
-  const _AuthoritySubmissionDetailView({required this.detail});
+  const _AuthoritySubmissionDetailView({
+    required this.detail,
+    required this.materializing,
+    required this.downloadingPdf,
+    required this.downloadingManifest,
+    required this.onMaterialize,
+    required this.onDownload,
+  });
 
   final CustomsAuthoritySubmissionDetail detail;
+  final bool materializing;
+  final bool downloadingPdf;
+  final bool downloadingManifest;
+  final ValueChanged<CustomsSubmissionPackage> onMaterialize;
+  final void Function(
+    CustomsSubmissionPackage package,
+    CustomsArtifactType type,
+  )
+  onDownload;
 
   @override
   Widget build(BuildContext context) {
@@ -212,6 +373,19 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
             ),
           ],
         ),
+        if (currentPackage != null)
+          _ArtifactSection(
+            package: currentPackage,
+            scopeAvailable: detail.artifactScope != null,
+            materializing: materializing,
+            downloadingPdf: downloadingPdf,
+            downloadingManifest: downloadingManifest,
+            onMaterialize: () => onMaterialize(currentPackage),
+            onDownloadPdf: () =>
+                onDownload(currentPackage, CustomsArtifactType.pdf),
+            onDownloadManifest: () =>
+                onDownload(currentPackage, CustomsArtifactType.jsonManifest),
+          ),
         _AuthoritySection(
           title: 'Kurum yanıtları',
           children: detail.responses.isEmpty
@@ -242,6 +416,150 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
                     )
                     .toList(),
         ),
+      ],
+    );
+  }
+}
+
+class _ArtifactSection extends StatelessWidget {
+  const _ArtifactSection({
+    required this.package,
+    required this.scopeAvailable,
+    required this.materializing,
+    required this.downloadingPdf,
+    required this.downloadingManifest,
+    required this.onMaterialize,
+    required this.onDownloadPdf,
+    required this.onDownloadManifest,
+  });
+
+  final CustomsSubmissionPackage package;
+  final bool scopeAvailable;
+  final bool materializing;
+  final bool downloadingPdf;
+  final bool downloadingManifest;
+  final VoidCallback onMaterialize;
+  final VoidCallback onDownloadPdf;
+  final VoidCallback onDownloadManifest;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!scopeAvailable) {
+      return const _AuthoritySection(
+        title: artifactSectionTitle,
+        children: [Text(scopeUnavailableDescription)],
+      );
+    }
+    final status = package.artifactStatus;
+    return _AuthoritySection(
+      title: artifactSectionTitle,
+      children: switch (status) {
+        CustomsSubmissionArtifactStatus.legacyNotMaterialized => [
+          const Text(legacyArtifactDescription),
+          FilledButton.icon(
+            key: const ValueKey('materialize-package'),
+            onPressed: materializing ? null : onMaterialize,
+            icon: materializing
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text(materializePackage),
+          ),
+        ],
+        CustomsSubmissionArtifactStatus.materializationPending => const [
+          LinearProgressIndicator(),
+          Text(pendingArtifactDescription),
+        ],
+        CustomsSubmissionArtifactStatus.materializing => const [
+          LinearProgressIndicator(),
+          Text(materializingArtifactDescription),
+        ],
+        CustomsSubmissionArtifactStatus.ready => [
+          _ArtifactDescriptor(label: 'PDF', descriptor: package.pdfArtifact),
+          FilledButton.icon(
+            key: const ValueKey('download-package-pdf'),
+            onPressed: package.pdfArtifact?.ready == true && !downloadingPdf
+                ? onDownloadPdf
+                : null,
+            icon: downloadingPdf
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download_rounded),
+            label: const Text(downloadPdf),
+          ),
+          _ArtifactDescriptor(
+            label: 'JSON manifest',
+            descriptor: package.jsonManifestArtifact,
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('download-package-manifest'),
+            onPressed:
+                package.jsonManifestArtifact?.ready == true &&
+                    !downloadingManifest
+                ? onDownloadManifest
+                : null,
+            icon: downloadingManifest
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download_rounded),
+            label: const Text(downloadManifest),
+          ),
+        ],
+        CustomsSubmissionArtifactStatus.failedRecoverable => [
+          const Text(failedRecoverableArtifactDescription),
+          FilledButton.icon(
+            key: const ValueKey('retry-materialize-package'),
+            onPressed: materializing ? null : onMaterialize,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text(retryMaterialization),
+          ),
+        ],
+        CustomsSubmissionArtifactStatus.integrityFailed => const [
+          Text(integrityFailedArtifactDescription),
+          Text(integrityFailedArtifactActionDescription),
+        ],
+        CustomsSubmissionArtifactStatus.disabled => const [
+          Text(disabledArtifactDescription),
+        ],
+        CustomsSubmissionArtifactStatus.unknown => const [
+          Text(unknownArtifactDescription),
+        ],
+      },
+    );
+  }
+}
+
+class _ArtifactDescriptor extends StatelessWidget {
+  const _ArtifactDescriptor({required this.label, required this.descriptor});
+
+  final String label;
+  final CustomsSubmissionArtifactDescriptor? descriptor;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = descriptor;
+    if (value?.ready != true) {
+      return Text('$label dosyası hazır değil.');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value!.safeFileName ?? label,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        if (value.sizeBytes != null) Text(_formatBytes(value.sizeBytes!)),
+        if (value.sha256 != null)
+          SelectableText(
+            'SHA-256: ${value.sha256}',
+            style: const TextStyle(fontFamily: 'monospace'),
+          ),
       ],
     );
   }
@@ -539,4 +857,10 @@ String _formatDateTime(String value) {
   if (parsed == null) return value;
   String two(int number) => number.toString().padLeft(2, '0');
   return '${two(parsed.day)}.${two(parsed.month)}.${parsed.year} ${two(parsed.hour)}:${two(parsed.minute)}';
+}
+
+String _formatBytes(int value) {
+  if (value < 1024) return '$value bayt';
+  if (value < 1024 * 1024) return '${(value / 1024).toStringAsFixed(1)} KB';
+  return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
 }

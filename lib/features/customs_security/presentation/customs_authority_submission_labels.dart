@@ -49,6 +49,29 @@ const customsAuthorityChannels = <String>[
   'other',
 ];
 
+const artifactSectionTitle = 'Resmî Paket ve Güvenli İndirme';
+const materializePackage = 'Resmî Paketi Oluştur';
+const retryMaterialization = 'Yeniden Dene';
+const downloadPdf = 'PDF İndir';
+const downloadManifest = 'Manifest İndir';
+const legacyArtifactDescription =
+    'Bu paket için güvenli indirme dosyaları henüz oluşturulmadı.';
+const pendingArtifactDescription = 'Paket oluşturma işlemi hazırlanıyor.';
+const materializingArtifactDescription =
+    'Resmî paket güvenli biçimde oluşturuluyor.';
+const failedRecoverableArtifactDescription =
+    'Paket oluşturma tamamlanamadı. Aynı güvenli istekle yeniden deneyebilirsiniz.';
+const integrityFailedArtifactDescription = 'Paket bütünlüğü doğrulanamadı.';
+const integrityFailedArtifactActionDescription =
+    'İndirme güvenlik nedeniyle durduruldu. İnceleme için destek ekibine başvurun.';
+const disabledArtifactDescription =
+    'Güvenli paket oluşturma işlemi şu anda kapalı.';
+const unknownArtifactDescription = 'Paket durumu doğrulanamadı.';
+const scopeUnavailableDescription =
+    'Bu eski kaydın güvenli paket kapsamı henüz doğrulanamadı. Paket oluşturma ve indirme işlemleri kullanılamıyor.';
+const downloadOpenFailed =
+    'İndirme bağlantısı açılamadı. Lütfen yeniden deneyin.';
+
 const customsAuthoritySubmissionTransitions = <String, List<String>>{
   'draft': ['awaiting_human_review', 'archived'],
   'awaiting_human_review': [
@@ -171,4 +194,45 @@ String customsAuthoritySubmissionErrorMessage(Object error) {
     return 'Sunucu yanıtı güvenli resmî iletim sözleşmesiyle eşleşmedi.';
   }
   return 'Resmî başvuru ve iletim işlemi tamamlanamadı.';
+}
+
+bool customsArtifactErrorIsRetryable(Object error) {
+  if (error is FormatException) return false;
+  if (error is FirebaseFunctionsException) {
+    return !{
+      'unauthenticated',
+      'permission-denied',
+      'failed-precondition',
+      'already-exists',
+      'resource-exhausted',
+      'invalid-argument',
+    }.contains(error.code);
+  }
+  return true;
+}
+
+String customsArtifactErrorMessage(Object error) {
+  if (error is AppCheckUnavailableException) {
+    return 'Uygulama güvenlik doğrulaması tamamlanamadı. '
+        'Bağlantınızı kontrol edip yeniden deneyin.';
+  }
+  if (error is FirebaseFunctionsException) {
+    return switch (error.code) {
+      'unauthenticated' =>
+        'Oturumunuz sona ermiş olabilir. Lütfen yeniden giriş yapın.',
+      'permission-denied' => 'Bu işlem için yetkiniz bulunmuyor.',
+      'failed-precondition' =>
+        'Paket mevcut durumunda bu işlem gerçekleştirilemiyor.',
+      'already-exists' =>
+        'İstek daha önce farklı bilgilerle kullanılmış. Sayfayı yenileyip tekrar deneyin.',
+      'resource-exhausted' => 'Paket boyutu güvenli işlem sınırını aşıyor.',
+      'unavailable' =>
+        'Paket hizmetine şu anda ulaşılamıyor. Lütfen yeniden deneyin.',
+      _ => 'Paket işlemi güvenli biçimde tamamlanamadı.',
+    };
+  }
+  if (error is FormatException) {
+    return 'Paket hizmetinden beklenmeyen bir yanıt alındı.';
+  }
+  return 'Paket işlemi güvenli biçimde tamamlanamadı.';
 }
