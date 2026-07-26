@@ -10,6 +10,7 @@ const {
   SUBMISSION_STATUSES,
   createRequest,
   detailRequest,
+  externalSubmissionRequest,
   fingerprint,
   listRequest,
   packageRequest,
@@ -40,6 +41,8 @@ const PACKAGE_COLLECTION = "customs_submission_packages";
 const RESPONSE_COLLECTION = "customs_submission_responses";
 const EVENT_COLLECTION = "customs_submission_events";
 const MAX_SCOPE = 200;
+const MAX_SUBMITTED_AT_FUTURE_MS = 5 * 60 * 1000;
+const MAX_SUBMITTED_AT_AGE_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
 const sha256 = (value) => createHash("sha256").update(String(value), "utf8").digest("hex");
 
@@ -381,12 +384,10 @@ function requireTransition(current, next, data, request) {
     }
   }
   if (next === "submitted_externally") {
-    if (!data.currentPackageId || !data.currentPackageHash || !data.channelType) {
-      throw new AuthoritySubmissionError("status.precondition_failed", "generated package and channel required");
-    }
-    if (!request.submittedAt || !request.externalSubmissionStatement) {
-      throw new AuthoritySubmissionError("status.precondition_failed", "external submission statement required");
-    }
+    throw new AuthoritySubmissionError(
+        "status.precondition_failed",
+        "record external submission operation required",
+    );
   }
   if (next === "concluded" && !data.officialReferenceNumber) {
     throw new AuthoritySubmissionError("status.precondition_failed", "official reference required");
@@ -761,6 +762,182 @@ function createAuthoritySubmissionService({
       });
     },
 
+    async recordExternalSubmission(raw, invocation) {
+      const request = externalSubmissionRequest(raw);
+      const context = await contextFor(request, invocation, true);
+      const recordedAt = nowIso(clock);
+      const recordedAtMs = new Date(recordedAt).getTime();
+      const submittedAtMs = new Date(request.submittedAt).getTime();
+      if (submittedAtMs > recordedAtMs + MAX_SUBMITTED_AT_FUTURE_MS ||
+          submittedAtMs < recordedAtMs - MAX_SUBMITTED_AT_AGE_MS) {
+        throw new AuthoritySubmissionError(
+            "status.precondition_failed",
+            "submittedAt outside accepted range",
+        );
+      }
+      const requestFingerprint = fingerprint(request);
+      const event = eventRef(
+          db,
+          context,
+          request.submissionId,
+          request.requestId,
+      );
+      return db.runTransaction(async (transaction) => {
+        const submission = await submissionSnapshot({
+          submissionId: request.submissionId,
+          context,
+          transaction,
+        });
+        const packageRecord = db.collection(PACKAGE_COLLECTION)
+            .doc(request.packageId);
+        const [existingEvent, packageSnapshot] = await Promise.all([
+          transaction.get(event.ref),
+          transaction.get(packageRecord),
+        ]);
+        if (existingEvent.exists) {
+          assertFingerprint(existingEvent.data() || {}, requestFingerprint);
+          const duplicatePackageData = scoped(
+              packageSnapshot,
+              context,
+              "package.not_found",
+          );
+          const existingSnapshot = submission.data.externalSubmission || {};
+          if (submission.data.status !== "submitted_externally" ||
+              existingSnapshot.requestId !== request.requestId ||
+              existingSnapshot.submissionChannel !==
+                request.submissionChannel ||
+              existingSnapshot.submittedAt !== request.submittedAt ||
+              existingSnapshot.externalSubmissionConfirmation !== true ||
+              existingSnapshot.externalSubmissionConfirmationVersion !==
+                request.externalSubmissionConfirmationVersion ||
+              existingSnapshot.externalSubmissionStatement !==
+                request.externalSubmissionStatement ||
+              existingSnapshot.externalReferenceType !==
+                request.externalReferenceType ||
+              (existingSnapshot.externalReferenceValue || null) !==
+                request.externalReferenceValue ||
+              existingSnapshot.packageId !== request.packageId ||
+              Number(existingSnapshot.packageVersion || 0) !==
+                request.packageVersion ||
+              existingSnapshot.packageHash !== request.packageHash ||
+              submission.data.lastEventId !== event.id ||
+              duplicatePackageData.immutable !== true ||
+              duplicatePackageData.submissionId !== request.submissionId ||
+              Number(duplicatePackageData.version || 0) !==
+                request.packageVersion ||
+              duplicatePackageData.aggregateHash !== request.packageHash) {
+            throw new AuthoritySubmissionError(
+                "internal",
+                "inconsistent external submission duplicate",
+            );
+          }
+          return {
+            contractVersion:
+              "customs-external-submission-record-result-v1",
+            ok: true,
+            duplicate: true,
+            transactionApplied: false,
+            submission: safeSubmission(request.submissionId, submission.data),
+            event: safeEvent(existingEvent.data() || {}),
+          };
+        }
+        if (submission.data.status !== "package_generated") {
+          throw new AuthoritySubmissionError(
+              "status.precondition_failed",
+              "submission package is not ready",
+          );
+        }
+        if (submission.data.currentPackageId !== request.packageId ||
+            Number(submission.data.currentPackageVersion || 0) !==
+              request.packageVersion ||
+            submission.data.currentPackageHash !== request.packageHash) {
+          throw new AuthoritySubmissionError(
+              "status.precondition_failed",
+              "active package mismatch",
+          );
+        }
+        const packageData = scoped(
+            packageSnapshot,
+            context,
+            "package.not_found",
+        );
+        if (packageData.immutable !== true ||
+            packageData.submissionId !== request.submissionId ||
+            Number(packageData.version || 0) !== request.packageVersion ||
+            packageData.aggregateHash !== request.packageHash) {
+          throw new AuthoritySubmissionError(
+              "status.precondition_failed",
+              "package integrity mismatch",
+          );
+        }
+        const sequence = Number(submission.data.eventCount || 0) + 1;
+        const snapshot = {
+          submissionChannel: request.submissionChannel,
+          submittedAt: request.submittedAt,
+          submittedByUid: invocation.uid,
+          externalSubmissionConfirmation: true,
+          externalSubmissionConfirmationVersion:
+            request.externalSubmissionConfirmationVersion,
+          externalSubmissionStatement: request.externalSubmissionStatement,
+          externalReferenceType: request.externalReferenceType,
+          externalReferenceValue: request.externalReferenceValue,
+          packageId: request.packageId,
+          packageVersion: request.packageVersion,
+          packageHash: request.packageHash,
+          recordedAt,
+          requestId: request.requestId,
+        };
+        const updates = {
+          status: "submitted_externally",
+          channelType: request.submissionChannel,
+          submittedAt: request.submittedAt,
+          submittedByUid: invocation.uid,
+          externalSubmissionStatement: request.externalSubmissionStatement,
+          externalSubmission: snapshot,
+          statusReason: "Dış kanalda tamamlanan resmî gönderim kaydedildi.",
+          statusChangedAt: recordedAt,
+          statusChangedByUid: invocation.uid,
+          updatedByUid: invocation.uid,
+          updatedAt: recordedAt,
+          eventCount: sequence,
+          lastEventId: event.id,
+          lastEventType:
+            "customs_submission_recorded_as_submitted_externally",
+          lastEventAt: recordedAt,
+        };
+        const eventData = eventDocument({
+          context,
+          submissionId: request.submissionId,
+          sequence,
+          eventType:
+            "customs_submission_recorded_as_submitted_externally",
+          previousStatus: submission.data.status,
+          nextStatus: "submitted_externally",
+          summary: `${submission.data.submissionNumber} dış kanalda gönderilmiş olarak kaydedildi.`,
+          reason: request.externalSubmissionStatement,
+          actorUid: invocation.uid,
+          recordedAt,
+          previousEventId: submission.data.lastEventId || null,
+          requestId: request.requestId,
+          requestFingerprint,
+        });
+        eventData.externalSubmission = snapshot;
+        transaction.update(submission.ref, updates);
+        transaction.create(event.ref, eventData);
+        return {
+          contractVersion: "customs-external-submission-record-result-v1",
+          ok: true,
+          duplicate: false,
+          transactionApplied: true,
+          submission: safeSubmission(
+              request.submissionId,
+              {...submission.data, ...updates},
+          ),
+          event: safeEvent(eventData),
+        };
+      });
+    },
+
     async recordReceipt(raw, invocation) {
       const request = receiptRequest(raw);
       const context = await contextFor(request, invocation, true);
@@ -1023,4 +1200,6 @@ module.exports = {
   safePackage,
   safeResponse,
   safeSubmission,
+  MAX_SUBMITTED_AT_AGE_MS,
+  MAX_SUBMITTED_AT_FUTURE_MS,
 };

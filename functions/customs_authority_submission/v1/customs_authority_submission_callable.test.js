@@ -43,6 +43,16 @@ test("callable auth and App Check gates fail closed before service access", asyn
       () => writeHandler({auth: {uid: "user-1"}, data: {}}),
       (error) => error instanceof HttpsError && error.code === "failed-precondition",
   );
+
+  const externalSubmissionHandler = createHandler("recordExternalSubmission", {
+    db: {},
+    appCheck: true,
+    log: silentLog,
+  });
+  await assert.rejects(
+      () => externalSubmissionHandler({auth: {uid: "user-1"}, data: {}}),
+      (error) => error instanceof HttpsError && error.code === "failed-precondition",
+  );
 });
 
 test("callable error mapping preserves legal and operational boundaries", () => {

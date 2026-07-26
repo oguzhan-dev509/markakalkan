@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   CONTRACT,
   createRequest,
+  externalSubmissionRequest,
   packageRequest,
 } = require("./contracts");
 const {
@@ -308,6 +309,29 @@ function packagePayload(submissionId, requestId = id(6)) {
   };
 }
 
+function externalSubmissionPayload(generated, requestId = id(30), overrides = {}) {
+  return {
+    contractVersion: CONTRACT.externalSubmissionRequest,
+    submissionId: generated.submission.submissionId,
+    tenantId: "tenant-1",
+    canonicalBrandId: "brand-1",
+    packageId: generated.package.packageId,
+    packageVersion: generated.package.version,
+    packageHash: generated.package.aggregateHash,
+    submissionChannel: "fsmh_portal",
+    submittedAt: "2026-07-25T15:59:00.000Z",
+    externalSubmissionConfirmation: true,
+    externalSubmissionConfirmationVersion:
+      "customs-external-submission-confirmation-v1",
+    externalSubmissionStatement:
+      "Yetkili kullanıcı, paketi kendi yetkisiyle resmî portal üzerinden dışarıda gönderdiğini beyan eder.",
+    externalReferenceType: "portal_transaction_id",
+    externalReferenceValue: "PORTAL-2026-0001",
+    requestId,
+    ...overrides,
+  };
+}
+
 async function approvedSubmission(service) {
   const created = await service.createSubmission(createPayload(), {uid: "user-1"});
   const submissionId = created.submission.submissionId;
@@ -321,6 +345,54 @@ async function approvedSubmission(service) {
 test("contracts reject unknown fields and packages without manifests", () => {
   assert.throws(() => createRequest({...createPayload(), extra: true}), /contract/);
   assert.throws(() => packageRequest({...packagePayload("submission-1"), documentManifest: [], evidenceManifest: []}), /manifest/);
+});
+
+test("external submission contract is strict and channel references fail closed", () => {
+  const generated = {
+    submission: {submissionId: "submission-1"},
+    package: {
+      packageId: "package-1",
+      version: 1,
+      aggregateHash: "a".repeat(64),
+    },
+  };
+  const valid = externalSubmissionPayload(generated);
+  assert.equal(externalSubmissionRequest(valid).externalReferenceValue, "PORTAL-2026-0001");
+  assert.throws(
+      () => externalSubmissionRequest({...valid, extra: true}),
+      /contract/,
+  );
+  assert.throws(
+      () => externalSubmissionRequest({...valid, externalSubmissionConfirmation: false}),
+      /confirmation/,
+  );
+  assert.throws(
+      () => externalSubmissionRequest({...valid, externalSubmissionConfirmationVersion: "old"}),
+      /version/,
+  );
+  assert.throws(
+      () => externalSubmissionRequest({...valid, submissionChannel: "registered_email"}),
+      /incompatible/,
+  );
+  assert.equal(externalSubmissionRequest({
+    ...valid,
+    submissionChannel: "registered_email",
+    externalReferenceType: "kep_message_id",
+    externalReferenceValue: "KEP-123",
+  }).externalReferenceType, "kep_message_id");
+  assert.equal(externalSubmissionRequest({
+    ...valid,
+    externalReferenceType: "none",
+    externalReferenceValue: null,
+  }).externalReferenceValue, null);
+  assert.throws(
+      () => externalSubmissionRequest({
+        ...valid,
+        externalReferenceType: "none",
+        externalReferenceValue: "unexpected",
+      }),
+      /empty/,
+  );
 });
 
 test("create is atomic, business-key idempotent and fingerprint protected", async () => {
@@ -400,16 +472,20 @@ test("external submission, receipt and authority response remain human-controlle
   const db = new FakeDb(baseCollections());
   const service = serviceFor(db);
   const submissionId = await approvedSubmission(service);
-  await service.generatePackage(packagePayload(submissionId), {uid: "user-1"});
+  const generated = await service.generatePackage(packagePayload(submissionId), {uid: "user-1"});
   await assert.rejects(
-      () => service.transitionSubmission(transitionPayload(submissionId, "submitted_externally", id(30)), {uid: "user-1"}),
-      /external submission statement/,
+      () => service.transitionSubmission(transitionPayload(submissionId, "submitted_externally", id(29), {
+        submittedAt: "2026-07-25T15:59:00.000Z",
+        externalSubmissionStatement: "Eski genel geçiş bu işlemi atlayamaz.",
+      }), {uid: "user-1"}),
+      /record external submission/,
   );
-  const submitted = await service.transitionSubmission(transitionPayload(submissionId, "submitted_externally", id(31), {
-    submittedAt: "2026-07-25T16:05:00.000Z",
-    externalSubmissionStatement: "Yetkili kullanıcı paketi FSMH portalında elektronik imza ile gönderdiğini beyan eder.",
-  }), {uid: "user-1"});
+  const submitted = await service.recordExternalSubmission(
+      externalSubmissionPayload(generated),
+      {uid: "user-1"},
+  );
   assert.equal(submitted.submission.status, "submitted_externally");
+  assert.equal(submitted.event.eventType, "customs_submission_recorded_as_submitted_externally");
 
   const receipt = await service.recordReceipt({
     contractVersion: CONTRACT.receiptRequest,
@@ -440,6 +516,105 @@ test("external submission, receipt and authority response remain human-controlle
   }, {uid: "user-1"});
   assert.equal(response.submission.status, "additional_information_requested");
   assert.equal(db.collections.customs_submission_responses.length, 2);
+});
+
+test("external submission verifies exact package and is atomic idempotent", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const submissionId = await approvedSubmission(service);
+  const generated = await service.generatePackage(packagePayload(submissionId), {uid: "user-1"});
+  const valid = externalSubmissionPayload(generated, id(40));
+  for (const overrides of [
+    {packageId: "missing-package"},
+    {packageVersion: 2},
+    {packageHash: "f".repeat(64)},
+  ]) {
+    await assert.rejects(
+        () => service.recordExternalSubmission({...valid, ...overrides}, {uid: "user-1"}),
+        /package/,
+    );
+  }
+  db.collections.customs_submission_packages[0].data.immutable = false;
+  await assert.rejects(
+      () => service.recordExternalSubmission(valid, {uid: "user-1"}),
+      /integrity/,
+  );
+  db.collections.customs_submission_packages[0].data.immutable = true;
+  const beforeEvents = db.collections.customs_submission_events.length;
+  const first = await service.recordExternalSubmission(valid, {uid: "user-1"});
+  const duplicate = await service.recordExternalSubmission(valid, {uid: "user-1"});
+  assert.equal(first.transactionApplied, true);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.transactionApplied, false);
+  assert.equal(db.collections.customs_submission_events.length, beforeEvents + 1);
+  const stored = db.collections.customs_authority_submissions[0].data;
+  assert.equal(stored.externalSubmission.packageId, generated.package.packageId);
+  assert.equal(stored.externalSubmission.packageHash, generated.package.aggregateHash);
+  assert.equal(stored.externalSubmission.submittedByUid, "user-1");
+  assert.equal(stored.externalSubmission.externalSubmissionConfirmation, true);
+  assert.equal(stored.externalSubmission.externalSubmissionConfirmationVersion, "customs-external-submission-confirmation-v1");
+  assert.equal(stored.eventCount, beforeEvents + 1);
+  await assert.rejects(
+      () => service.recordExternalSubmission(
+          {...valid, externalSubmissionStatement: `${valid.externalSubmissionStatement} Farklı.`},
+          {uid: "user-1"},
+      ),
+      /fingerprint/,
+  );
+});
+
+test("external submission rejects invalid scope, owner, dates and transaction failure", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const submissionId = await approvedSubmission(service);
+  const generated = await service.generatePackage(packagePayload(submissionId), {uid: "user-1"});
+  const valid = externalSubmissionPayload(generated, id(41));
+  await assert.rejects(
+      () => service.recordExternalSubmission(
+          {...valid, submittedAt: "2026-07-25T16:06:00.000Z"},
+          {uid: "user-1"},
+      ),
+      /range/,
+  );
+  await assert.rejects(
+      () => service.recordExternalSubmission(
+          {...valid, submittedAt: "2010-07-25T16:00:00.000Z"},
+          {uid: "user-1"},
+      ),
+      /range/,
+  );
+  db.collections.customs_authority_submissions[0].data.status = "approved_for_package";
+  await assert.rejects(
+      () => service.recordExternalSubmission(valid, {uid: "user-1"}),
+      /not ready/,
+  );
+  db.collections.customs_authority_submissions[0].data.status = "package_generated";
+  const packageRecord = db.collections.customs_submission_packages.shift();
+  await assert.rejects(
+      () => service.recordExternalSubmission(valid, {uid: "user-1"}),
+      /not found/,
+  );
+  db.collections.customs_submission_packages.push(packageRecord);
+  db.collections.customs_submission_packages[0].data.canonicalBrandId = "brand-other";
+  await assert.rejects(
+      () => service.recordExternalSubmission(valid, {uid: "user-1"}),
+      /not found/,
+  );
+  db.collections.customs_submission_packages[0].data.canonicalBrandId = "brand-1";
+  db.collections.tenant_memberships[0].data.role = "member";
+  await assert.rejects(
+      () => service.recordExternalSubmission(valid, {uid: "user-1"}),
+      /owner/,
+  );
+  db.collections.tenant_memberships[0].data.role = "owner";
+  db.transactionFailure = true;
+  const beforeEvents = db.collections.customs_submission_events.length;
+  await assert.rejects(
+      () => service.recordExternalSubmission(valid, {uid: "user-1"}),
+      /simulated transaction failure/,
+  );
+  assert.equal(db.collections.customs_authority_submissions[0].data.status, "package_generated");
+  assert.equal(db.collections.customs_submission_events.length, beforeEvents);
 });
 
 test("list and detail are tenant-scoped read-only with verified chain", async () => {

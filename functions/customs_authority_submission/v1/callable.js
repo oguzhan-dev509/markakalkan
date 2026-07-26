@@ -22,7 +22,7 @@ function mapError(error) {
   if (error.code === "authorization.denied") {
     return new HttpsError("permission-denied", "Bu işlem için marka sahibi yetkisi gerekir.");
   }
-  if (["profile.not_found", "intervention.not_found", "submission.not_found"].includes(error.code)) {
+  if (["profile.not_found", "intervention.not_found", "submission.not_found", "package.not_found"].includes(error.code)) {
     return new HttpsError("not-found", "Resmî başvuru veya kaynak kaydı bulunamadı.");
   }
   if (error.code === "source.mismatch") {
@@ -102,6 +102,9 @@ function buildTransitionCustomsAuthoritySubmission({db}) {
 function buildGenerateCustomsSubmissionPackage({db}) {
   return build("generatePackage", WRITE_OPTIONS, {db});
 }
+function buildRecordCustomsExternalSubmission({db}) {
+  return build("recordExternalSubmission", WRITE_OPTIONS, {db});
+}
 function buildRecordCustomsSubmissionReceipt({db}) {
   return build("recordReceipt", WRITE_OPTIONS, {db});
 }
@@ -124,6 +127,7 @@ module.exports = {
   buildGetCustomsAuthoritySubmissionDetail,
   buildListCustomsAuthoritySubmissions,
   buildRecordCustomsSubmissionReceipt,
+  buildRecordCustomsExternalSubmission,
   buildTransitionCustomsAuthoritySubmission,
   buildUpdateCustomsAuthoritySubmission,
   createHandler,

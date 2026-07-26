@@ -146,6 +146,7 @@ const {
   buildGetCustomsAuthoritySubmissionDetail,
   buildListCustomsAuthoritySubmissions,
   buildRecordCustomsSubmissionReceipt,
+  buildRecordCustomsExternalSubmission,
   buildTransitionCustomsAuthoritySubmission,
   buildUpdateCustomsAuthoritySubmission,
 } = require("./customs_authority_submission/v1");
@@ -317,6 +318,8 @@ exports.transitionCustomsAuthoritySubmission =
     buildTransitionCustomsAuthoritySubmission({db});
 exports.generateCustomsSubmissionPackage =
     buildGenerateCustomsSubmissionPackage({db});
+exports.recordCustomsExternalSubmission =
+    buildRecordCustomsExternalSubmission({db});
 exports.recordCustomsSubmissionReceipt =
     buildRecordCustomsSubmissionReceipt({db});
 exports.appendCustomsAuthorityResponse =

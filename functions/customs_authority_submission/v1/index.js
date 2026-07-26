@@ -5,6 +5,7 @@ const {
   buildGetCustomsAuthoritySubmissionDetail,
   buildListCustomsAuthoritySubmissions,
   buildRecordCustomsSubmissionReceipt,
+  buildRecordCustomsExternalSubmission,
   buildTransitionCustomsAuthoritySubmission,
   buildUpdateCustomsAuthoritySubmission,
 } = require("./callable");
@@ -16,6 +17,7 @@ module.exports = {
   buildGetCustomsAuthoritySubmissionDetail,
   buildListCustomsAuthoritySubmissions,
   buildRecordCustomsSubmissionReceipt,
+  buildRecordCustomsExternalSubmission,
   buildTransitionCustomsAuthoritySubmission,
   buildUpdateCustomsAuthoritySubmission,
 };

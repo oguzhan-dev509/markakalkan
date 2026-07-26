@@ -48,6 +48,19 @@ const CHANNEL_TYPES = Object.freeze([
   "other",
 ]);
 
+const EXTERNAL_REFERENCE_TYPES = Object.freeze([
+  "none",
+  "kep_message_id",
+  "portal_transaction_id",
+  "physical_delivery_reference",
+  "official_correspondence_reference",
+  "telephone_reference",
+  "other_reference",
+]);
+
+const EXTERNAL_SUBMISSION_CONFIRMATION_VERSION =
+  "customs-external-submission-confirmation-v1";
+
 const PACKAGE_TYPES = Object.freeze([
   "fsmh_application_package",
   "authority_referral_package",
@@ -92,6 +105,7 @@ const CONTRACT = Object.freeze({
   responseRequest: "customs-authority-response-append-request-v1",
   listRequest: "customs-authority-submission-list-request-v1",
   detailRequest: "customs-authority-submission-detail-request-v1",
+  externalSubmissionRequest: "customs-external-submission-record-request-v1",
 });
 
 class AuthoritySubmissionError extends Error {
@@ -363,6 +377,111 @@ function transitionRequest(raw) {
   });
 }
 
+function externalSubmissionRequest(raw) {
+  strict(raw, CONTRACT.externalSubmissionRequest, [
+    "submissionId",
+    "tenantId",
+    "canonicalBrandId",
+    "packageId",
+    "packageVersion",
+    "packageHash",
+    "submissionChannel",
+    "submittedAt",
+    "externalSubmissionConfirmation",
+    "externalSubmissionConfirmationVersion",
+    "externalSubmissionStatement",
+    "externalReferenceType",
+    "externalReferenceValue",
+    "requestId",
+  ]);
+  if (raw.externalSubmissionConfirmation !== true) {
+    throw new AuthoritySubmissionError(
+        "invalid-argument",
+        "external submission confirmation required",
+    );
+  }
+  if (raw.externalSubmissionConfirmationVersion !==
+      EXTERNAL_SUBMISSION_CONFIRMATION_VERSION) {
+    throw new AuthoritySubmissionError(
+        "invalid-argument",
+        "external submission confirmation version invalid",
+    );
+  }
+  const submissionChannel = enumValue(
+      raw.submissionChannel,
+      CHANNEL_TYPES,
+      "submissionChannel",
+  );
+  const externalReferenceType = enumValue(
+      raw.externalReferenceType,
+      EXTERNAL_REFERENCE_TYPES,
+      "externalReferenceType",
+  );
+  const allowedReferenceTypes = {
+    fsmh_portal: ["none", "portal_transaction_id"],
+    official_online_form: ["none", "portal_transaction_id"],
+    electronic_signature: ["none", "portal_transaction_id"],
+    registered_email: ["none", "kep_message_id"],
+    physical_delivery: ["none", "physical_delivery_reference"],
+    telephone_136: ["none", "telephone_reference"],
+    emergency_112: ["none", "telephone_reference"],
+    official_correspondence: ["none", "official_correspondence_reference"],
+    other: ["none", "other_reference"],
+  };
+  if (!allowedReferenceTypes[submissionChannel].includes(externalReferenceType)) {
+    throw new AuthoritySubmissionError(
+        "invalid-argument",
+        "external reference incompatible with submission channel",
+    );
+  }
+  let externalReferenceValue = null;
+  if (externalReferenceType === "none") {
+    if (raw.externalReferenceValue != null &&
+        (typeof raw.externalReferenceValue !== "string" ||
+         raw.externalReferenceValue.trim() !== "")) {
+      throw new AuthoritySubmissionError(
+          "invalid-argument",
+          "externalReferenceValue must be empty",
+      );
+    }
+  } else {
+    externalReferenceValue = cleanText(
+        raw.externalReferenceValue,
+        "externalReferenceValue",
+        3,
+        300,
+    );
+  }
+  return Object.freeze({
+    contractVersion: raw.contractVersion,
+    submissionId: cleanText(raw.submissionId, "submissionId", 1, 128),
+    tenantId: cleanText(raw.tenantId, "tenantId", 1, 128),
+    canonicalBrandId: cleanText(
+        raw.canonicalBrandId,
+        "canonicalBrandId",
+        1,
+        128,
+    ),
+    packageId: cleanText(raw.packageId, "packageId", 1, 128),
+    packageVersion: integer(raw.packageVersion, "packageVersion", 1, 1000000),
+    packageHash: sha256Hex(raw.packageHash, "packageHash"),
+    submissionChannel,
+    submittedAt: iso(raw.submittedAt, "submittedAt"),
+    externalSubmissionConfirmation: true,
+    externalSubmissionConfirmationVersion:
+      EXTERNAL_SUBMISSION_CONFIRMATION_VERSION,
+    externalSubmissionStatement: cleanText(
+        raw.externalSubmissionStatement,
+        "externalSubmissionStatement",
+        20,
+        2000,
+    ),
+    externalReferenceType,
+    externalReferenceValue,
+    requestId: uuid(raw.requestId),
+  });
+}
+
 function packageRequest(raw) {
   strict(raw, CONTRACT.packageRequest, [
     "submissionId",
@@ -518,6 +637,8 @@ module.exports = {
   AuthoritySubmissionError,
   CHANNEL_TYPES,
   CONTRACT,
+  EXTERNAL_REFERENCE_TYPES,
+  EXTERNAL_SUBMISSION_CONFIRMATION_VERSION,
   OUTCOME_CODES,
   PACKAGE_TYPES,
   REDACTION_ACTIONS,
@@ -527,6 +648,7 @@ module.exports = {
   TARGET_AUTHORITIES,
   createRequest,
   detailRequest,
+  externalSubmissionRequest,
   fingerprint,
   listRequest,
   packageRequest,
