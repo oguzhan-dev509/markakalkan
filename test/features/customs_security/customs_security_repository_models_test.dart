@@ -21,11 +21,11 @@ void main() {
           'authorizedImporterIds': <String>[],
           'protectedProductIds': <String>[],
           'hsCodes': <String>[],
-          'productCategories': <String>[],
-          'originCountries': <String>[],
-          'authorizedImportCountries': <String>[],
+          'productCategories': <String>['Otomotiv yedek parçası'],
+          'originCountries': <String>['DE'],
+          'authorizedImportCountries': <String>['TR'],
           'authenticationInstructions': 'Doğrulama talimatı.',
-          'serialVerificationMethods': <String>[],
+          'serialVerificationMethods': <String>['Üretici seri sorgusu'],
           'securityFeatureSummaries': <String>[],
           'counterfeitTwinRecordIds': <String>[],
           'productionAssetIds': <String>[],
@@ -46,6 +46,12 @@ void main() {
 
     expect(result.items.single.profileId, 'profile-1');
     expect(result.items.single.status, 'draft');
+    expect(result.items.single.productCategories, ['Otomotiv yedek parçası']);
+    expect(result.items.single.serialVerificationMethods, [
+      'Üretici seri sorgusu',
+    ]);
+    expect(result.items.single.originCountries, ['DE']);
+    expect(result.items.single.authorizedImportCountries, ['TR']);
   });
 
   test('read contract rejects a response that claims a write', () {
@@ -67,9 +73,17 @@ void main() {
       rightHolderName: 'Hak sahibi',
       authenticationInstructions: 'Doğrulama talimatı yeterince uzundur.',
       protectedProductIds: const ['product-1'],
+      productCategories: const ['Otomotiv yedek parçası'],
+      serialVerificationMethods: const ['Üretici seri sorgusu'],
+      originCountries: const ['DE'],
+      authorizedImportCountries: const ['TR'],
       validUntil: DateTime.utc(2027, 1, 1),
     ).toRequestMap();
     expect(profile['protectedProductIds'], ['product-1']);
+    expect(profile['productCategories'], ['Otomotiv yedek parçası']);
+    expect(profile['serialVerificationMethods'], ['Üretici seri sorgusu']);
+    expect(profile['originCountries'], ['DE']);
+    expect(profile['authorizedImportCountries'], ['TR']);
     expect(profile['validUntil'], '2027-01-01T00:00:00.000Z');
 
     const intervention = CustomsBorderInterventionDraft(

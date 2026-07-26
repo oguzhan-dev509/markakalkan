@@ -84,6 +84,33 @@ void main() {
       find.byKey(const ValueKey('customs-protected-products')),
       'product-1',
     );
+    Future<void> addChip(String field, String value) async {
+      final input = find.byKey(ValueKey('$field-input'));
+      await tester.ensureVisible(input);
+      await tester.enterText(input, value);
+      final add = find.byKey(ValueKey('$field-add'));
+      tester.widget<OutlinedButton>(add).onPressed!();
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Ürün kategorileri'), findsOneWidget);
+    expect(find.text('Seri doğrulama yöntemleri'), findsOneWidget);
+    expect(find.text('Menşe ülkeleri'), findsOneWidget);
+    expect(find.text('Yetkili ithalat ülkeleri'), findsOneWidget);
+    await addChip('customs-product-categories', 'Otomotiv yedek parçası');
+    await addChip('customs-product-categories', 'Fren sistemi');
+    final categoryChip = find.byKey(
+      const ValueKey('customs-product-categories-chip-Otomotiv yedek parçası'),
+    );
+    tester.widget<InputChip>(categoryChip).onDeleted!();
+    await tester.pumpAndSettle();
+    await addChip(
+      'customs-serial-verification-methods',
+      'Üretici seri numarası ve doğrulama kaydı',
+    );
+    await addChip('customs-origin-countries', 'tr');
+    await addChip('customs-origin-countries', 'TR');
+    await addChip('customs-authorized-import-countries', 'de');
     await tester.enterText(
       find.byKey(const ValueKey('customs-authentication-instructions')),
       'Seri numarası ve ambalaj güvenlik işaretleri birlikte doğrulanır.',
@@ -95,7 +122,43 @@ void main() {
 
     expect(repository.createProfileCalls, 1);
     expect(repository.lastProfileDraft?.protectedProductIds, ['product-1']);
+    expect(repository.lastProfileDraft?.productCategories, ['Fren sistemi']);
+    expect(repository.lastProfileDraft?.serialVerificationMethods, [
+      'Üretici seri numarası ve doğrulama kaydı',
+    ]);
+    expect(repository.lastProfileDraft?.originCountries, ['TR']);
+    expect(repository.lastProfileDraft?.authorizedImportCountries, ['DE']);
+    expect(find.text('Sahte İkiz kayıtları'), findsNothing);
+    expect(find.text('Üretim varlıkları'), findsNothing);
     expect(find.textContaining('taslak profili oluşturuldu'), findsOneWidget);
+  });
+
+  testWidgets('invalid profile country code prevents repository invocation', (
+    tester,
+  ) async {
+    final repository = FakeCustomsSecurityRepository(profiles: const []);
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('create-customs-profile')));
+    await tester.pumpAndSettle();
+    final input = find.byKey(const ValueKey('customs-origin-countries-input'));
+    await tester.ensureVisible(input);
+    await tester.enterText(input, 'TUR');
+    final submit = find.byKey(const ValueKey('confirm-create-customs-profile'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(repository.createProfileCalls, 0);
+    expect(
+      find.text('Ülke kodu iki harfli ISO biçiminde olmalıdır. Örn. TR'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('creates a draft border intervention from an active profile', (

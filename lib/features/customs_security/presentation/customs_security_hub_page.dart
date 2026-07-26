@@ -920,12 +920,24 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
   final _rightHolder = TextEditingController();
   final _rights = TextEditingController();
   final _products = TextEditingController();
+  final _productCategory = TextEditingController();
   final _hsCodes = TextEditingController();
   final _instructions = TextEditingController();
+  final _serialVerificationMethod = TextEditingController();
   final _features = TextEditingController();
+  final _originCountry = TextEditingController();
+  final _authorizedImportCountry = TextEditingController();
   final _riskCountries = TextEditingController();
   final _riskRoutes = TextEditingController();
   final _validUntil = TextEditingController();
+  final List<String> _productCategories = [];
+  final List<String> _serialVerificationMethods = [];
+  final List<String> _originCountries = [];
+  final List<String> _authorizedImportCountries = [];
+  String? _productCategoryError;
+  String? _serialVerificationMethodError;
+  String? _originCountryError;
+  String? _authorizedImportCountryError;
 
   @override
   void dispose() {
@@ -934,9 +946,13 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
       _rightHolder,
       _rights,
       _products,
+      _productCategory,
       _hsCodes,
       _instructions,
+      _serialVerificationMethod,
       _features,
+      _originCountry,
+      _authorizedImportCountry,
       _riskCountries,
       _riskRoutes,
       _validUntil,
@@ -952,17 +968,107 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
     return DateTime.tryParse('${clean}T23:59:59.000Z');
   }
 
+  bool _addListValue({
+    required TextEditingController controller,
+    required List<String> values,
+    required int maximumLength,
+    required void Function(String?) setError,
+    String Function(String)? normalize,
+    bool Function(String)? validate,
+    String? validationMessage,
+  }) {
+    final raw = controller.text.trim();
+    if (raw.isEmpty) {
+      setState(() => setError(null));
+      return true;
+    }
+    final value = normalize?.call(raw) ?? raw;
+    if (validate != null && !validate(value)) {
+      setState(() => setError(validationMessage));
+      return false;
+    }
+    if (value.length > maximumLength) {
+      setState(
+        () => setError('Değer en fazla $maximumLength karakter olabilir.'),
+      );
+      return false;
+    }
+    if (!values.contains(value) && values.length >= 50) {
+      setState(() => setError('En fazla 50 değer eklenebilir.'));
+      return false;
+    }
+    setState(() {
+      if (!values.contains(value)) values.add(value);
+      controller.clear();
+      setError(null);
+    });
+    return true;
+  }
+
+  bool _addProductCategory() => _addListValue(
+    controller: _productCategory,
+    values: _productCategories,
+    maximumLength: 300,
+    setError: (value) => _productCategoryError = value,
+  );
+
+  bool _addSerialVerificationMethod() => _addListValue(
+    controller: _serialVerificationMethod,
+    values: _serialVerificationMethods,
+    maximumLength: 500,
+    setError: (value) => _serialVerificationMethodError = value,
+  );
+
+  bool _addOriginCountry() => _addCountry(
+    controller: _originCountry,
+    values: _originCountries,
+    setError: (value) => _originCountryError = value,
+  );
+
+  bool _addAuthorizedImportCountry() => _addCountry(
+    controller: _authorizedImportCountry,
+    values: _authorizedImportCountries,
+    setError: (value) => _authorizedImportCountryError = value,
+  );
+
+  bool _addCountry({
+    required TextEditingController controller,
+    required List<String> values,
+    required void Function(String?) setError,
+  }) => _addListValue(
+    controller: controller,
+    values: values,
+    maximumLength: 2,
+    setError: setError,
+    normalize: (value) => value.toUpperCase(),
+    validate: (value) => RegExp(r'^[A-Z]{2}$').hasMatch(value),
+    validationMessage: 'Ülke kodu iki harfli ISO biçiminde olmalıdır. Örn. TR',
+  );
+
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    var pendingValuesValid = true;
+    pendingValuesValid = _addProductCategory() && pendingValuesValid;
+    pendingValuesValid = _addSerialVerificationMethod() && pendingValuesValid;
+    pendingValuesValid = _addOriginCountry() && pendingValuesValid;
+    pendingValuesValid = _addAuthorizedImportCountry() && pendingValuesValid;
+    if (!pendingValuesValid || !_formKey.currentState!.validate()) return;
     Navigator.of(context).pop(
       CustomsProtectionProfileDraft(
         profileName: _name.text,
         rightHolderName: _rightHolder.text,
         rightHolderReferenceIds: _split(_rights.text),
         protectedProductIds: _split(_products.text),
+        productCategories: List.unmodifiable(_productCategories),
         hsCodes: _split(_hsCodes.text),
         authenticationInstructions: _instructions.text,
+        serialVerificationMethods: List.unmodifiable(
+          _serialVerificationMethods,
+        ),
         securityFeatureSummaries: _split(_features.text),
+        originCountries: List.unmodifiable(_originCountries),
+        authorizedImportCountries: List.unmodifiable(
+          _authorizedImportCountries,
+        ),
         riskCountryCodes: _split(
           _riskCountries.text,
         ).map((value) => value.toUpperCase()).toList(growable: false),
@@ -1008,6 +1114,17 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
                   label: 'Korunan ürün kimlikleri',
                   hint: 'Aktivasyon için en az bir ürün gerekir',
                 ),
+                _chipListField(
+                  keyName: 'customs-product-categories',
+                  controller: _productCategory,
+                  label: 'Ürün kategorileri',
+                  hint: 'Örn. Otomotiv yedek parçası',
+                  values: _productCategories,
+                  errorText: _productCategoryError,
+                  onAdd: _addProductCategory,
+                  onRemove: (value) =>
+                      setState(() => _productCategories.remove(value)),
+                ),
                 _field(
                   key: 'customs-hs-codes',
                   controller: _hsCodes,
@@ -1020,10 +1137,43 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
                   minimum: 10,
                   maxLines: 4,
                 ),
+                _chipListField(
+                  keyName: 'customs-serial-verification-methods',
+                  controller: _serialVerificationMethod,
+                  label: 'Seri doğrulama yöntemleri',
+                  hint: 'Örn. Üretici seri numarası ve doğrulama kaydı',
+                  values: _serialVerificationMethods,
+                  errorText: _serialVerificationMethodError,
+                  onAdd: _addSerialVerificationMethod,
+                  onRemove: (value) =>
+                      setState(() => _serialVerificationMethods.remove(value)),
+                ),
                 _field(
                   key: 'customs-security-features',
                   controller: _features,
                   label: 'Güvenlik özellikleri',
+                ),
+                _chipListField(
+                  keyName: 'customs-origin-countries',
+                  controller: _originCountry,
+                  label: 'Menşe ülkeleri',
+                  hint: 'TR',
+                  values: _originCountries,
+                  errorText: _originCountryError,
+                  onAdd: _addOriginCountry,
+                  onRemove: (value) =>
+                      setState(() => _originCountries.remove(value)),
+                ),
+                _chipListField(
+                  keyName: 'customs-authorized-import-countries',
+                  controller: _authorizedImportCountry,
+                  label: 'Yetkili ithalat ülkeleri',
+                  hint: 'TR',
+                  values: _authorizedImportCountries,
+                  errorText: _authorizedImportCountryError,
+                  onAdd: _addAuthorizedImportCountry,
+                  onRemove: (value) =>
+                      setState(() => _authorizedImportCountries.remove(value)),
                 ),
                 _field(
                   key: 'customs-risk-countries',
@@ -1065,6 +1215,74 @@ class _CreateProfileDialogState extends State<_CreateProfileDialog> {
           child: const Text('Taslak oluştur'),
         ),
       ],
+    );
+  }
+
+  Widget _chipListField({
+    required String keyName,
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required List<String> values,
+    required String? errorText,
+    required bool Function() onAdd,
+    required void Function(String value) onRemove,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  key: ValueKey('$keyName-input'),
+                  controller: controller,
+                  decoration: InputDecoration(
+                    labelText: label,
+                    hintText: hint,
+                    errorText: errorText,
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => onAdd(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: OutlinedButton.icon(
+                  key: ValueKey('$keyName-add'),
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Ekle'),
+                ),
+              ),
+            ],
+          ),
+          if (values.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: values
+                  .map(
+                    (value) => InputChip(
+                      key: ValueKey('$keyName-chip-$value'),
+                      label: Text(value),
+                      deleteIcon: Icon(
+                        Icons.close,
+                        key: ValueKey('$keyName-remove-$value'),
+                      ),
+                      onDeleted: () => onRemove(value),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

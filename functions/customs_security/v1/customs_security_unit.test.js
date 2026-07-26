@@ -192,10 +192,11 @@ const profilePayload = (requestId = "123e4567-e89b-42d3-a456-426614174301") => (
   rightHolderReferenceIds: ["marka-tescil-1"],
   protectedProductIds: ["bosch-fren-balatasi"],
   hsCodes: ["870830"],
-  originCountries: ["DE"],
-  authorizedImportCountries: ["TR"],
+  productCategories: [" Otomotiv yedek parçası ", "Otomotiv yedek parçası"],
+  originCountries: [" de ", "DE"],
+  authorizedImportCountries: [" tr ", "TR"],
   authenticationInstructions: "Seri numarası, ambalaj ve güvenlik işaretleri birlikte doğrulanmalıdır.",
-  serialVerificationMethods: ["MarkaKalkan seri doğrulaması"],
+  serialVerificationMethods: [" MarkaKalkan seri doğrulaması ", "MarkaKalkan seri doğrulaması"],
   securityFeatureSummaries: ["Lazer baskılı seri numarası"],
   riskCountryCodes: ["CN"],
   riskRouteSummaries: ["Çin - transit merkez - Türkiye"],
@@ -249,7 +250,10 @@ async function createActiveProfile(service) {
 
 test("contracts are strict bounded and legally neutral", () => {
   const profile = profileCreateRequest(profilePayload());
+  assert.deepEqual(profile.productCategories, ["Otomotiv yedek parçası"]);
   assert.equal(profile.originCountries[0], "DE");
+  assert.deepEqual(profile.authorizedImportCountries, ["TR"]);
+  assert.deepEqual(profile.serialVerificationMethods, ["MarkaKalkan seri doğrulaması"]);
   assert.equal(fingerprint(profile).length, 64);
   assert.throws(() => profileCreateRequest({...profilePayload(), unknown: true}), /contract/);
   assert.throws(() => profileCreateRequest({...profilePayload(), requestId: "bad"}), /requestId/);
@@ -277,10 +281,34 @@ test("profile create is atomic idempotent and fingerprint protected", async () =
   assert.equal(db.writes, writes);
   assert.equal(db.collections.customs_protection_profiles.length, 1);
   assert.equal(db.collections.customs_intervention_events.length, 1);
+  const stored = db.collections.customs_protection_profiles[0].data;
+  assert.deepEqual(first.profile.productCategories, ["Otomotiv yedek parçası"]);
+  assert.deepEqual(first.profile.serialVerificationMethods, ["MarkaKalkan seri doğrulaması"]);
+  assert.deepEqual(first.profile.originCountries, ["DE"]);
+  assert.deepEqual(first.profile.authorizedImportCountries, ["TR"]);
+  assert.deepEqual(stored.productCategories, first.profile.productCategories);
+  assert.deepEqual(stored.serialVerificationMethods, first.profile.serialVerificationMethods);
+  assert.deepEqual(stored.originCountries, first.profile.originCountries);
+  assert.deepEqual(stored.authorizedImportCountries, first.profile.authorizedImportCountries);
   await assert.rejects(
       () => service.createProfile({...profilePayload(), profileName: "Farklı profil adı"}, {uid: "user-1"}),
       /fingerprint/,
   );
+});
+
+test("profile optional list fields preserve empty-array compatibility", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = createCustomsSecurityService({db, clock: clock(), resolveContext});
+  const payload = profilePayload("123e4567-e89b-42d3-a456-426614174399");
+  delete payload.productCategories;
+  delete payload.serialVerificationMethods;
+  delete payload.originCountries;
+  delete payload.authorizedImportCountries;
+  const created = await service.createProfile(payload, {uid: "user-1"});
+  assert.deepEqual(created.profile.productCategories, []);
+  assert.deepEqual(created.profile.serialVerificationMethods, []);
+  assert.deepEqual(created.profile.originCountries, []);
+  assert.deepEqual(created.profile.authorizedImportCountries, []);
 });
 
 test("profile lifecycle requires review rights and product basis", async () => {
