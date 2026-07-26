@@ -13,6 +13,7 @@ const {
   externalSubmissionRequest,
   fingerprint,
   listRequest,
+  outcomeRequest,
   packageRequest,
   receiptRequest,
   responseRequest,
@@ -43,6 +44,13 @@ const EVENT_COLLECTION = "customs_submission_events";
 const MAX_SCOPE = 200;
 const MAX_SUBMITTED_AT_FUTURE_MS = 5 * 60 * 1000;
 const MAX_SUBMITTED_AT_AGE_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+const MAX_OFFICIAL_DATE_AFTER_RECEIPT_MS = 24 * 60 * 60 * 1000;
+const CONCLUDABLE_OUTCOME_STATUSES = Object.freeze([
+  "submitted_externally",
+  "receipt_recorded",
+  "authority_review",
+  "additional_information_requested",
+]);
 
 const sha256 = (value) => createHash("sha256").update(String(value), "utf8").digest("hex");
 
@@ -86,6 +94,37 @@ function assertFingerprint(existing, expected) {
 
 function normalizeBusinessValue(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeAuthorityValue(value) {
+  return String(value || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("tr-TR")
+      .replace(/ı/g, "i")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+}
+
+function authorityNameMatches(submission, name) {
+  const normalizedName = normalizeAuthorityValue(name);
+  const normalizedUnit = normalizeAuthorityValue(submission.targetUnit);
+  if (normalizedUnit &&
+      (normalizedUnit.includes(normalizedName) ||
+       normalizedName.includes(normalizedUnit))) {
+    return true;
+  }
+  const markers = {
+    customs_enforcement: ["ticaret bakanligi", "gumruk"],
+    police_anti_smuggling: ["icisleri bakanligi", "emniyet", "polis"],
+    emergency_112: ["112", "acil cagri"],
+    cyber_crime: ["siber", "emniyet"],
+    fsmh_program: ["ticaret bakanligi", "fsmh", "fikri ve sinai"],
+    other_authorized_body: [],
+  };
+  return (markers[submission.targetAuthority] || [])
+      .some((marker) => normalizedName.includes(marker));
 }
 
 function duplicateCheckKey(context, request) {
@@ -184,6 +223,16 @@ function safeSubmission(id, data) {
     externalSubmissionStatement: data.externalSubmissionStatement || null,
     officialReferenceNumber: data.officialReferenceNumber || null,
     receiptRecordedAt: data.receiptRecordedAt || null,
+    outcomeResponseId: data.outcomeResponseId || null,
+    outcomeCode: data.outcomeCode || null,
+    outcomeFinalityLevel: data.outcomeFinalityLevel || null,
+    authorityReferenceNumber: data.authorityReferenceNumber || null,
+    officialDocumentDate: data.officialDocumentDate || null,
+    outcomeReceivedAt: data.outcomeReceivedAt || null,
+    outcomeRecordedAt: data.outcomeRecordedAt || null,
+    authorityNameSnapshot: data.authorityNameSnapshot || null,
+    authorityUnitSnapshot: data.authorityUnitSnapshot || null,
+    outcomeSummary: data.outcomeSummary || null,
     packageCount: Number(data.packageCount || 0),
     responseCount: Number(data.responseCount || 0),
     eventCount: Number(data.eventCount || 0),
@@ -228,6 +277,14 @@ function safeResponse(id, data) {
     attachmentHashes: data.attachmentHashes || [],
     requestedDueAt: data.requestedDueAt || null,
     outcomeCode: data.outcomeCode || null,
+    outcomeFinalityLevel: data.outcomeFinalityLevel || null,
+    officialDocumentDate: data.officialDocumentDate || null,
+    authorityNameSnapshot: data.authorityNameSnapshot || null,
+    authorityUnitSnapshot: data.authorityUnitSnapshot || null,
+    previousResponseId: data.previousResponseId || null,
+    additionalNotes: data.additionalNotes || null,
+    attachmentIntegrityStatus:
+      data.attachmentIntegrityStatus || null,
     immutable: data.immutable === true,
   };
 }
@@ -389,8 +446,11 @@ function requireTransition(current, next, data, request) {
         "record external submission operation required",
     );
   }
-  if (next === "concluded" && !data.officialReferenceNumber) {
-    throw new AuthoritySubmissionError("status.precondition_failed", "official reference required");
+  if (next === "concluded") {
+    throw new AuthoritySubmissionError(
+        "status.precondition_failed",
+        "record authority outcome operation required",
+    );
   }
 }
 
@@ -1031,6 +1091,14 @@ function createAuthoritySubmissionService({
     async appendResponse(raw, invocation) {
       const request = responseRequest(raw);
       const context = await contextFor(request, invocation, true);
+      if (["decision", "closure_notice", "rejection_notice"].includes(
+          request.responseType,
+      )) {
+        throw new AuthoritySubmissionError(
+            "status.precondition_failed",
+            "record authority outcome operation required",
+        );
+      }
       const recordedAt = nowIso(clock);
       const requestFingerprint = fingerprint(request);
       const event = eventRef(db, context, request.submissionId, request.requestId);
@@ -1122,6 +1190,346 @@ function createAuthoritySubmissionService({
       });
     },
 
+    async recordOutcome(raw, invocation) {
+      const request = outcomeRequest(raw);
+      const context = await contextFor(request, invocation, true);
+      const recordedAt = nowIso(clock);
+      const recordedAtMs = new Date(recordedAt).getTime();
+      const receivedAtMs = new Date(request.receivedAt).getTime();
+      const officialDocumentDateMs =
+        new Date(request.officialDocumentDate).getTime();
+      if (receivedAtMs > recordedAtMs + MAX_SUBMITTED_AT_FUTURE_MS ||
+          receivedAtMs < recordedAtMs - MAX_SUBMITTED_AT_AGE_MS ||
+          officialDocumentDateMs >
+            recordedAtMs + MAX_SUBMITTED_AT_FUTURE_MS ||
+          officialDocumentDateMs <
+            recordedAtMs - MAX_SUBMITTED_AT_AGE_MS ||
+          officialDocumentDateMs >
+            receivedAtMs + MAX_OFFICIAL_DATE_AFTER_RECEIPT_MS) {
+        throw new AuthoritySubmissionError(
+            "status.precondition_failed",
+            "outcome dates outside accepted range",
+        );
+      }
+      const requestFingerprint = fingerprint(request);
+      const response = responseRef(
+          db,
+          context,
+          request.submissionId,
+          request.requestId,
+      );
+      const outcomeEvent = eventRef(
+          db,
+          context,
+          request.submissionId,
+          request.requestId,
+      );
+      const concludedEvent = eventRef(
+          db,
+          context,
+          request.submissionId,
+          `${request.requestId}|concluded`,
+      );
+      return db.runTransaction(async (transaction) => {
+        const submission = await submissionSnapshot({
+          submissionId: request.submissionId,
+          context,
+          transaction,
+        });
+        const externalSubmission = submission.data.externalSubmission || {};
+        const packageRecord = db.collection(PACKAGE_COLLECTION)
+            .doc(externalSubmission.packageId || "__missing__");
+        const previousResponseRef = request.previousResponseId ?
+          db.collection(RESPONSE_COLLECTION).doc(request.previousResponseId) :
+          null;
+        const [
+          existingResponse,
+          existingOutcomeEvent,
+          existingConcludedEvent,
+          packageSnapshot,
+          previousResponseSnapshot,
+        ] = await Promise.all([
+          transaction.get(response.ref),
+          transaction.get(outcomeEvent.ref),
+          transaction.get(concludedEvent.ref),
+          transaction.get(packageRecord),
+          previousResponseRef ? transaction.get(previousResponseRef) : null,
+        ]);
+        const duplicateParts = [
+          existingResponse.exists,
+          existingOutcomeEvent.exists,
+          existingConcludedEvent.exists,
+        ];
+        if (duplicateParts.some(Boolean)) {
+          if (!duplicateParts.every(Boolean)) {
+            throw new AuthoritySubmissionError(
+                "internal",
+                "partial authority outcome record",
+            );
+          }
+          assertFingerprint(
+              existingResponse.data() || {},
+              requestFingerprint,
+          );
+          assertFingerprint(
+              existingOutcomeEvent.data() || {},
+              requestFingerprint,
+          );
+          assertFingerprint(
+              existingConcludedEvent.data() || {},
+              requestFingerprint,
+          );
+          const duplicatePackageData = scoped(
+              packageSnapshot,
+              context,
+              "package.not_found",
+          );
+          if (submission.data.status !== "concluded" ||
+              submission.data.outcomeResponseId !== response.id ||
+              submission.data.lastEventId !== concludedEvent.id ||
+              submission.data.outcomeCode !== request.outcomeCode ||
+              submission.data.outcomeFinalityLevel !==
+                request.outcomeFinalityLevel ||
+              submission.data.authorityReferenceNumber !==
+                request.authorityReferenceNumber ||
+              submission.data.officialDocumentDate !==
+                request.officialDocumentDate ||
+              submission.data.outcomeReceivedAt !== request.receivedAt ||
+              submission.data.authorityNameSnapshot !==
+                request.authorityNameSnapshot ||
+              (submission.data.authorityUnitSnapshot || null) !==
+                request.authorityUnitSnapshot ||
+              submission.data.outcomeSummary !== request.summary ||
+              !externalSubmission.packageId ||
+              duplicatePackageData.immutable !== true ||
+              duplicatePackageData.submissionId !== request.submissionId ||
+              Number(duplicatePackageData.version || 0) !==
+                Number(externalSubmission.packageVersion) ||
+              duplicatePackageData.aggregateHash !==
+                externalSubmission.packageHash) {
+            throw new AuthoritySubmissionError(
+                "internal",
+                "inconsistent authority outcome duplicate",
+            );
+          }
+          if (previousResponseSnapshot) {
+            scoped(
+                previousResponseSnapshot,
+                context,
+                "response.not_found",
+            );
+            if ((previousResponseSnapshot.data() || {}).submissionId !==
+                request.submissionId) {
+              throw new AuthoritySubmissionError(
+                  "internal",
+                  "inconsistent previous authority response",
+              );
+            }
+          }
+          return {
+            contractVersion:
+              "customs-authority-outcome-record-result-v1",
+            ok: true,
+            duplicate: true,
+            transactionApplied: false,
+            submission: safeSubmission(request.submissionId, submission.data),
+            response: safeResponse(
+                response.id,
+                existingResponse.data() || {},
+            ),
+            events: [
+              safeEvent(existingOutcomeEvent.data() || {}),
+              safeEvent(existingConcludedEvent.data() || {}),
+            ],
+          };
+        }
+        if (!CONCLUDABLE_OUTCOME_STATUSES.includes(submission.data.status)) {
+          throw new AuthoritySubmissionError(
+              "status.precondition_failed",
+              "submission cannot be concluded",
+          );
+        }
+        if (!externalSubmission.packageId ||
+            !externalSubmission.packageVersion ||
+            !externalSubmission.packageHash ||
+            !externalSubmission.submittedAt ||
+            !externalSubmission.submittedByUid) {
+          throw new AuthoritySubmissionError(
+              "status.precondition_failed",
+              "external submission snapshot required",
+          );
+        }
+        const packageData = scoped(
+            packageSnapshot,
+            context,
+            "package.not_found",
+        );
+        if (packageData.immutable !== true ||
+            packageData.submissionId !== request.submissionId ||
+            Number(packageData.version || 0) !==
+              Number(externalSubmission.packageVersion) ||
+            packageData.aggregateHash !== externalSubmission.packageHash) {
+          throw new AuthoritySubmissionError(
+              "status.precondition_failed",
+              "submitted package integrity mismatch",
+          );
+        }
+        if (!authorityNameMatches(
+            submission.data,
+            request.authorityNameSnapshot,
+        )) {
+          throw new AuthoritySubmissionError(
+              "status.precondition_failed",
+              "authority name mismatch",
+          );
+        }
+        if (submission.data.targetUnit) {
+          if (!request.authorityUnitSnapshot ||
+              normalizeAuthorityValue(request.authorityUnitSnapshot) !==
+                normalizeAuthorityValue(submission.data.targetUnit)) {
+            throw new AuthoritySubmissionError(
+                "status.precondition_failed",
+                "authority unit mismatch",
+            );
+          }
+        }
+        if (previousResponseSnapshot) {
+          scoped(
+              previousResponseSnapshot,
+              context,
+              "response.not_found",
+          );
+          if ((previousResponseSnapshot.data() || {}).submissionId !==
+              request.submissionId) {
+            throw new AuthoritySubmissionError(
+                "status.precondition_failed",
+                "previous response scope mismatch",
+            );
+          }
+        }
+        const responseDocument = optional({
+          contractVersion: "customs-submission-response-v1",
+          schemaVersion: "customs-submission-response-schema-v1",
+          tenantId: context.tenantId,
+          canonicalBrandId: context.brandId,
+          submissionId: request.submissionId,
+          responseType: request.responseType,
+          outcomeCode: request.outcomeCode,
+          outcomeFinalityLevel: request.outcomeFinalityLevel,
+          outcomeFinalitySemantics:
+            "user_classification_of_authority_document_not_markakalkan_legal_determination",
+          authorityReference: request.authorityReferenceNumber,
+          officialDocumentDate: request.officialDocumentDate,
+          receivedAt: request.receivedAt,
+          receivedByUid: invocation.uid,
+          authorityNameSnapshot: request.authorityNameSnapshot,
+          summary: request.summary,
+          attachmentReferences: request.attachmentReferences,
+          attachmentHashes: request.attachmentHashes,
+          attachmentIntegrityStatus: "metadata_only_unverified",
+          humanEntryConfirmation: true,
+          humanEntryConfirmationVersion:
+            request.humanEntryConfirmationVersion,
+          recordedAt,
+          immutable: true,
+          requestId: request.requestId,
+          requestFingerprint,
+        }, {
+          authorityUnitSnapshot: request.authorityUnitSnapshot,
+          previousResponseId: request.previousResponseId,
+          additionalNotes: request.additionalNotes,
+        });
+        const firstSequence = Number(submission.data.eventCount || 0) + 1;
+        const secondSequence = firstSequence + 1;
+        const finalityMetadata = {
+          outcomeCode: request.outcomeCode,
+          outcomeFinalityLevel: request.outcomeFinalityLevel,
+          semantics:
+            "user_classification_of_authority_document_not_markakalkan_legal_determination",
+          humanEntryConfirmation: true,
+          humanEntryConfirmationVersion:
+            request.humanEntryConfirmationVersion,
+          authorityReferenceNumber: request.authorityReferenceNumber,
+          responseId: response.id,
+        };
+        const outcomeEventData = eventDocument({
+          context,
+          submissionId: request.submissionId,
+          sequence: firstSequence,
+          eventType: "customs_authority_outcome_recorded",
+          previousStatus: submission.data.status,
+          nextStatus: submission.data.status,
+          summary: `${submission.data.submissionNumber} için kurum sonucu kaydedildi.`,
+          reason: request.summary,
+          actorUid: invocation.uid,
+          recordedAt,
+          previousEventId: submission.data.lastEventId || null,
+          requestId: request.requestId,
+          requestFingerprint,
+        });
+        outcomeEventData.outcomeMetadata = finalityMetadata;
+        const concludedEventData = eventDocument({
+          context,
+          submissionId: request.submissionId,
+          sequence: secondSequence,
+          eventType: "customs_authority_submission_concluded",
+          previousStatus: submission.data.status,
+          nextStatus: "concluded",
+          summary: `${submission.data.submissionNumber} kurum sonucu ile sonuçlandırıldı.`,
+          reason: request.summary,
+          actorUid: invocation.uid,
+          recordedAt,
+          previousEventId: outcomeEvent.id,
+          requestId: request.requestId,
+          requestFingerprint,
+        });
+        concludedEventData.outcomeMetadata = finalityMetadata;
+        const updates = {
+          status: "concluded",
+          concludedAt: recordedAt,
+          outcomeResponseId: response.id,
+          outcomeCode: request.outcomeCode,
+          outcomeFinalityLevel: request.outcomeFinalityLevel,
+          authorityReferenceNumber: request.authorityReferenceNumber,
+          officialDocumentDate: request.officialDocumentDate,
+          outcomeReceivedAt: request.receivedAt,
+          outcomeRecordedAt: recordedAt,
+          outcomeRecordedByUid: invocation.uid,
+          authorityNameSnapshot: request.authorityNameSnapshot,
+          authorityUnitSnapshot: request.authorityUnitSnapshot || null,
+          outcomeSummary: request.summary,
+          responseCount: Number(submission.data.responseCount || 0) + 1,
+          eventCount: secondSequence,
+          lastEventId: concludedEvent.id,
+          lastEventType: "customs_authority_submission_concluded",
+          lastEventAt: recordedAt,
+          statusChangedAt: recordedAt,
+          statusChangedByUid: invocation.uid,
+          updatedAt: recordedAt,
+          updatedByUid: invocation.uid,
+        };
+        transaction.create(response.ref, responseDocument);
+        transaction.create(outcomeEvent.ref, outcomeEventData);
+        transaction.create(concludedEvent.ref, concludedEventData);
+        transaction.update(submission.ref, updates);
+        return {
+          contractVersion: "customs-authority-outcome-record-result-v1",
+          ok: true,
+          duplicate: false,
+          transactionApplied: true,
+          submission: safeSubmission(
+              request.submissionId,
+              {...submission.data, ...updates},
+          ),
+          response: safeResponse(response.id, responseDocument),
+          events: [
+            safeEvent(outcomeEventData),
+            safeEvent(concludedEventData),
+          ],
+        };
+      });
+    },
+
     async listSubmissions(raw, invocation) {
       const request = listRequest(raw);
       const context = await contextFor(request, invocation, false);
@@ -1202,4 +1610,6 @@ module.exports = {
   safeSubmission,
   MAX_SUBMITTED_AT_AGE_MS,
   MAX_SUBMITTED_AT_FUTURE_MS,
+  MAX_OFFICIAL_DATE_AFTER_RECEIPT_MS,
+  CONCLUDABLE_OUTCOME_STATUSES,
 };

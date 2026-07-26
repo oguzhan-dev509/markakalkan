@@ -5,6 +5,7 @@ const {
   CONTRACT,
   createRequest,
   externalSubmissionRequest,
+  outcomeRequest,
   packageRequest,
 } = require("./contracts");
 const {
@@ -332,6 +333,47 @@ function externalSubmissionPayload(generated, requestId = id(30), overrides = {}
   };
 }
 
+function outcomePayload(submissionId, requestId = id(50), overrides = {}) {
+  return {
+    contractVersion: CONTRACT.outcomeRequest,
+    submissionId,
+    tenantId: "tenant-1",
+    canonicalBrandId: "brand-1",
+    responseType: "decision",
+    outcomeCode: "action_taken",
+    outcomeFinalityLevel: "administrative_final",
+    authorityReferenceNumber: "FSMH-2026-SONUC-1",
+    officialDocumentDate: "2026-07-25T14:00:00.000Z",
+    receivedAt: "2026-07-25T15:30:00.000Z",
+    authorityNameSnapshot: "Ticaret Bakanlığı",
+    authorityUnitSnapshot: "Ticaret Bakanlığı FSMH Programı",
+    summary:
+      "Kurum tarafından bildirilen sonuç, kullanıcı tarafından hukuken nötr biçimde kaydedildi.",
+    humanEntryConfirmation: true,
+    humanEntryConfirmationVersion:
+      "customs-authority-outcome-human-entry-v1",
+    previousResponseId: null,
+    attachmentReferences: ["authority-outcome-document-1"],
+    attachmentHashes: ["e".repeat(64)],
+    additionalNotes: null,
+    requestId,
+    ...overrides,
+  };
+}
+
+async function externallySubmitted(service) {
+  const submissionId = await approvedSubmission(service);
+  const generated = await service.generatePackage(
+      packagePayload(submissionId),
+      {uid: "user-1"},
+  );
+  await service.recordExternalSubmission(
+      externalSubmissionPayload(generated),
+      {uid: "user-1"},
+  );
+  return {submissionId, generated};
+}
+
 async function approvedSubmission(service) {
   const created = await service.createSubmission(createPayload(), {uid: "user-1"});
   const submissionId = created.submission.submissionId;
@@ -393,6 +435,208 @@ test("external submission contract is strict and channel references fail closed"
       }),
       /empty/,
   );
+});
+
+test("authority outcome contract enforces final response and human classification", () => {
+  const valid = outcomePayload("submission-1");
+  assert.equal(outcomeRequest(valid).outcomeCode, "action_taken");
+  for (const responseType of [
+    "receipt",
+    "acknowledgement",
+    "information_request",
+    "status_update",
+    "other",
+  ]) {
+    assert.throws(
+        () => outcomeRequest({...valid, responseType}),
+        /unsupported/,
+    );
+  }
+  assert.throws(
+      () => outcomeRequest({...valid, outcomeCode: "pending"}),
+      /unsupported/,
+  );
+  assert.throws(
+      () => outcomeRequest({...valid, outcomeFinalityLevel: "certain"}),
+      /unsupported/,
+  );
+  for (const finality of [
+    "preliminary",
+    "informational",
+    "not_stated",
+  ]) {
+    assert.throws(
+        () => outcomeRequest({...valid, outcomeFinalityLevel: finality}),
+        /terminal outcome/,
+    );
+  }
+  assert.equal(outcomeRequest({
+    ...valid,
+    outcomeFinalityLevel: "judicial_final",
+  }).outcomeFinalityLevel, "judicial_final");
+  assert.equal(outcomeRequest({
+    ...valid,
+    responseType: "closure_notice",
+    outcomeCode: "closed",
+    outcomeFinalityLevel: "not_stated",
+  }).responseType, "closure_notice");
+  assert.equal(outcomeRequest({
+    ...valid,
+    responseType: "rejection_notice",
+    outcomeCode: "rejected",
+    outcomeFinalityLevel: "not_stated",
+  }).responseType, "rejection_notice");
+  for (const overrides of [
+    {responseType: "closure_notice", outcomeCode: "rejected"},
+    {
+      responseType: "closure_notice",
+      outcomeCode: "temporary_measure_recorded",
+    },
+    {responseType: "rejection_notice", outcomeCode: "closed"},
+    {responseType: "rejection_notice", outcomeCode: "no_action"},
+  ]) {
+    assert.throws(
+        () => outcomeRequest({...valid, ...overrides}),
+        /terminal outcome|Ara cevap/,
+    );
+  }
+  for (const outcomeCode of [
+    "accepted_for_review",
+    "temporary_measure_recorded",
+    "goods_detained_or_suspended",
+    "goods_seizure_reported",
+    "additional_procedure_required",
+  ]) {
+    assert.throws(
+        () => outcomeRequest({...valid, outcomeCode}),
+        /Ara cevap/,
+    );
+  }
+  assert.throws(
+      () => outcomeRequest({...valid, humanEntryConfirmation: false}),
+      /confirmation/,
+  );
+  assert.throws(
+      () => outcomeRequest({...valid, humanEntryConfirmationVersion: "old"}),
+      /version/,
+  );
+  assert.throws(
+      () => outcomeRequest({...valid, attachmentHashes: []}),
+      /mismatch/,
+  );
+});
+
+test("non-terminal outcome combinations are rejected before any write", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const {submissionId} = await externallySubmitted(service);
+  const beforeResponses = db.collections.customs_submission_responses.length;
+  const beforeEvents = db.collections.customs_submission_events.length;
+  const beforeStatus =
+    db.collections.customs_authority_submissions[0].data.status;
+  const invalid = [
+    {outcomeFinalityLevel: "preliminary"},
+    {outcomeFinalityLevel: "informational"},
+    {outcomeFinalityLevel: "not_stated"},
+    {responseType: "closure_notice", outcomeCode: "rejected"},
+    {
+      responseType: "closure_notice",
+      outcomeCode: "temporary_measure_recorded",
+    },
+    {responseType: "rejection_notice", outcomeCode: "closed"},
+    {responseType: "rejection_notice", outcomeCode: "no_action"},
+  ];
+  for (const [index, overrides] of invalid.entries()) {
+    await assert.rejects(
+        () => service.recordOutcome(
+            outcomePayload(submissionId, id(100 + index), overrides),
+            {uid: "user-1"},
+        ),
+        /terminal outcome|Ara cevap/,
+    );
+  }
+  assert.equal(db.collections.customs_submission_responses.length, beforeResponses);
+  assert.equal(db.collections.customs_submission_events.length, beforeEvents);
+  assert.equal(
+      db.collections.customs_authority_submissions[0].data.status,
+      beforeStatus,
+  );
+});
+
+test("all supported terminal response families conclude atomically", async () => {
+  const combinations = [
+    {
+      responseType: "decision",
+      outcomeCode: "action_taken",
+      outcomeFinalityLevel: "administrative_final",
+    },
+    {
+      responseType: "decision",
+      outcomeCode: "action_taken",
+      outcomeFinalityLevel: "judicial_final",
+    },
+    {
+      responseType: "closure_notice",
+      outcomeCode: "closed",
+      outcomeFinalityLevel: "not_stated",
+    },
+    {
+      responseType: "rejection_notice",
+      outcomeCode: "rejected",
+      outcomeFinalityLevel: "not_stated",
+    },
+  ];
+  for (const [index, overrides] of combinations.entries()) {
+    const db = new FakeDb(baseCollections());
+    const service = serviceFor(db);
+    const {submissionId} = await externallySubmitted(service);
+    const result = await service.recordOutcome(
+        outcomePayload(submissionId, id(120 + index), overrides),
+        {uid: "user-1"},
+    );
+    assert.equal(result.submission.status, "concluded");
+    assert.equal(result.response.responseType, overrides.responseType);
+    assert.equal(result.response.outcomeCode, overrides.outcomeCode);
+    assert.equal(result.events.length, 2);
+  }
+});
+
+test("intermediate outcome codes remain available through append response", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const {submissionId} = await externallySubmitted(service);
+  const statusUpdate = await service.appendResponse({
+    contractVersion: CONTRACT.responseRequest,
+    submissionId,
+    responseType: "status_update",
+    authorityReference: "ARA-1",
+    receivedAt: "2026-07-25T15:30:00.000Z",
+    summary: "Kurum geçici tedbir uygulandığını bildirdi.",
+    attachmentReferences: [],
+    attachmentHashes: [],
+    requestedDueAt: null,
+    outcomeCode: "temporary_measure_recorded",
+    requestId: id(140),
+  }, {uid: "user-1"});
+  const informationRequest = await service.appendResponse({
+    contractVersion: CONTRACT.responseRequest,
+    submissionId,
+    responseType: "information_request",
+    authorityReference: "ARA-2",
+    receivedAt: "2026-07-25T15:40:00.000Z",
+    summary: "Kurum ek işlem ve belge gerektiğini bildirdi.",
+    attachmentReferences: [],
+    attachmentHashes: [],
+    requestedDueAt: "2026-08-01T23:59:59.000Z",
+    outcomeCode: "additional_procedure_required",
+    requestId: id(141),
+  }, {uid: "user-1"});
+  assert.equal(statusUpdate.response.outcomeCode, "temporary_measure_recorded");
+  assert.equal(
+      informationRequest.response.outcomeCode,
+      "additional_procedure_required",
+  );
+  assert.equal(informationRequest.submission.status, "additional_information_requested");
 });
 
 test("create is atomic, business-key idempotent and fingerprint protected", async () => {
@@ -614,6 +858,167 @@ test("external submission rejects invalid scope, owner, dates and transaction fa
       /simulated transaction failure/,
   );
   assert.equal(db.collections.customs_authority_submissions[0].data.status, "package_generated");
+  assert.equal(db.collections.customs_submission_events.length, beforeEvents);
+});
+
+test("authority outcome atomically records response and two-event conclusion", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const {submissionId, generated} = await externallySubmitted(service);
+  const beforeEvents = db.collections.customs_submission_events.length;
+  const request = outcomePayload(submissionId);
+  const first = await service.recordOutcome(request, {uid: "user-1"});
+  const duplicate = await service.recordOutcome(request, {uid: "user-1"});
+  assert.equal(first.transactionApplied, true);
+  assert.equal(first.submission.status, "concluded");
+  assert.equal(first.response.outcomeCode, "action_taken");
+  assert.equal(first.response.attachmentIntegrityStatus, "metadata_only_unverified");
+  assert.deepEqual(
+      first.events.map((event) => event.eventType),
+      [
+        "customs_authority_outcome_recorded",
+        "customs_authority_submission_concluded",
+      ],
+  );
+  assert.equal(first.events[0].sequence, beforeEvents + 1);
+  assert.equal(first.events[1].sequence, beforeEvents + 2);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.transactionApplied, false);
+  assert.equal(db.collections.customs_submission_responses.length, 1);
+  assert.equal(db.collections.customs_submission_events.length, beforeEvents + 2);
+  const stored = db.collections.customs_authority_submissions[0].data;
+  assert.equal(stored.outcomeResponseId, first.response.responseId);
+  assert.equal(stored.outcomeRecordedByUid, "user-1");
+  assert.equal(stored.currentPackageId, generated.package.packageId);
+  assert.equal(stored.currentPackageHash, generated.package.aggregateHash);
+  const outcomeEvent = db.collections.customs_submission_events.at(-2).data;
+  const concludedEvent = db.collections.customs_submission_events.at(-1).data;
+  assert.equal(concludedEvent.previousEventId, db.collections.customs_submission_events.at(-2).id);
+  assert.equal(outcomeEvent.outcomeMetadata.semantics, "user_classification_of_authority_document_not_markakalkan_legal_determination");
+  assert.equal(concludedEvent.outcomeMetadata.humanEntryConfirmation, true);
+  stored.outcomeSummary = "tampered";
+  await assert.rejects(
+      () => service.recordOutcome(request, {uid: "user-1"}),
+      /inconsistent/,
+  );
+  stored.outcomeSummary = request.summary;
+  await assert.rejects(
+      () => service.recordOutcome(
+          {...request, summary: `${request.summary} Farklı.`},
+          {uid: "user-1"},
+      ),
+      /fingerprint/,
+  );
+});
+
+test("authority outcome prerequisites and bypasses fail closed", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const {submissionId} = await externallySubmitted(service);
+  const valid = outcomePayload(submissionId, id(51));
+  await service.recordReceipt({
+    contractVersion: CONTRACT.receiptRequest,
+    submissionId,
+    officialReferenceNumber: "FSMH-2026-RECEIPT-BYPASS",
+    receivedAt: "2026-07-25T15:20:00.000Z",
+    channelType: "fsmh_portal",
+    receiptDocumentReference: null,
+    receiptDocumentHash: null,
+    summary: "Genel concluded geçiş kapısını sınamak için teslim kaydı.",
+    requestId: id(56),
+  }, {uid: "user-1"});
+  await assert.rejects(
+      () => service.transitionSubmission(
+          transitionPayload(submissionId, "concluded", id(52)),
+          {uid: "user-1"},
+      ),
+      /record authority outcome/,
+  );
+  for (const [index, responseType] of [
+    "decision",
+    "closure_notice",
+    "rejection_notice",
+  ].entries()) {
+    await assert.rejects(
+        () => service.appendResponse({
+          contractVersion: CONTRACT.responseRequest,
+          submissionId,
+          responseType,
+          authorityReference: `BYPASS-${index + 1}`,
+          receivedAt: "2026-07-25T15:30:00.000Z",
+          summary: "Nihai sonuç genel cevap API üzerinden eklenmemelidir.",
+          attachmentReferences: [],
+          attachmentHashes: [],
+          requestedDueAt: null,
+          outcomeCode: responseType === "rejection_notice" ?
+            "rejected" : "closed",
+          requestId: id(53 + index),
+        }, {uid: "user-1"}),
+        /record authority outcome/,
+    );
+  }
+  await assert.rejects(
+      () => service.recordOutcome(
+          {...valid, authorityNameSnapshot: "Bambaşka Kurum"},
+          {uid: "user-1"},
+      ),
+      /authority name/,
+  );
+  await assert.rejects(
+      () => service.recordOutcome(
+          {...valid, authorityUnitSnapshot: "Başka Birim"},
+          {uid: "user-1"},
+      ),
+      /authority unit/,
+  );
+  await assert.rejects(
+      () => service.recordOutcome(
+          {...valid, receivedAt: "2026-07-25T16:06:00.000Z"},
+          {uid: "user-1"},
+      ),
+      /dates/,
+  );
+  db.collections.customs_authority_submissions[0].data.externalSubmission = null;
+  await assert.rejects(
+      () => service.recordOutcome(valid, {uid: "user-1"}),
+      /external submission/,
+  );
+});
+
+test("authority outcome validates previous response scope and rolls back atomically", async () => {
+  const db = new FakeDb(baseCollections());
+  const service = serviceFor(db);
+  const {submissionId} = await externallySubmitted(service);
+  db.collections.customs_submission_responses.push({
+    id: "foreign-response",
+    data: {
+      tenantId: "tenant-1",
+      canonicalBrandId: "brand-1",
+      submissionId: "different-submission",
+      requestFingerprint: "f".repeat(64),
+    },
+  });
+  await assert.rejects(
+      () => service.recordOutcome(
+          outcomePayload(submissionId, id(54), {
+            previousResponseId: "foreign-response",
+          }),
+          {uid: "user-1"},
+      ),
+      /scope/,
+  );
+  db.transactionFailure = true;
+  const beforeResponses = db.collections.customs_submission_responses.length;
+  const beforeEvents = db.collections.customs_submission_events.length;
+  await assert.rejects(
+      () => service.recordOutcome(
+          outcomePayload(submissionId, id(55)),
+          {uid: "user-1"},
+      ),
+      /simulated transaction failure/,
+  );
+  assert.equal(db.collections.customs_authority_submissions[0].data.status, "submitted_externally");
+  assert.equal(db.collections.customs_submission_responses.length, beforeResponses);
   assert.equal(db.collections.customs_submission_events.length, beforeEvents);
 });
 

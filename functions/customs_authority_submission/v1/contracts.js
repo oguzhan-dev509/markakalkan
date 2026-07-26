@@ -82,12 +82,79 @@ const OUTCOME_CODES = Object.freeze([
   "pending",
   "accepted_for_review",
   "action_taken",
+  "temporary_measure_recorded",
+  "goods_detained_or_suspended",
+  "goods_seizure_reported",
   "no_action",
   "referred_to_other_authority",
+  "additional_procedure_required",
   "closed",
   "rejected",
   "other",
 ]);
+
+const OUTCOME_FINALITY_LEVELS = Object.freeze([
+  "informational",
+  "preliminary",
+  "administrative_final",
+  "judicial_final",
+  "not_stated",
+]);
+
+const FINAL_RESPONSE_TYPES = Object.freeze([
+  "decision",
+  "closure_notice",
+  "rejection_notice",
+]);
+
+const OUTCOME_HUMAN_ENTRY_CONFIRMATION_VERSION =
+  "customs-authority-outcome-human-entry-v1";
+
+const NON_TERMINAL_OUTCOME_CODES = Object.freeze([
+  "accepted_for_review",
+  "temporary_measure_recorded",
+  "goods_detained_or_suspended",
+  "goods_seizure_reported",
+  "additional_procedure_required",
+]);
+
+const TERMINAL_OUTCOME_MATRIX = Object.freeze({
+  decision: Object.freeze({
+    outcomeCodes: Object.freeze([
+      "action_taken",
+      "no_action",
+      "referred_to_other_authority",
+      "closed",
+      "rejected",
+      "other",
+    ]),
+    finalityLevels: Object.freeze([
+      "administrative_final",
+      "judicial_final",
+    ]),
+  }),
+  closure_notice: Object.freeze({
+    outcomeCodes: Object.freeze([
+      "closed",
+      "no_action",
+      "referred_to_other_authority",
+      "other",
+    ]),
+    finalityLevels: Object.freeze([
+      "administrative_final",
+      "judicial_final",
+      "not_stated",
+    ]),
+  }),
+  rejection_notice: Object.freeze({
+    outcomeCodes: Object.freeze(["rejected"]),
+    finalityLevels: Object.freeze([
+      "administrative_final",
+      "judicial_final",
+      "not_stated",
+    ]),
+  }),
+});
 
 const REDACTION_ACTIONS = Object.freeze([
   "remove",
@@ -106,6 +173,7 @@ const CONTRACT = Object.freeze({
   listRequest: "customs-authority-submission-list-request-v1",
   detailRequest: "customs-authority-submission-detail-request-v1",
   externalSubmissionRequest: "customs-external-submission-record-request-v1",
+  outcomeRequest: "customs-authority-outcome-record-request-v1",
 });
 
 class AuthoritySubmissionError extends Error {
@@ -580,6 +648,161 @@ function responseRequest(raw) {
   });
 }
 
+function outcomeRequest(raw) {
+  strict(raw, CONTRACT.outcomeRequest, [
+    "submissionId",
+    "tenantId",
+    "canonicalBrandId",
+    "responseType",
+    "outcomeCode",
+    "outcomeFinalityLevel",
+    "authorityReferenceNumber",
+    "officialDocumentDate",
+    "receivedAt",
+    "authorityNameSnapshot",
+    "authorityUnitSnapshot",
+    "summary",
+    "humanEntryConfirmation",
+    "humanEntryConfirmationVersion",
+    "previousResponseId",
+    "attachmentReferences",
+    "attachmentHashes",
+    "additionalNotes",
+    "requestId",
+  ]);
+  if (raw.humanEntryConfirmation !== true) {
+    throw new AuthoritySubmissionError(
+        "invalid-argument",
+        "human entry confirmation required",
+    );
+  }
+  if (raw.humanEntryConfirmationVersion !==
+      OUTCOME_HUMAN_ENTRY_CONFIRMATION_VERSION) {
+    throw new AuthoritySubmissionError(
+        "invalid-argument",
+        "human entry confirmation version invalid",
+    );
+  }
+  const responseType = enumValue(
+      raw.responseType,
+      FINAL_RESPONSE_TYPES,
+      "responseType",
+  );
+  const outcomeFinalityLevel = enumValue(
+      raw.outcomeFinalityLevel,
+      OUTCOME_FINALITY_LEVELS,
+      "outcomeFinalityLevel",
+  );
+  const outcomeCode = enumValue(raw.outcomeCode, [
+    "accepted_for_review",
+    "action_taken",
+    "temporary_measure_recorded",
+    "goods_detained_or_suspended",
+    "goods_seizure_reported",
+    "no_action",
+    "referred_to_other_authority",
+    "additional_procedure_required",
+    "closed",
+    "rejected",
+    "other",
+  ], "outcomeCode");
+  if (NON_TERMINAL_OUTCOME_CODES.includes(outcomeCode)) {
+    throw new AuthoritySubmissionError(
+        "outcome.non_terminal",
+        "Bu kurum cevabı dosyayı sonuçlandırmaz. Ara cevap olarak kaydedilmelidir.",
+    );
+  }
+  const terminalRule = TERMINAL_OUTCOME_MATRIX[responseType];
+  if (!terminalRule.outcomeCodes.includes(outcomeCode) ||
+      !terminalRule.finalityLevels.includes(outcomeFinalityLevel)) {
+    throw new AuthoritySubmissionError(
+        "outcome.terminal_combination_invalid",
+        "responseType, outcomeCode and outcomeFinalityLevel do not form a terminal outcome",
+    );
+  }
+  const attachmentReferences = stringArray(
+      raw.attachmentReferences,
+      "attachmentReferences",
+      100,
+      500,
+      true,
+  );
+  const attachmentHashes = stringArray(
+      raw.attachmentHashes,
+      "attachmentHashes",
+      100,
+      64,
+      true,
+  ).map((value, index) =>
+    sha256Hex(value, `attachmentHashes[${index}]`),
+  );
+  if (attachmentReferences.length !== attachmentHashes.length) {
+    throw new AuthoritySubmissionError(
+        "invalid-argument",
+        "attachment references and hashes mismatch",
+    );
+  }
+  return Object.freeze({
+    contractVersion: raw.contractVersion,
+    submissionId: cleanText(raw.submissionId, "submissionId", 1, 128),
+    tenantId: cleanText(raw.tenantId, "tenantId", 1, 128),
+    canonicalBrandId: cleanText(
+        raw.canonicalBrandId,
+        "canonicalBrandId",
+        1,
+        128,
+    ),
+    responseType,
+    outcomeCode,
+    outcomeFinalityLevel,
+    authorityReferenceNumber: cleanText(
+        raw.authorityReferenceNumber,
+        "authorityReferenceNumber",
+        2,
+        500,
+    ),
+    officialDocumentDate: iso(
+        raw.officialDocumentDate,
+        "officialDocumentDate",
+    ),
+    receivedAt: iso(raw.receivedAt, "receivedAt"),
+    authorityNameSnapshot: cleanText(
+        raw.authorityNameSnapshot,
+        "authorityNameSnapshot",
+        2,
+        300,
+    ),
+    authorityUnitSnapshot: cleanText(
+        raw.authorityUnitSnapshot,
+        "authorityUnitSnapshot",
+        1,
+        300,
+        true,
+    ),
+    summary: cleanText(raw.summary, "summary", 10, 5000),
+    humanEntryConfirmation: true,
+    humanEntryConfirmationVersion:
+      OUTCOME_HUMAN_ENTRY_CONFIRMATION_VERSION,
+    previousResponseId: cleanText(
+        raw.previousResponseId,
+        "previousResponseId",
+        1,
+        128,
+        true,
+    ),
+    attachmentReferences: Object.freeze(attachmentReferences),
+    attachmentHashes: Object.freeze(attachmentHashes),
+    additionalNotes: cleanText(
+        raw.additionalNotes,
+        "additionalNotes",
+        1,
+        3000,
+        true,
+    ),
+    requestId: uuid(raw.requestId),
+  });
+}
+
 function listRequest(raw) {
   strict(raw, CONTRACT.listRequest, [
     "tenantId",
@@ -639,6 +862,11 @@ module.exports = {
   CONTRACT,
   EXTERNAL_REFERENCE_TYPES,
   EXTERNAL_SUBMISSION_CONFIRMATION_VERSION,
+  FINAL_RESPONSE_TYPES,
+  OUTCOME_FINALITY_LEVELS,
+  OUTCOME_HUMAN_ENTRY_CONFIRMATION_VERSION,
+  NON_TERMINAL_OUTCOME_CODES,
+  TERMINAL_OUTCOME_MATRIX,
   OUTCOME_CODES,
   PACKAGE_TYPES,
   REDACTION_ACTIONS,
@@ -651,6 +879,7 @@ module.exports = {
   externalSubmissionRequest,
   fingerprint,
   listRequest,
+  outcomeRequest,
   packageRequest,
   receiptRequest,
   responseRequest,

@@ -6,6 +6,7 @@ const {
   buildListCustomsAuthoritySubmissions,
   buildRecordCustomsSubmissionReceipt,
   buildRecordCustomsExternalSubmission,
+  buildRecordCustomsAuthorityOutcome,
   buildTransitionCustomsAuthoritySubmission,
   buildUpdateCustomsAuthoritySubmission,
 } = require("./callable");
@@ -18,6 +19,7 @@ module.exports = {
   buildListCustomsAuthoritySubmissions,
   buildRecordCustomsSubmissionReceipt,
   buildRecordCustomsExternalSubmission,
+  buildRecordCustomsAuthorityOutcome,
   buildTransitionCustomsAuthoritySubmission,
   buildUpdateCustomsAuthoritySubmission,
 };

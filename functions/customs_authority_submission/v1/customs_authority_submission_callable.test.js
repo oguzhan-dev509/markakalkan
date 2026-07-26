@@ -53,6 +53,16 @@ test("callable auth and App Check gates fail closed before service access", asyn
       () => externalSubmissionHandler({auth: {uid: "user-1"}, data: {}}),
       (error) => error instanceof HttpsError && error.code === "failed-precondition",
   );
+
+  const outcomeHandler = createHandler("recordOutcome", {
+    db: {},
+    appCheck: true,
+    log: silentLog,
+  });
+  await assert.rejects(
+      () => outcomeHandler({auth: {uid: "user-1"}, data: {}}),
+      (error) => error instanceof HttpsError && error.code === "failed-precondition",
+  );
 });
 
 test("callable error mapping preserves legal and operational boundaries", () => {
@@ -64,6 +74,15 @@ test("callable error mapping preserves legal and operational boundaries", () => 
 
   const duplicate = mapError({code: "idempotency.conflict"});
   assert.equal(duplicate.code, "already-exists");
+
+  const nonTerminal = mapError({code: "outcome.non_terminal"});
+  assert.equal(nonTerminal.code, "failed-precondition");
+  assert.match(nonTerminal.message, /Ara cevap/);
+
+  const invalidTerminal = mapError({
+    code: "outcome.terminal_combination_invalid",
+  });
+  assert.equal(invalidTerminal.code, "failed-precondition");
 
   const unknown = mapError({code: "unknown"});
   assert.equal(unknown.code, "invalid-argument");

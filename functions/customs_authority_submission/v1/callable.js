@@ -22,7 +22,7 @@ function mapError(error) {
   if (error.code === "authorization.denied") {
     return new HttpsError("permission-denied", "Bu işlem için marka sahibi yetkisi gerekir.");
   }
-  if (["profile.not_found", "intervention.not_found", "submission.not_found", "package.not_found"].includes(error.code)) {
+  if (["profile.not_found", "intervention.not_found", "submission.not_found", "package.not_found", "response.not_found"].includes(error.code)) {
     return new HttpsError("not-found", "Resmî başvuru veya kaynak kaydı bulunamadı.");
   }
   if (error.code === "source.mismatch") {
@@ -36,6 +36,12 @@ function mapError(error) {
   }
   if (["status.invalid_transition", "status.precondition_failed"].includes(error.code)) {
     return new HttpsError("failed-precondition", "İstenen durum geçişi veya güvenlik kapısı mevcut kayıt için uygun değil.");
+  }
+  if (error.code === "outcome.non_terminal") {
+    return new HttpsError("failed-precondition", "Bu kurum cevabı dosyayı sonuçlandırmaz. Ara cevap olarak kaydedilmelidir.");
+  }
+  if (error.code === "outcome.terminal_combination_invalid") {
+    return new HttpsError("failed-precondition", "Kurum cevabı türü, sonuç ve kesinlik düzeyi dosyayı sonuçlandırmak için uyumlu değil.");
   }
   if (error.code === "scope.too_large") {
     return new HttpsError("resource-exhausted", "Resmî iletim kapsamı güvenli sınırı aşıyor.");
@@ -105,6 +111,9 @@ function buildGenerateCustomsSubmissionPackage({db}) {
 function buildRecordCustomsExternalSubmission({db}) {
   return build("recordExternalSubmission", WRITE_OPTIONS, {db});
 }
+function buildRecordCustomsAuthorityOutcome({db}) {
+  return build("recordOutcome", WRITE_OPTIONS, {db});
+}
 function buildRecordCustomsSubmissionReceipt({db}) {
   return build("recordReceipt", WRITE_OPTIONS, {db});
 }
@@ -128,6 +137,7 @@ module.exports = {
   buildListCustomsAuthoritySubmissions,
   buildRecordCustomsSubmissionReceipt,
   buildRecordCustomsExternalSubmission,
+  buildRecordCustomsAuthorityOutcome,
   buildTransitionCustomsAuthoritySubmission,
   buildUpdateCustomsAuthoritySubmission,
   createHandler,
