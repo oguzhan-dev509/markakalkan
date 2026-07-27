@@ -274,52 +274,62 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                 );
               },
             ),
-      body: Column(
-        children: [
-          const _CustomsHero(),
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      key: ValueKey('customs-security-loading'),
-                    ),
-                  )
-                : _error != null
-                ? _ErrorPanel(message: _error!, onRetry: _load)
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _ProfileWorkspace(
-                        profiles: _profiles,
-                        selectedStatus: _profileStatus,
-                        onStatusChanged: (value) {
-                          setState(() => _profileStatus = value);
-                          _load();
-                        },
-                        onOpen: _openProfile,
-                      ),
-                      _InterventionWorkspace(
-                        interventions: _interventions,
-                        selectedStatus: _interventionStatus,
-                        onStatusChanged: (value) {
-                          setState(() => _interventionStatus = value);
-                          _load();
-                        },
-                        onOpen: _openIntervention,
-                      ),
-                      _AuthoritySubmissionWorkspace(
-                        submissions: _submissions,
-                        selectedStatus: _submissionStatus,
-                        onStatusChanged: (value) {
-                          setState(() => _submissionStatus = value);
-                          _load();
-                        },
-                        onOpen: _openSubmission,
-                      ),
-                    ],
-                  ),
-          ),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            key: const ValueKey('customs-security-scroll-shell'),
+            child: Column(
+              children: [
+                const _CustomsHero(),
+                const _CustomsOperationInformationBand(),
+                SizedBox(
+                  key: const ValueKey('customs-security-workspace-viewport'),
+                  height: constraints.maxHeight,
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            key: ValueKey('customs-security-loading'),
+                          ),
+                        )
+                      : _error != null
+                      ? _ErrorPanel(message: _error!, onRetry: _load)
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _ProfileWorkspace(
+                              profiles: _profiles,
+                              selectedStatus: _profileStatus,
+                              onStatusChanged: (value) {
+                                setState(() => _profileStatus = value);
+                                _load();
+                              },
+                              onOpen: _openProfile,
+                            ),
+                            _InterventionWorkspace(
+                              interventions: _interventions,
+                              selectedStatus: _interventionStatus,
+                              onStatusChanged: (value) {
+                                setState(() => _interventionStatus = value);
+                                _load();
+                              },
+                              onOpen: _openIntervention,
+                            ),
+                            _AuthoritySubmissionWorkspace(
+                              submissions: _submissions,
+                              selectedStatus: _submissionStatus,
+                              onStatusChanged: (value) {
+                                setState(() => _submissionStatus = value);
+                                _load();
+                              },
+                              onOpen: _openSubmission,
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -389,6 +399,192 @@ class _LegalLanguageNotice extends StatelessWidget {
             child: Text(
               'Bu çalışma alanı kişi veya kuruluşlar hakkında otomatik suç isnadı üretmez. Şüphe, doğrulama ve kesinleşmiş sonuçlar ayrı tutulur.',
               style: TextStyle(color: Color(0xFFE9F0F3), height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomsOperationInformationBand extends StatelessWidget {
+  const _CustomsOperationInformationBand();
+
+  static const _stages = <({IconData icon, String label})>[
+    (icon: Icons.description_outlined, label: 'Başvuru içeriği'),
+    (icon: Icons.inventory_2_outlined, label: 'Başvuru paketi'),
+    (icon: Icons.picture_as_pdf_outlined, label: 'İndirilebilir resmî dosya'),
+    (icon: Icons.send_outlined, label: 'Kuruma iletim'),
+    (icon: Icons.fact_check_outlined, label: 'Teslim, cevap ve sonuç'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: 'Gümrük operasyon bilgi bandı',
+      child: Container(
+        key: const ValueKey('customs-operation-information-band'),
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFDDE6EB)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0A0B2239),
+              blurRadius: 18,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.account_tree_outlined,
+                  color: MarkaKalkanTheme.teal,
+                  size: 21,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Operasyon Bilgi Bandı',
+                        style: TextStyle(
+                          color: MarkaKalkanTheme.navy,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'Başvurudan kurum cevabı ve nihai sonuca kadar beş aşamayı aynı operasyon zincirinde izleyin.',
+                        style: TextStyle(
+                          color: Color(0xFF687580),
+                          fontSize: 13,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth >= 980) {
+                  return Row(
+                    key: const ValueKey(
+                      'customs-operation-information-wide-row',
+                    ),
+                    children: [
+                      for (var index = 0; index < _stages.length; index++) ...[
+                        Expanded(
+                          child: _CustomsOperationInformationStage(
+                            index: index + 1,
+                            icon: _stages[index].icon,
+                            label: _stages[index].label,
+                          ),
+                        ),
+                        if (index != _stages.length - 1)
+                          const SizedBox(width: 10),
+                      ],
+                    ],
+                  );
+                }
+
+                return SizedBox(
+                  height: 64,
+                  child: ListView.separated(
+                    key: const ValueKey(
+                      'customs-operation-information-horizontal-list',
+                    ),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _stages.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) => SizedBox(
+                      width: 210,
+                      child: _CustomsOperationInformationStage(
+                        index: index + 1,
+                        icon: _stages[index].icon,
+                        label: _stages[index].label,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomsOperationInformationStage extends StatelessWidget {
+  const _CustomsOperationInformationStage({
+    required this.index,
+    required this.icon,
+    required this.label,
+  });
+
+  final int index;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: ValueKey('customs-operation-information-stage-$index'),
+      constraints: const BoxConstraints(minHeight: 64),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F8FA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E9ED)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: MarkaKalkanTheme.teal,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$index',
+              style: const TextStyle(
+                color: MarkaKalkanTheme.navy,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(icon, color: MarkaKalkanTheme.navy, size: 18),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: MarkaKalkanTheme.navy,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                height: 1.2,
+              ),
             ),
           ),
         ],

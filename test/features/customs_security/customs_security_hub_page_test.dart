@@ -38,12 +38,82 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('otomatik suç isnadı üretmez'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('customs-operation-information-band')),
+      findsOneWidget,
+    );
+    for (final label in [
+      'Operasyon Bilgi Bandı',
+      'Başvuru içeriği',
+      'Başvuru paketi',
+      'İndirilebilir resmî dosya',
+      'Kuruma iletim',
+      'Teslim, cevap ve sonuç',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
     expect(find.text('GKP-2026-ABC12345'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('customs-intervention-tab')));
     await tester.pumpAndSettle();
     expect(find.text('SGM-2026-ABC12345'), findsOneWidget);
     expect(find.text('Ön incelemede'), findsOneWidget);
+  });
+
+  testWidgets(
+    'hero and operation band remain independent on a narrow viewport',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository();
+      await tester.binding.setSurfaceSize(const Size(390, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+      );
+      await tester.pumpAndSettle();
+
+      final hero = find.byKey(const ValueKey('customs-security-hero'));
+      final band = find.byKey(
+        const ValueKey('customs-operation-information-band'),
+      );
+      expect(hero, findsOneWidget);
+      expect(band, findsOneWidget);
+      expect(find.descendant(of: hero, matching: band), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey('customs-operation-information-horizontal-list'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('short viewport keeps a full workspace without Flex overflow', (
+    tester,
+  ) async {
+    final repository = FakeCustomsSecurityRepository();
+    await tester.binding.setSurfaceSize(const Size(390, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('customs-security-scroll-shell')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('customs-security-workspace-viewport')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('customs-operation-information-band')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('profile card delegates internal id to detail opener', (
