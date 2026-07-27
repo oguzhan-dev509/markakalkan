@@ -43,6 +43,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
 
   bool _loading = true;
   bool _submitting = false;
+  bool _compactLayout = true;
   String? _error;
   String? _profileStatus;
   String? _interventionStatus;
@@ -221,22 +222,36 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
       backgroundColor: MarkaKalkanTheme.background,
       appBar: AppBar(
         title: const Text('Kaçakçılık, Taklit ve Gümrük Güvenliği'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(
-              key: ValueKey('customs-profile-tab'),
-              text: 'Koruma Profilleri',
-            ),
-            Tab(
-              key: ValueKey('customs-intervention-tab'),
-              text: 'Sınır Müdahaleleri',
-            ),
-            Tab(
-              key: ValueKey('customs-authority-submission-tab'),
-              text: 'Resmî İletimler',
-            ),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(kTextTabBarHeight),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 600;
+              return TabBar(
+                key: const ValueKey('customs-security-tab-bar'),
+                controller: _tabController,
+                isScrollable: compact,
+                tabAlignment: compact ? TabAlignment.start : TabAlignment.fill,
+                labelPadding: compact
+                    ? const EdgeInsets.symmetric(horizontal: 20)
+                    : null,
+                tabs: const [
+                  Tab(
+                    key: ValueKey('customs-profile-tab'),
+                    text: 'Koruma Profilleri',
+                  ),
+                  Tab(
+                    key: ValueKey('customs-intervention-tab'),
+                    text: 'Sınır Müdahaleleri',
+                  ),
+                  Tab(
+                    key: ValueKey('customs-authority-submission-tab'),
+                    text: 'Resmî İletimler',
+                  ),
+                ],
+              );
+            },
+          ),
         ),
         actions: [
           IconButton(
@@ -246,7 +261,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
           ),
         ],
       ),
-      floatingActionButton: _loading
+      floatingActionButton: _loading || _compactLayout
           ? null
           : AnimatedBuilder(
               animation: _tabController,
@@ -276,12 +291,58 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
             ),
       body: LayoutBuilder(
         builder: (context, constraints) {
+          final compact = constraints.maxWidth < 600;
+          if (_compactLayout != compact) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted || _compactLayout == compact) return;
+              setState(() => _compactLayout = compact);
+            });
+          }
+
           return SingleChildScrollView(
             key: const ValueKey('customs-security-scroll-shell'),
             child: Column(
               children: [
                 const _CustomsHero(),
                 const _CustomsOperationInformationBand(),
+                if (compact && !_loading)
+                  AnimatedBuilder(
+                    animation: _tabController,
+                    builder: (context, _) {
+                      final tabIndex = _tabController.index;
+                      if (tabIndex == 2) return const SizedBox.shrink();
+                      final profilesTab = tabIndex == 0;
+                      return Padding(
+                        key: const ValueKey(
+                          'customs-mobile-create-action-region',
+                        ),
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.icon(
+                            key: ValueKey(
+                              profilesTab
+                                  ? 'mobile-create-customs-profile'
+                                  : 'mobile-create-customs-intervention',
+                            ),
+                            onPressed: _submitting
+                                ? null
+                                : profilesTab
+                                ? _createProfile
+                                : _createIntervention,
+                            icon: Icon(
+                              _submitting
+                                  ? Icons.hourglass_top_rounded
+                                  : Icons.add_rounded,
+                            ),
+                            label: Text(
+                              profilesTab ? 'Yeni profil' : 'Yeni müdahale',
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 SizedBox(
                   key: const ValueKey('customs-security-workspace-viewport'),
                   height: constraints.maxHeight,

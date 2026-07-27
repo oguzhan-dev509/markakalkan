@@ -116,6 +116,79 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'mobile uses scrollable full-title tabs and only an inline create action',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+      );
+      await tester.pumpAndSettle();
+
+      final tabBar = tester.widget<TabBar>(
+        find.byKey(const ValueKey('customs-security-tab-bar')),
+      );
+      expect(tabBar.isScrollable, isTrue);
+      expect(find.text('Koruma Profilleri'), findsOneWidget);
+      expect(find.text('Sınır Müdahaleleri'), findsOneWidget);
+      expect(find.text('Resmî İletimler'), findsOneWidget);
+
+      final action = find.byKey(
+        const ValueKey('mobile-create-customs-profile'),
+      );
+      expect(action, findsOneWidget);
+      expect(tester.widget(action), isA<FilledButton>());
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(
+        find.byKey(const ValueKey('customs-mobile-create-action-region')),
+        findsOneWidget,
+      );
+
+      final band = find.byKey(
+        const ValueKey('customs-operation-information-band'),
+      );
+      expect(
+        tester.getBottomLeft(band).dy <= tester.getTopLeft(action).dy,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('wide layout keeps fixed tabs and the floating create action', (
+    tester,
+  ) async {
+    final repository = FakeCustomsSecurityRepository();
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    final tabBar = tester.widget<TabBar>(
+      find.byKey(const ValueKey('customs-security-tab-bar')),
+    );
+    expect(tabBar.isScrollable, isFalse);
+
+    final action = find.byKey(const ValueKey('create-customs-profile'));
+    expect(action, findsOneWidget);
+    expect(tester.widget(action), isA<FloatingActionButton>());
+    expect(
+      find.byKey(const ValueKey('customs-mobile-create-action-region')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-create-customs-profile')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('profile card delegates internal id to detail opener', (
     tester,
   ) async {
