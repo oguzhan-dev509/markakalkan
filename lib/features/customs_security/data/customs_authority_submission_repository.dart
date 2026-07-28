@@ -38,6 +38,49 @@ abstract interface class CustomsAuthoritySubmissionRepository {
     String submissionId,
   );
 
+  Future<CustomsPackageGenerationResult> generatePackage({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionPackageDraft draft,
+    required String requestId,
+  });
+
+  Future<CustomsExternalSubmissionResult> recordExternalSubmission({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required int packageVersion,
+    required String packageHash,
+    required CustomsExternalSubmissionDraft draft,
+    required String requestId,
+  });
+
+  Future<CustomsSubmissionReceiptResult> recordReceipt({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionReceiptDraft draft,
+    required String requestId,
+  });
+
+  Future<CustomsAuthorityResponseAppendResult> appendAuthorityResponse({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityResponseDraft draft,
+    required String requestId,
+  });
+
+  Future<CustomsAuthorityOutcomeResult> recordAuthorityOutcome({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityOutcomeDraft draft,
+    required String requestId,
+  });
+
   Future<CustomsPackageMaterializationResult> materializePackageArtifact({
     required String tenantId,
     required String canonicalBrandId,
@@ -198,6 +241,107 @@ class CallableCustomsAuthoritySubmissionRepository
   }
 
   @override
+  Future<CustomsPackageGenerationResult> generatePackage({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionPackageDraft draft,
+    required String requestId,
+  }) async {
+    final response = await _callProtected('generateCustomsSubmissionPackage', {
+      'contractVersion': 'customs-submission-package-generate-request-v1',
+      'tenantId': tenantId,
+      'canonicalBrandId': canonicalBrandId,
+      'submissionId': submissionId,
+      ...draft.toRequestMap(),
+      'requestId': requestId,
+    });
+    return CustomsPackageGenerationResult.fromMap(response);
+  }
+
+  @override
+  Future<CustomsExternalSubmissionResult> recordExternalSubmission({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required int packageVersion,
+    required String packageHash,
+    required CustomsExternalSubmissionDraft draft,
+    required String requestId,
+  }) async {
+    final response = await _callProtected('recordCustomsExternalSubmission', {
+      'contractVersion': 'customs-external-submission-record-request-v1',
+      'tenantId': tenantId,
+      'canonicalBrandId': canonicalBrandId,
+      'submissionId': submissionId,
+      'packageId': packageId,
+      'packageVersion': packageVersion,
+      'packageHash': packageHash,
+      ...draft.toRequestMap(),
+      'requestId': requestId,
+    });
+    return CustomsExternalSubmissionResult.fromMap(response);
+  }
+
+  @override
+  Future<CustomsSubmissionReceiptResult> recordReceipt({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionReceiptDraft draft,
+    required String requestId,
+  }) async {
+    final response = await _callProtected('recordCustomsSubmissionReceipt', {
+      'contractVersion': 'customs-submission-receipt-record-request-v1',
+      'tenantId': tenantId,
+      'canonicalBrandId': canonicalBrandId,
+      'submissionId': submissionId,
+      ...draft.toRequestMap(),
+      'requestId': requestId,
+    });
+    return CustomsSubmissionReceiptResult.fromMap(response);
+  }
+
+  @override
+  Future<CustomsAuthorityResponseAppendResult> appendAuthorityResponse({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityResponseDraft draft,
+    required String requestId,
+  }) async {
+    final response = await _callProtected('appendCustomsAuthorityResponse', {
+      'contractVersion': 'customs-authority-response-append-request-v1',
+      'tenantId': tenantId,
+      'canonicalBrandId': canonicalBrandId,
+      'submissionId': submissionId,
+      ...draft.toRequestMap(),
+      'requestId': requestId,
+    });
+    return CustomsAuthorityResponseAppendResult.fromMap(response);
+  }
+
+  @override
+  Future<CustomsAuthorityOutcomeResult> recordAuthorityOutcome({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityOutcomeDraft draft,
+    required String requestId,
+  }) async {
+    final response = await _callProtected('recordCustomsAuthorityOutcome', {
+      'contractVersion': 'customs-authority-outcome-record-request-v1',
+      'tenantId': tenantId,
+      'canonicalBrandId': canonicalBrandId,
+      'submissionId': submissionId,
+      ...draft.toRequestMap(),
+      'requestId': requestId,
+    });
+    return CustomsAuthorityOutcomeResult.fromMap(response);
+  }
+
+  @override
   Future<CustomsPackageMaterializationResult> materializePackageArtifact({
     required String tenantId,
     required String canonicalBrandId,
@@ -272,6 +416,54 @@ class EmptyCustomsAuthoritySubmissionRepository
   Future<CustomsAuthoritySubmissionDetail> getSubmissionDetail(
     String submissionId,
   ) async => _unsupported();
+
+  @override
+  Future<CustomsPackageGenerationResult> generatePackage({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionPackageDraft draft,
+    required String requestId,
+  }) async => _unsupported();
+
+  @override
+  Future<CustomsExternalSubmissionResult> recordExternalSubmission({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required int packageVersion,
+    required String packageHash,
+    required CustomsExternalSubmissionDraft draft,
+    required String requestId,
+  }) async => _unsupported();
+
+  @override
+  Future<CustomsSubmissionReceiptResult> recordReceipt({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionReceiptDraft draft,
+    required String requestId,
+  }) async => _unsupported();
+
+  @override
+  Future<CustomsAuthorityResponseAppendResult> appendAuthorityResponse({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityResponseDraft draft,
+    required String requestId,
+  }) async => _unsupported();
+
+  @override
+  Future<CustomsAuthorityOutcomeResult> recordAuthorityOutcome({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityOutcomeDraft draft,
+    required String requestId,
+  }) async => _unsupported();
 
   @override
   Future<CustomsPackageMaterializationResult> materializePackageArtifact({
@@ -928,6 +1120,509 @@ class CustomsSubmissionRedactionItem {
       );
 }
 
+enum CustomsSubmissionPackageType {
+  fsmhApplicationPackage('fsmh_application_package'),
+  authorityReferralPackage('authority_referral_package'),
+  additionalInformationPackage('additional_information_package');
+
+  const CustomsSubmissionPackageType(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsSubmissionChannel {
+  fsmhPortal('fsmh_portal'),
+  officialOnlineForm('official_online_form'),
+  electronicSignature('electronic_signature'),
+  registeredEmail('registered_email'),
+  physicalDelivery('physical_delivery'),
+  telephone136('telephone_136'),
+  emergency112('emergency_112'),
+  officialCorrespondence('official_correspondence'),
+  other('other');
+
+  const CustomsSubmissionChannel(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsExternalReferenceType {
+  none('none'),
+  kepMessageId('kep_message_id'),
+  portalTransactionId('portal_transaction_id'),
+  physicalDeliveryReference('physical_delivery_reference'),
+  officialCorrespondenceReference('official_correspondence_reference'),
+  telephoneReference('telephone_reference'),
+  otherReference('other_reference');
+
+  const CustomsExternalReferenceType(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsInterimAuthorityResponseType {
+  acknowledgement('acknowledgement'),
+  informationRequest('information_request'),
+  statusUpdate('status_update'),
+  other('other');
+
+  const CustomsInterimAuthorityResponseType(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsFinalAuthorityResponseType {
+  decision('decision'),
+  closureNotice('closure_notice'),
+  rejectionNotice('rejection_notice');
+
+  const CustomsFinalAuthorityResponseType(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsAuthorityOutcomeCode {
+  pending('pending'),
+  acceptedForReview('accepted_for_review'),
+  actionTaken('action_taken'),
+  temporaryMeasureRecorded('temporary_measure_recorded'),
+  goodsDetainedOrSuspended('goods_detained_or_suspended'),
+  goodsSeizureReported('goods_seizure_reported'),
+  noAction('no_action'),
+  referredToOtherAuthority('referred_to_other_authority'),
+  additionalProcedureRequired('additional_procedure_required'),
+  closed('closed'),
+  rejected('rejected'),
+  other('other');
+
+  const CustomsAuthorityOutcomeCode(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsAuthorityOutcomeFinalityLevel {
+  informational('informational'),
+  preliminary('preliminary'),
+  administrativeFinal('administrative_final'),
+  judicialFinal('judicial_final'),
+  notStated('not_stated');
+
+  const CustomsAuthorityOutcomeFinalityLevel(this.wireValue);
+  final String wireValue;
+}
+
+enum CustomsRedactionAction {
+  remove('remove'),
+  mask('mask'),
+  generalize('generalize'),
+  retain('retain');
+
+  const CustomsRedactionAction(this.wireValue);
+  final String wireValue;
+}
+
+extension CustomsSubmissionManifestItemRequestMap
+    on CustomsSubmissionManifestItem {
+  Map<String, dynamic> toRequestMap() {
+    final map = <String, dynamic>{
+      'referenceId': referenceId.trim(),
+      'title': title.trim(),
+      'sha256': sha256.trim().toLowerCase(),
+    };
+    _optionalText(map, 'mimeType', mimeType);
+    if (sizeBytes != null) map['sizeBytes'] = sizeBytes;
+    return map;
+  }
+}
+
+extension CustomsSubmissionRedactionItemRequestMap
+    on CustomsSubmissionRedactionItem {
+  Map<String, dynamic> toRequestMap() => {
+    'fieldPath': fieldPath.trim(),
+    'action': action.trim(),
+    'reason': reason.trim(),
+  };
+}
+
+class CustomsSubmissionPackageDraft {
+  const CustomsSubmissionPackageDraft({
+    required this.packageType,
+    required this.coverLetterText,
+    required this.authoritySummary,
+    required this.legalNeutralityStatement,
+    this.documentManifest = const [],
+    this.evidenceManifest = const [],
+    this.redactionManifest = const [],
+  });
+
+  final CustomsSubmissionPackageType packageType;
+  final String coverLetterText;
+  final String authoritySummary;
+  final String legalNeutralityStatement;
+  final List<CustomsSubmissionManifestItem> documentManifest;
+  final List<CustomsSubmissionManifestItem> evidenceManifest;
+  final List<CustomsSubmissionRedactionItem> redactionManifest;
+
+  Map<String, dynamic> toRequestMap() {
+    if (documentManifest.isEmpty && evidenceManifest.isEmpty) {
+      throw ArgumentError('Paket için en az bir belge veya delil gerekir.');
+    }
+    return {
+      'packageType': packageType.wireValue,
+      'coverLetterText': coverLetterText.trim(),
+      'authoritySummary': authoritySummary.trim(),
+      'legalNeutralityStatement': legalNeutralityStatement.trim(),
+      'documentManifest': documentManifest
+          .map((item) => item.toRequestMap())
+          .toList(growable: false),
+      'evidenceManifest': evidenceManifest
+          .map((item) => item.toRequestMap())
+          .toList(growable: false),
+      'redactionManifest': redactionManifest
+          .map((item) => item.toRequestMap())
+          .toList(growable: false),
+    };
+  }
+}
+
+class CustomsExternalSubmissionDraft {
+  const CustomsExternalSubmissionDraft({
+    required this.submissionChannel,
+    required this.submittedAt,
+    required this.externalSubmissionStatement,
+    required this.externalReferenceType,
+    this.externalReferenceValue,
+    this.externalSubmissionConfirmed = false,
+  });
+
+  static const confirmationVersion =
+      'customs-external-submission-confirmation-v1';
+
+  final CustomsSubmissionChannel submissionChannel;
+  final String submittedAt;
+  final String externalSubmissionStatement;
+  final CustomsExternalReferenceType externalReferenceType;
+  final String? externalReferenceValue;
+  final bool externalSubmissionConfirmed;
+
+  Map<String, dynamic> toRequestMap() {
+    if (!externalSubmissionConfirmed) {
+      throw ArgumentError('Dış teslim teyidi gerekir.');
+    }
+    final map = <String, dynamic>{
+      'submissionChannel': submissionChannel.wireValue,
+      'submittedAt': submittedAt.trim(),
+      'externalSubmissionConfirmation': true,
+      'externalSubmissionConfirmationVersion': confirmationVersion,
+      'externalSubmissionStatement': externalSubmissionStatement.trim(),
+      'externalReferenceType': externalReferenceType.wireValue,
+    };
+    _optionalText(map, 'externalReferenceValue', externalReferenceValue);
+    return map;
+  }
+}
+
+class CustomsSubmissionReceiptDraft {
+  const CustomsSubmissionReceiptDraft({
+    required this.officialReferenceNumber,
+    required this.receivedAt,
+    required this.channelType,
+    required this.summary,
+    this.receiptDocumentReference,
+    this.receiptDocumentHash,
+  });
+
+  final String officialReferenceNumber;
+  final String receivedAt;
+  final CustomsSubmissionChannel channelType;
+  final String summary;
+  final String? receiptDocumentReference;
+  final String? receiptDocumentHash;
+
+  Map<String, dynamic> toRequestMap() {
+    final map = <String, dynamic>{
+      'officialReferenceNumber': officialReferenceNumber.trim(),
+      'receivedAt': receivedAt.trim(),
+      'channelType': channelType.wireValue,
+      'summary': summary.trim(),
+    };
+    _optionalText(map, 'receiptDocumentReference', receiptDocumentReference);
+    _optionalText(map, 'receiptDocumentHash', receiptDocumentHash);
+    return map;
+  }
+}
+
+class CustomsAuthorityResponseDraft {
+  const CustomsAuthorityResponseDraft({
+    required this.responseType,
+    required this.receivedAt,
+    required this.summary,
+    this.authorityReference,
+    this.attachmentReferences = const [],
+    this.attachmentHashes = const [],
+    this.requestedDueAt,
+    this.outcomeCode,
+  });
+
+  final CustomsInterimAuthorityResponseType responseType;
+  final String? authorityReference;
+  final String receivedAt;
+  final String summary;
+  final List<String> attachmentReferences;
+  final List<String> attachmentHashes;
+  final String? requestedDueAt;
+  final CustomsAuthorityOutcomeCode? outcomeCode;
+
+  Map<String, dynamic> toRequestMap() {
+    if (attachmentReferences.length != attachmentHashes.length) {
+      throw ArgumentError('Ek referansları ve hash listeleri eşleşmelidir.');
+    }
+    final map = <String, dynamic>{
+      'responseType': responseType.wireValue,
+      'receivedAt': receivedAt.trim(),
+      'summary': summary.trim(),
+      'attachmentReferences': attachmentReferences
+          .map((value) => value.trim())
+          .toList(growable: false),
+      'attachmentHashes': attachmentHashes
+          .map((value) => value.trim().toLowerCase())
+          .toList(growable: false),
+    };
+    _optionalText(map, 'authorityReference', authorityReference);
+    _optionalText(map, 'requestedDueAt', requestedDueAt);
+    if (outcomeCode != null) map['outcomeCode'] = outcomeCode!.wireValue;
+    return map;
+  }
+}
+
+class CustomsAuthorityOutcomeDraft {
+  const CustomsAuthorityOutcomeDraft({
+    required this.responseType,
+    required this.outcomeCode,
+    required this.outcomeFinalityLevel,
+    required this.authorityReferenceNumber,
+    required this.officialDocumentDate,
+    required this.receivedAt,
+    required this.authorityNameSnapshot,
+    required this.summary,
+    this.authorityUnitSnapshot,
+    this.previousResponseId,
+    this.attachmentReferences = const [],
+    this.attachmentHashes = const [],
+    this.additionalNotes,
+    this.humanEntryConfirmed = false,
+  });
+
+  static const humanEntryConfirmationVersion =
+      'customs-authority-outcome-human-entry-v1';
+
+  final CustomsFinalAuthorityResponseType responseType;
+  final CustomsAuthorityOutcomeCode outcomeCode;
+  final CustomsAuthorityOutcomeFinalityLevel outcomeFinalityLevel;
+  final String authorityReferenceNumber;
+  final String officialDocumentDate;
+  final String receivedAt;
+  final String authorityNameSnapshot;
+  final String? authorityUnitSnapshot;
+  final String summary;
+  final String? previousResponseId;
+  final List<String> attachmentReferences;
+  final List<String> attachmentHashes;
+  final String? additionalNotes;
+  final bool humanEntryConfirmed;
+
+  Map<String, dynamic> toRequestMap() {
+    if (!humanEntryConfirmed) {
+      throw ArgumentError('Kurum sonucu insan girişi teyidi gerektirir.');
+    }
+    if (attachmentReferences.length != attachmentHashes.length) {
+      throw ArgumentError('Ek referansları ve hash listeleri eşleşmelidir.');
+    }
+    final map = <String, dynamic>{
+      'responseType': responseType.wireValue,
+      'outcomeCode': outcomeCode.wireValue,
+      'outcomeFinalityLevel': outcomeFinalityLevel.wireValue,
+      'authorityReferenceNumber': authorityReferenceNumber.trim(),
+      'officialDocumentDate': officialDocumentDate.trim(),
+      'receivedAt': receivedAt.trim(),
+      'authorityNameSnapshot': authorityNameSnapshot.trim(),
+      'summary': summary.trim(),
+      'humanEntryConfirmation': true,
+      'humanEntryConfirmationVersion': humanEntryConfirmationVersion,
+      'attachmentReferences': attachmentReferences
+          .map((value) => value.trim())
+          .toList(growable: false),
+      'attachmentHashes': attachmentHashes
+          .map((value) => value.trim().toLowerCase())
+          .toList(growable: false),
+    };
+    _optionalText(map, 'authorityUnitSnapshot', authorityUnitSnapshot);
+    _optionalText(map, 'previousResponseId', previousResponseId);
+    _optionalText(map, 'additionalNotes', additionalNotes);
+    return map;
+  }
+}
+
+class CustomsPackageGenerationResult {
+  const CustomsPackageGenerationResult({
+    required this.contractVersion,
+    required this.ok,
+    required this.duplicate,
+    required this.transactionCommitted,
+    required this.submission,
+    required this.package,
+  });
+
+  final String contractVersion;
+  final bool ok;
+  final bool duplicate;
+  final bool transactionCommitted;
+  final CustomsAuthoritySubmission submission;
+  final CustomsSubmissionPackage package;
+
+  factory CustomsPackageGenerationResult.fromMap(Map<String, dynamic> map) {
+    const version = 'customs-submission-package-generate-result-v1';
+    _requireMutationEnvelope(map, version, 'transactionCommitted');
+    return CustomsPackageGenerationResult(
+      contractVersion: version,
+      ok: true,
+      duplicate: map['duplicate'] == true,
+      transactionCommitted: map['transactionCommitted'] == true,
+      submission: CustomsAuthoritySubmission.fromMap(_map(map['submission'])),
+      package: CustomsSubmissionPackage.fromMap(_map(map['package'])),
+    );
+  }
+}
+
+class CustomsExternalSubmissionResult {
+  const CustomsExternalSubmissionResult({
+    required this.contractVersion,
+    required this.ok,
+    required this.duplicate,
+    required this.transactionApplied,
+    required this.submission,
+    required this.event,
+  });
+
+  final String contractVersion;
+  final bool ok;
+  final bool duplicate;
+  final bool transactionApplied;
+  final CustomsAuthoritySubmission submission;
+  final CustomsAuthoritySubmissionEvent event;
+
+  factory CustomsExternalSubmissionResult.fromMap(Map<String, dynamic> map) {
+    const version = 'customs-external-submission-record-result-v1';
+    _requireMutationEnvelope(map, version, 'transactionApplied');
+    return CustomsExternalSubmissionResult(
+      contractVersion: version,
+      ok: true,
+      duplicate: map['duplicate'] == true,
+      transactionApplied: map['transactionApplied'] == true,
+      submission: CustomsAuthoritySubmission.fromMap(_map(map['submission'])),
+      event: CustomsAuthoritySubmissionEvent.fromMap(_map(map['event'])),
+    );
+  }
+}
+
+class CustomsSubmissionReceiptResult {
+  const CustomsSubmissionReceiptResult({
+    required this.contractVersion,
+    required this.ok,
+    required this.duplicate,
+    required this.transactionCommitted,
+    required this.submission,
+    required this.response,
+  });
+
+  final String contractVersion;
+  final bool ok;
+  final bool duplicate;
+  final bool transactionCommitted;
+  final CustomsAuthoritySubmission submission;
+  final CustomsAuthorityResponse response;
+
+  factory CustomsSubmissionReceiptResult.fromMap(Map<String, dynamic> map) {
+    const version = 'customs-submission-receipt-record-result-v1';
+    _requireMutationEnvelope(map, version, 'transactionCommitted');
+    return CustomsSubmissionReceiptResult(
+      contractVersion: version,
+      ok: true,
+      duplicate: map['duplicate'] == true,
+      transactionCommitted: map['transactionCommitted'] == true,
+      submission: CustomsAuthoritySubmission.fromMap(_map(map['submission'])),
+      response: CustomsAuthorityResponse.fromMap(_map(map['response'])),
+    );
+  }
+}
+
+class CustomsAuthorityResponseAppendResult {
+  const CustomsAuthorityResponseAppendResult({
+    required this.contractVersion,
+    required this.ok,
+    required this.duplicate,
+    required this.transactionCommitted,
+    required this.submission,
+    required this.response,
+  });
+
+  final String contractVersion;
+  final bool ok;
+  final bool duplicate;
+  final bool transactionCommitted;
+  final CustomsAuthoritySubmission submission;
+  final CustomsAuthorityResponse response;
+
+  factory CustomsAuthorityResponseAppendResult.fromMap(
+    Map<String, dynamic> map,
+  ) {
+    const version = 'customs-authority-response-append-result-v1';
+    _requireMutationEnvelope(map, version, 'transactionCommitted');
+    return CustomsAuthorityResponseAppendResult(
+      contractVersion: version,
+      ok: true,
+      duplicate: map['duplicate'] == true,
+      transactionCommitted: map['transactionCommitted'] == true,
+      submission: CustomsAuthoritySubmission.fromMap(_map(map['submission'])),
+      response: CustomsAuthorityResponse.fromMap(_map(map['response'])),
+    );
+  }
+}
+
+class CustomsAuthorityOutcomeResult {
+  const CustomsAuthorityOutcomeResult({
+    required this.contractVersion,
+    required this.ok,
+    required this.duplicate,
+    required this.transactionApplied,
+    required this.submission,
+    required this.response,
+    required this.events,
+  });
+
+  final String contractVersion;
+  final bool ok;
+  final bool duplicate;
+  final bool transactionApplied;
+  final CustomsAuthoritySubmission submission;
+  final CustomsAuthorityResponse response;
+  final List<CustomsAuthoritySubmissionEvent> events;
+
+  factory CustomsAuthorityOutcomeResult.fromMap(Map<String, dynamic> map) {
+    const version = 'customs-authority-outcome-record-result-v1';
+    _requireMutationEnvelope(map, version, 'transactionApplied');
+    final events = _list(map['events'])
+        .map((item) => CustomsAuthoritySubmissionEvent.fromMap(_map(item)))
+        .toList(growable: false);
+    if (events.length != 2) {
+      throw const FormatException('Kurum sonucu olay zinciri geçersiz.');
+    }
+    return CustomsAuthorityOutcomeResult(
+      contractVersion: version,
+      ok: true,
+      duplicate: map['duplicate'] == true,
+      transactionApplied: map['transactionApplied'] == true,
+      submission: CustomsAuthoritySubmission.fromMap(_map(map['submission'])),
+      response: CustomsAuthorityResponse.fromMap(_map(map['response'])),
+      events: events,
+    );
+  }
+}
+
 class CustomsAuthorityResponse {
   const CustomsAuthorityResponse({
     required this.responseId,
@@ -1024,6 +1719,19 @@ String generateCustomsAuthoritySubmissionRequestId() {
       '${hex.substring(12, 16)}-'
       '${hex.substring(16, 20)}-'
       '${hex.substring(20)}';
+}
+
+void _requireMutationEnvelope(
+  Map<String, dynamic> map,
+  String version,
+  String transactionField,
+) {
+  if (map['contractVersion'] != version ||
+      map['ok'] != true ||
+      map['duplicate'] is! bool ||
+      map[transactionField] is! bool) {
+    throw const FormatException('Geçersiz resmî iletim işlem yanıtı.');
+  }
 }
 
 void _requireReadResult(Map<String, dynamic> map, String version) {

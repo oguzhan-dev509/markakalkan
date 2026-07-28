@@ -45,6 +45,61 @@ Map<String, dynamic> _submissionMap() => {
   'updatedAt': '2026-07-25T16:00:00.000Z',
 };
 
+Map<String, dynamic> _packageMap() => {
+  'packageId': 'package-1',
+  'submissionId': 'submission-1',
+  'version': 1,
+  'packageType': 'fsmh_application_package',
+  'sourceSnapshot': <String, dynamic>{},
+  'documentManifest': [
+    {
+      'referenceId': 'doc-1',
+      'title': 'Marka tescil belgesi',
+      'sha256': _hash('b'),
+      'mimeType': 'application/pdf',
+      'sizeBytes': 1200,
+    },
+  ],
+  'evidenceManifest': <Object>[],
+  'redactionManifest': <Object>[],
+  'coverLetterText': 'Resmî paket için hazırlanan üst yazı metnidir.',
+  'authoritySummary': 'Kurum için hazırlanan resmî başvuru özetidir.',
+  'legalNeutralityStatement':
+      'Bu paket kesin suç isnadı içermez ve insan incelemesine dayanır.',
+  'aggregateHashAlgorithm': 'SHA-256',
+  'aggregateHash': _hash('c'),
+  'generatedAt': '2026-07-25T16:10:00.000Z',
+  'generatedByUid': 'user-1',
+  'immutable': true,
+};
+
+Map<String, dynamic> _responseMap({String type = 'acknowledgement'}) => {
+  'responseId': 'response-1',
+  'submissionId': 'submission-1',
+  'responseType': type,
+  'authorityReference': 'FSMH-2026-0001',
+  'receivedAt': '2026-07-25T16:20:00.000Z',
+  'receivedByUid': 'user-1',
+  'summary': 'Kurum cevabı insan incelemesiyle kaydedildi.',
+  'attachmentReferences': <String>[],
+  'attachmentHashes': <String>[],
+  'requestedDueAt': null,
+  'outcomeCode': type == 'decision' ? 'action_taken' : 'accepted_for_review',
+  'immutable': true,
+};
+
+Map<String, dynamic> _eventMap(int sequence, String type) => {
+  'submissionId': 'submission-1',
+  'sequence': sequence,
+  'eventType': type,
+  'previousStatus': 'package_generated',
+  'nextStatus': sequence == 3 ? 'submitted_externally' : 'concluded',
+  'summary': 'Resmî iletim olayı kaydedildi.',
+  'reason': 'İnsan tarafından doğrulanan işlem.',
+  'actorLabel': 'Yetkili kullanıcı',
+  'recordedAt': '2026-07-25T16:30:00.000Z',
+};
+
 void main() {
   test('artifact scope and package fields parse backward compatibly', () {
     Map<String, dynamic> detailMap(Object? scope, Object? status) => {
@@ -411,6 +466,374 @@ void main() {
           r'[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
         ),
       ),
+    );
+  });
+  test(
+    'five protected operations preserve exact contracts and request ids',
+    () async {
+      final calls = <MapEntry<String, Map<String, dynamic>>>[];
+      var appCheckCalls = 0;
+      final repository = CallableCustomsAuthoritySubmissionRepository(
+        ensureAppCheckReady: () async {
+          appCheckCalls++;
+        },
+        callable: (name, request) async {
+          calls.add(MapEntry(name, request));
+          return switch (name) {
+            'generateCustomsSubmissionPackage' => {
+              'contractVersion':
+                  'customs-submission-package-generate-result-v1',
+              'ok': true,
+              'duplicate': false,
+              'transactionCommitted': true,
+              'submission': {
+                ..._submissionMap(),
+                'status': 'package_generated',
+                'currentPackageId': 'package-1',
+                'currentPackageVersion': 1,
+                'currentPackageHash': _hash('c'),
+                'packageCount': 1,
+              },
+              'package': _packageMap(),
+            },
+            'recordCustomsExternalSubmission' => {
+              'contractVersion': 'customs-external-submission-record-result-v1',
+              'ok': true,
+              'duplicate': false,
+              'transactionApplied': true,
+              'submission': {
+                ..._submissionMap(),
+                'status': 'submitted_externally',
+              },
+              'event': _eventMap(
+                3,
+                'customs_submission_recorded_as_submitted_externally',
+              ),
+            },
+            'recordCustomsSubmissionReceipt' => {
+              'contractVersion': 'customs-submission-receipt-record-result-v1',
+              'ok': true,
+              'duplicate': true,
+              'transactionCommitted': false,
+              'submission': {..._submissionMap(), 'status': 'receipt_recorded'},
+              'response': _responseMap(type: 'receipt'),
+            },
+            'appendCustomsAuthorityResponse' => {
+              'contractVersion': 'customs-authority-response-append-result-v1',
+              'ok': true,
+              'duplicate': false,
+              'transactionCommitted': true,
+              'submission': _submissionMap(),
+              'response': _responseMap(),
+            },
+            'recordCustomsAuthorityOutcome' => {
+              'contractVersion': 'customs-authority-outcome-record-result-v1',
+              'ok': true,
+              'duplicate': false,
+              'transactionApplied': true,
+              'submission': {..._submissionMap(), 'status': 'concluded'},
+              'response': _responseMap(type: 'decision'),
+              'events': [
+                _eventMap(4, 'customs_authority_outcome_recorded'),
+                _eventMap(5, 'customs_authority_submission_concluded'),
+              ],
+            },
+            _ => throw StateError('Beklenmeyen callable: $name'),
+          };
+        },
+      );
+
+      const manifest = CustomsSubmissionManifestItem(
+        referenceId: 'doc-1',
+        title: 'Marka tescil belgesi',
+        sha256:
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        mimeType: 'application/pdf',
+        sizeBytes: 1200,
+      );
+      const packageDraft = CustomsSubmissionPackageDraft(
+        packageType: CustomsSubmissionPackageType.fsmhApplicationPackage,
+        coverLetterText: 'Kurum için hazırlanan resmî üst yazı metnidir.',
+        authoritySummary: 'Kurum için hazırlanan resmî başvuru özetidir.',
+        legalNeutralityStatement:
+            'Bu paket kesin suç isnadı içermez ve insan incelemesine dayanır.',
+        documentManifest: [manifest],
+      );
+      final packageResult = await repository.generatePackage(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: packageDraft,
+        requestId: 'request-package',
+      );
+      final externalResult = await repository.recordExternalSubmission(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        packageId: 'package-1',
+        packageVersion: 1,
+        packageHash: _hash('c'),
+        draft: const CustomsExternalSubmissionDraft(
+          submissionChannel: CustomsSubmissionChannel.fsmhPortal,
+          submittedAt: '2026-07-25T16:15:00.000Z',
+          externalSubmissionStatement:
+              'Paket kurum portalına insan tarafından teslim edildi.',
+          externalReferenceType: CustomsExternalReferenceType.none,
+          externalSubmissionConfirmed: true,
+        ),
+        requestId: 'request-external',
+      );
+      final receiptResult = await repository.recordReceipt(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: const CustomsSubmissionReceiptDraft(
+          officialReferenceNumber: 'FSMH-2026-0001',
+          receivedAt: '2026-07-25T16:20:00.000Z',
+          channelType: CustomsSubmissionChannel.fsmhPortal,
+          summary: 'Başvurunun kurum tarafından alındığı teyit edildi.',
+        ),
+        requestId: 'request-receipt',
+      );
+      final responseResult = await repository.appendAuthorityResponse(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: const CustomsAuthorityResponseDraft(
+          responseType: CustomsInterimAuthorityResponseType.acknowledgement,
+          receivedAt: '2026-07-25T16:25:00.000Z',
+          summary: 'Kurum incelemenin başladığını bildirdi.',
+        ),
+        requestId: 'request-response',
+      );
+      final outcomeResult = await repository.recordAuthorityOutcome(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: const CustomsAuthorityOutcomeDraft(
+          responseType: CustomsFinalAuthorityResponseType.decision,
+          outcomeCode: CustomsAuthorityOutcomeCode.actionTaken,
+          outcomeFinalityLevel:
+              CustomsAuthorityOutcomeFinalityLevel.administrativeFinal,
+          authorityReferenceNumber: 'FSMH-2026-SONUC-1',
+          officialDocumentDate: '2026-07-25T16:00:00.000Z',
+          receivedAt: '2026-07-25T16:30:00.000Z',
+          authorityNameSnapshot: 'Ticaret Bakanlığı',
+          summary: 'Kurum tarafından bildirilen nihai sonuç kaydedildi.',
+          humanEntryConfirmed: true,
+        ),
+        requestId: 'request-outcome',
+      );
+
+      expect(appCheckCalls, 5);
+      expect(calls.map((call) => call.key), [
+        'generateCustomsSubmissionPackage',
+        'recordCustomsExternalSubmission',
+        'recordCustomsSubmissionReceipt',
+        'appendCustomsAuthorityResponse',
+        'recordCustomsAuthorityOutcome',
+      ]);
+      expect(calls.map((call) => call.value['requestId']), [
+        'request-package',
+        'request-external',
+        'request-receipt',
+        'request-response',
+        'request-outcome',
+      ]);
+      expect(calls.map((call) => call.value['contractVersion']), [
+        'customs-submission-package-generate-request-v1',
+        'customs-external-submission-record-request-v1',
+        'customs-submission-receipt-record-request-v1',
+        'customs-authority-response-append-request-v1',
+        'customs-authority-outcome-record-request-v1',
+      ]);
+      expect(
+        calls[1].value['externalSubmissionConfirmationVersion'],
+        CustomsExternalSubmissionDraft.confirmationVersion,
+      );
+      expect(calls[1].value.containsKey('externalReferenceValue'), isFalse);
+      expect(
+        calls[4].value['humanEntryConfirmationVersion'],
+        CustomsAuthorityOutcomeDraft.humanEntryConfirmationVersion,
+      );
+      expect(calls[4].value.containsKey('authorityUnitSnapshot'), isFalse);
+      expect(packageResult.transactionCommitted, isTrue);
+      expect(externalResult.transactionApplied, isTrue);
+      expect(receiptResult.duplicate, isTrue);
+      expect(responseResult.response.responseType, 'acknowledgement');
+      expect(outcomeResult.events, hasLength(2));
+    },
+  );
+
+  test(
+    'new drafts enforce confirmations, manifests and paired attachments',
+    () {
+      const noManifest = CustomsSubmissionPackageDraft(
+        packageType: CustomsSubmissionPackageType.authorityReferralPackage,
+        coverLetterText: 'Kurum için hazırlanan resmî üst yazı metnidir.',
+        authoritySummary: 'Kurum için hazırlanan resmî başvuru özetidir.',
+        legalNeutralityStatement:
+            'Bu paket kesin suç isnadı içermez ve insan incelemesine dayanır.',
+      );
+      expect(noManifest.toRequestMap, throwsArgumentError);
+
+      const unconfirmed = CustomsExternalSubmissionDraft(
+        submissionChannel: CustomsSubmissionChannel.registeredEmail,
+        submittedAt: '2026-07-25T16:15:00.000Z',
+        externalSubmissionStatement:
+            'Paket kayıtlı elektronik posta ile kuruma teslim edildi.',
+        externalReferenceType: CustomsExternalReferenceType.kepMessageId,
+        externalReferenceValue: 'KEP-1',
+      );
+      expect(unconfirmed.toRequestMap, throwsArgumentError);
+
+      const mismatchedResponse = CustomsAuthorityResponseDraft(
+        responseType: CustomsInterimAuthorityResponseType.statusUpdate,
+        receivedAt: '2026-07-25T16:25:00.000Z',
+        summary: 'Kurum dosyanın incelemede olduğunu bildirdi.',
+        attachmentReferences: ['doc-1'],
+      );
+      expect(mismatchedResponse.toRequestMap, throwsArgumentError);
+
+      const unconfirmedOutcome = CustomsAuthorityOutcomeDraft(
+        responseType: CustomsFinalAuthorityResponseType.closureNotice,
+        outcomeCode: CustomsAuthorityOutcomeCode.closed,
+        outcomeFinalityLevel: CustomsAuthorityOutcomeFinalityLevel.notStated,
+        authorityReferenceNumber: 'FSMH-2026-SONUC-2',
+        officialDocumentDate: '2026-07-25T16:00:00.000Z',
+        receivedAt: '2026-07-25T16:30:00.000Z',
+        authorityNameSnapshot: 'Ticaret Bakanlığı',
+        summary: 'Kurum dosyanın kapatıldığını bildirdi.',
+      );
+      expect(unconfirmedOutcome.toRequestMap, throwsArgumentError);
+    },
+  );
+
+  test('empty repository rejects all five new write operations', () async {
+    const repository = EmptyCustomsAuthoritySubmissionRepository();
+    const packageDraft = CustomsSubmissionPackageDraft(
+      packageType: CustomsSubmissionPackageType.fsmhApplicationPackage,
+      coverLetterText: 'Kurum için hazırlanan resmî üst yazı metnidir.',
+      authoritySummary: 'Kurum için hazırlanan resmî başvuru özetidir.',
+      legalNeutralityStatement:
+          'Bu paket kesin suç isnadı içermez ve insan incelemesine dayanır.',
+      documentManifest: [
+        CustomsSubmissionManifestItem(
+          referenceId: 'doc-1',
+          title: 'Marka tescil belgesi',
+          sha256:
+              'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        ),
+      ],
+    );
+    const externalDraft = CustomsExternalSubmissionDraft(
+      submissionChannel: CustomsSubmissionChannel.fsmhPortal,
+      submittedAt: '2026-07-25T16:15:00.000Z',
+      externalSubmissionStatement:
+          'Paket kurum portalına insan tarafından teslim edildi.',
+      externalReferenceType: CustomsExternalReferenceType.none,
+      externalSubmissionConfirmed: true,
+    );
+    const receiptDraft = CustomsSubmissionReceiptDraft(
+      officialReferenceNumber: 'FSMH-2026-0001',
+      receivedAt: '2026-07-25T16:20:00.000Z',
+      channelType: CustomsSubmissionChannel.fsmhPortal,
+      summary: 'Başvurunun kurum tarafından alındığı teyit edildi.',
+    );
+    const responseDraft = CustomsAuthorityResponseDraft(
+      responseType: CustomsInterimAuthorityResponseType.acknowledgement,
+      receivedAt: '2026-07-25T16:25:00.000Z',
+      summary: 'Kurum incelemenin başladığını bildirdi.',
+    );
+    const outcomeDraft = CustomsAuthorityOutcomeDraft(
+      responseType: CustomsFinalAuthorityResponseType.decision,
+      outcomeCode: CustomsAuthorityOutcomeCode.actionTaken,
+      outcomeFinalityLevel:
+          CustomsAuthorityOutcomeFinalityLevel.administrativeFinal,
+      authorityReferenceNumber: 'FSMH-2026-SONUC-1',
+      officialDocumentDate: '2026-07-25T16:00:00.000Z',
+      receivedAt: '2026-07-25T16:30:00.000Z',
+      authorityNameSnapshot: 'Ticaret Bakanlığı',
+      summary: 'Kurum tarafından bildirilen nihai sonuç kaydedildi.',
+      humanEntryConfirmed: true,
+    );
+
+    await expectLater(
+      repository.generatePackage(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: packageDraft,
+        requestId: 'request-package',
+      ),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      repository.recordExternalSubmission(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        packageId: 'package-1',
+        packageVersion: 1,
+        packageHash: _hash('c'),
+        draft: externalDraft,
+        requestId: 'request-external',
+      ),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      repository.recordReceipt(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: receiptDraft,
+        requestId: 'request-receipt',
+      ),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      repository.appendAuthorityResponse(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: responseDraft,
+        requestId: 'request-response',
+      ),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      repository.recordAuthorityOutcome(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        draft: outcomeDraft,
+        requestId: 'request-outcome',
+      ),
+      throwsUnsupportedError,
+    );
+  });
+
+  test('new mutation results reject wrong contracts and event counts', () {
+    expect(
+      () => CustomsPackageGenerationResult.fromMap({
+        'contractVersion': 'wrong',
+        'ok': true,
+        'duplicate': false,
+        'transactionCommitted': true,
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => CustomsAuthorityOutcomeResult.fromMap({
+        'contractVersion': 'customs-authority-outcome-record-result-v1',
+        'ok': true,
+        'duplicate': false,
+        'transactionApplied': true,
+        'submission': _submissionMap(),
+        'response': _responseMap(type: 'decision'),
+        'events': [_eventMap(4, 'customs_authority_outcome_recorded')],
+      }),
+      throwsFormatException,
     );
   });
 }

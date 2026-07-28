@@ -217,6 +217,64 @@ class FakeCustomsAuthoritySubmissionRepository
   }
 
   @override
+  Future<CustomsPackageGenerationResult> generatePackage({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionPackageDraft draft,
+    required String requestId,
+  }) async => throw UnsupportedError(
+    'FakeCustomsAuthoritySubmissionRepository.generatePackage is not configured.',
+  );
+
+  @override
+  Future<CustomsExternalSubmissionResult> recordExternalSubmission({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required String packageId,
+    required int packageVersion,
+    required String packageHash,
+    required CustomsExternalSubmissionDraft draft,
+    required String requestId,
+  }) async => throw UnsupportedError(
+    'FakeCustomsAuthoritySubmissionRepository.recordExternalSubmission is not configured.',
+  );
+
+  @override
+  Future<CustomsSubmissionReceiptResult> recordReceipt({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsSubmissionReceiptDraft draft,
+    required String requestId,
+  }) async => throw UnsupportedError(
+    'FakeCustomsAuthoritySubmissionRepository.recordReceipt is not configured.',
+  );
+
+  @override
+  Future<CustomsAuthorityResponseAppendResult> appendAuthorityResponse({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityResponseDraft draft,
+    required String requestId,
+  }) async => throw UnsupportedError(
+    'FakeCustomsAuthoritySubmissionRepository.appendAuthorityResponse is not configured.',
+  );
+
+  @override
+  Future<CustomsAuthorityOutcomeResult> recordAuthorityOutcome({
+    required String tenantId,
+    required String canonicalBrandId,
+    required String submissionId,
+    required CustomsAuthorityOutcomeDraft draft,
+    required String requestId,
+  }) async => throw UnsupportedError(
+    'FakeCustomsAuthoritySubmissionRepository.recordAuthorityOutcome is not configured.',
+  );
+
+  @override
   Future<CustomsPackageMaterializationResult> materializePackageArtifact({
     required String tenantId,
     required String canonicalBrandId,
