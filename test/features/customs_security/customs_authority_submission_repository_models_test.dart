@@ -34,8 +34,20 @@ Map<String, dynamic> _submissionMap() => {
   'submittedByUid': null,
   'submittedAt': null,
   'externalSubmissionStatement': null,
+  'externalReferenceType': null,
+  'externalReferenceValue': null,
   'officialReferenceNumber': null,
   'receiptRecordedAt': null,
+  'outcomeResponseId': null,
+  'outcomeCode': null,
+  'outcomeFinalityLevel': null,
+  'authorityReferenceNumber': null,
+  'officialDocumentDate': null,
+  'outcomeReceivedAt': null,
+  'outcomeRecordedAt': null,
+  'authorityNameSnapshot': null,
+  'authorityUnitSnapshot': null,
+  'outcomeSummary': null,
   'packageCount': 0,
   'responseCount': 0,
   'eventCount': 1,
@@ -85,6 +97,19 @@ Map<String, dynamic> _responseMap({String type = 'acknowledgement'}) => {
   'attachmentHashes': <String>[],
   'requestedDueAt': null,
   'outcomeCode': type == 'decision' ? 'action_taken' : 'accepted_for_review',
+  'outcomeFinalityLevel': type == 'decision' ? 'administrative_final' : null,
+  'officialDocumentDate': type == 'decision'
+      ? '2026-07-25T16:00:00.000Z'
+      : null,
+  'authorityNameSnapshot': type == 'decision' ? 'Ticaret Bakanlığı' : null,
+  'authorityUnitSnapshot': type == 'decision' ? 'FSMH Başvuru Birimi' : null,
+  'previousResponseId': type == 'decision' ? 'response-previous' : null,
+  'additionalNotes': type == 'decision'
+      ? 'Kullanıcı tarafından eklenen açıklama.'
+      : null,
+  'attachmentIntegrityStatus': type == 'decision'
+      ? 'metadata_only_unverified'
+      : null,
   'immutable': true,
 };
 
@@ -302,6 +327,57 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test(
+    'read model preserves external delivery and authority outcome metadata',
+    () {
+      final submission = CustomsAuthoritySubmission.fromMap({
+        ..._submissionMap(),
+        'status': 'concluded',
+        'externalReferenceType': 'portal_transaction_id',
+        'externalReferenceValue': 'PORTAL-2026-0001',
+        'outcomeResponseId': 'response-outcome-1',
+        'outcomeCode': 'action_taken',
+        'outcomeFinalityLevel': 'administrative_final',
+        'authorityReferenceNumber': 'FSMH-2026-SONUC-1',
+        'officialDocumentDate': '2026-07-25T16:00:00.000Z',
+        'outcomeReceivedAt': '2026-07-25T16:30:00.000Z',
+        'outcomeRecordedAt': '2026-07-25T16:35:00.000Z',
+        'authorityNameSnapshot': 'Ticaret Bakanlığı',
+        'authorityUnitSnapshot': 'FSMH Başvuru Birimi',
+        'outcomeSummary': 'Kurum tarafından bildirilen nihai sonuç.',
+      });
+      final response = CustomsAuthorityResponse.fromMap(
+        _responseMap(type: 'decision'),
+      );
+
+      expect(submission.externalReferenceType, 'portal_transaction_id');
+      expect(submission.externalReferenceValue, 'PORTAL-2026-0001');
+      expect(submission.outcomeResponseId, 'response-outcome-1');
+      expect(submission.outcomeCode, 'action_taken');
+      expect(submission.outcomeFinalityLevel, 'administrative_final');
+      expect(submission.authorityReferenceNumber, 'FSMH-2026-SONUC-1');
+      expect(submission.officialDocumentDate, '2026-07-25T16:00:00.000Z');
+      expect(submission.outcomeReceivedAt, '2026-07-25T16:30:00.000Z');
+      expect(submission.outcomeRecordedAt, '2026-07-25T16:35:00.000Z');
+      expect(submission.authorityNameSnapshot, 'Ticaret Bakanlığı');
+      expect(submission.authorityUnitSnapshot, 'FSMH Başvuru Birimi');
+      expect(
+        submission.outcomeSummary,
+        'Kurum tarafından bildirilen nihai sonuç.',
+      );
+      expect(response.outcomeFinalityLevel, 'administrative_final');
+      expect(response.officialDocumentDate, '2026-07-25T16:00:00.000Z');
+      expect(response.authorityNameSnapshot, 'Ticaret Bakanlığı');
+      expect(response.authorityUnitSnapshot, 'FSMH Başvuru Birimi');
+      expect(response.previousResponseId, 'response-previous');
+      expect(
+        response.additionalNotes,
+        'Kullanıcı tarafından eklenen açıklama.',
+      );
+      expect(response.attachmentIntegrityStatus, 'metadata_only_unverified');
+    },
+  );
 
   test('detail parses package response and verified event chain', () {
     final detail = CustomsAuthoritySubmissionDetail.fromMap({

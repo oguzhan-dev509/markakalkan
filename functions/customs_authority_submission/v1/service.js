@@ -225,6 +225,14 @@ function safeSubmission(id, data) {
     submittedByUid: data.submittedByUid || null,
     submittedAt: data.submittedAt || null,
     externalSubmissionStatement: data.externalSubmissionStatement || null,
+    externalReferenceType:
+      data.externalSubmission?.externalReferenceType ||
+      data.externalReferenceType ||
+      null,
+    externalReferenceValue:
+      data.externalSubmission?.externalReferenceValue ||
+      data.externalReferenceValue ||
+      null,
     officialReferenceNumber: data.officialReferenceNumber || null,
     receiptRecordedAt: data.receiptRecordedAt || null,
     outcomeResponseId: data.outcomeResponseId || null,

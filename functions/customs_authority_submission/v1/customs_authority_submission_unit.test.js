@@ -732,6 +732,14 @@ test("external submission, receipt and authority response remain human-controlle
       {uid: "user-1"},
   );
   assert.equal(submitted.submission.status, "submitted_externally");
+  assert.equal(
+      submitted.submission.externalReferenceType,
+      "portal_transaction_id",
+  );
+  assert.equal(
+      submitted.submission.externalReferenceValue,
+      "PORTAL-2026-0001",
+  );
   assert.equal(submitted.event.eventType, "customs_submission_recorded_as_submitted_externally");
 
   const receipt = await service.recordReceipt({

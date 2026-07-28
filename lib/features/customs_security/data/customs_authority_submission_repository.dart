@@ -898,8 +898,20 @@ class CustomsAuthoritySubmission {
     this.submittedByUid,
     this.submittedAt,
     this.externalSubmissionStatement,
+    this.externalReferenceType,
+    this.externalReferenceValue,
     this.officialReferenceNumber,
     this.receiptRecordedAt,
+    this.outcomeResponseId,
+    this.outcomeCode,
+    this.outcomeFinalityLevel,
+    this.authorityReferenceNumber,
+    this.officialDocumentDate,
+    this.outcomeReceivedAt,
+    this.outcomeRecordedAt,
+    this.authorityNameSnapshot,
+    this.authorityUnitSnapshot,
+    this.outcomeSummary,
     this.lastEventType,
     this.lastEventAt,
   });
@@ -932,8 +944,20 @@ class CustomsAuthoritySubmission {
   final String? submittedByUid;
   final String? submittedAt;
   final String? externalSubmissionStatement;
+  final String? externalReferenceType;
+  final String? externalReferenceValue;
   final String? officialReferenceNumber;
   final String? receiptRecordedAt;
+  final String? outcomeResponseId;
+  final String? outcomeCode;
+  final String? outcomeFinalityLevel;
+  final String? authorityReferenceNumber;
+  final String? officialDocumentDate;
+  final String? outcomeReceivedAt;
+  final String? outcomeRecordedAt;
+  final String? authorityNameSnapshot;
+  final String? authorityUnitSnapshot;
+  final String? outcomeSummary;
   final int packageCount;
   final int responseCount;
   final int eventCount;
@@ -942,53 +966,64 @@ class CustomsAuthoritySubmission {
   final String createdAt;
   final String updatedAt;
 
-  factory CustomsAuthoritySubmission.fromMap(Map<String, dynamic> map) =>
-      CustomsAuthoritySubmission(
-        submissionId: _string(map, 'submissionId'),
-        submissionNumber: _string(map, 'submissionNumber'),
-        submissionType: _string(map, 'submissionType'),
-        targetAuthority: _string(map, 'targetAuthority'),
-        targetUnit: _nullableString(map['targetUnit']),
-        channelType: _nullableString(map['channelType']),
-        protectionProfileId: _nullableString(map['protectionProfileId']),
-        interventionId: _nullableString(map['interventionId']),
-        caseId: _nullableString(map['caseId']),
-        legalMatterId: _nullableString(map['legalMatterId']),
-        incidentReference: _string(map, 'incidentReference'),
-        title: _string(map, 'title'),
-        authoritySummary: _string(map, 'authoritySummary'),
-        status: _string(map, 'status'),
-        humanReviewReference: _nullableString(map['humanReviewReference']),
-        rightsHolderApprovalReference: _nullableString(
-          map['rightsHolderApprovalReference'],
-        ),
-        dataMinimizationConfirmed: map['dataMinimizationConfirmed'] == true,
-        nonAccusatoryLanguageConfirmed:
-            map['nonAccusatoryLanguageConfirmed'] == true,
-        duplicateCheckKey: _string(map, 'duplicateCheckKey'),
-        currentPackageId: _nullableString(map['currentPackageId']),
-        currentPackageVersion: _integer(map, 'currentPackageVersion'),
-        currentPackageHash: _nullableString(map['currentPackageHash']),
-        preparedByUid: _string(map, 'preparedByUid'),
-        reviewedByUid: _nullableString(map['reviewedByUid']),
-        approvedByUid: _nullableString(map['approvedByUid']),
-        submittedByUid: _nullableString(map['submittedByUid']),
-        submittedAt: _nullableString(map['submittedAt']),
-        externalSubmissionStatement: _nullableString(
-          map['externalSubmissionStatement'],
-        ),
-        officialReferenceNumber: _nullableString(
-          map['officialReferenceNumber'],
-        ),
-        receiptRecordedAt: _nullableString(map['receiptRecordedAt']),
-        packageCount: _integer(map, 'packageCount'),
-        responseCount: _integer(map, 'responseCount'),
-        eventCount: _integer(map, 'eventCount'),
-        lastEventType: _nullableString(map['lastEventType']),
-        lastEventAt: _nullableString(map['lastEventAt']),
-        createdAt: _string(map, 'createdAt'),
-        updatedAt: _string(map, 'updatedAt'),
-      );
+  factory CustomsAuthoritySubmission.fromMap(
+    Map<String, dynamic> map,
+  ) => CustomsAuthoritySubmission(
+    submissionId: _string(map, 'submissionId'),
+    submissionNumber: _string(map, 'submissionNumber'),
+    submissionType: _string(map, 'submissionType'),
+    targetAuthority: _string(map, 'targetAuthority'),
+    targetUnit: _nullableString(map['targetUnit']),
+    channelType: _nullableString(map['channelType']),
+    protectionProfileId: _nullableString(map['protectionProfileId']),
+    interventionId: _nullableString(map['interventionId']),
+    caseId: _nullableString(map['caseId']),
+    legalMatterId: _nullableString(map['legalMatterId']),
+    incidentReference: _string(map, 'incidentReference'),
+    title: _string(map, 'title'),
+    authoritySummary: _string(map, 'authoritySummary'),
+    status: _string(map, 'status'),
+    humanReviewReference: _nullableString(map['humanReviewReference']),
+    rightsHolderApprovalReference: _nullableString(
+      map['rightsHolderApprovalReference'],
+    ),
+    dataMinimizationConfirmed: map['dataMinimizationConfirmed'] == true,
+    nonAccusatoryLanguageConfirmed:
+        map['nonAccusatoryLanguageConfirmed'] == true,
+    duplicateCheckKey: _string(map, 'duplicateCheckKey'),
+    currentPackageId: _nullableString(map['currentPackageId']),
+    currentPackageVersion: _integer(map, 'currentPackageVersion'),
+    currentPackageHash: _nullableString(map['currentPackageHash']),
+    preparedByUid: _string(map, 'preparedByUid'),
+    reviewedByUid: _nullableString(map['reviewedByUid']),
+    approvedByUid: _nullableString(map['approvedByUid']),
+    submittedByUid: _nullableString(map['submittedByUid']),
+    submittedAt: _nullableString(map['submittedAt']),
+    externalSubmissionStatement: _nullableString(
+      map['externalSubmissionStatement'],
+    ),
+    externalReferenceType: _nullableString(map['externalReferenceType']),
+    externalReferenceValue: _nullableString(map['externalReferenceValue']),
+    officialReferenceNumber: _nullableString(map['officialReferenceNumber']),
+    receiptRecordedAt: _nullableString(map['receiptRecordedAt']),
+    outcomeResponseId: _nullableString(map['outcomeResponseId']),
+    outcomeCode: _nullableString(map['outcomeCode']),
+    outcomeFinalityLevel: _nullableString(map['outcomeFinalityLevel']),
+    authorityReferenceNumber: _nullableString(map['authorityReferenceNumber']),
+    officialDocumentDate: _nullableString(map['officialDocumentDate']),
+    outcomeReceivedAt: _nullableString(map['outcomeReceivedAt']),
+    outcomeRecordedAt: _nullableString(map['outcomeRecordedAt']),
+    authorityNameSnapshot: _nullableString(map['authorityNameSnapshot']),
+    authorityUnitSnapshot: _nullableString(map['authorityUnitSnapshot']),
+    outcomeSummary: _nullableString(map['outcomeSummary']),
+    packageCount: _integer(map, 'packageCount'),
+    responseCount: _integer(map, 'responseCount'),
+    eventCount: _integer(map, 'eventCount'),
+    lastEventType: _nullableString(map['lastEventType']),
+    lastEventAt: _nullableString(map['lastEventAt']),
+    createdAt: _string(map, 'createdAt'),
+    updatedAt: _string(map, 'updatedAt'),
+  );
 }
 
 class CustomsSubmissionPackage {
@@ -1637,6 +1672,13 @@ class CustomsAuthorityResponse {
     this.authorityReference,
     this.requestedDueAt,
     this.outcomeCode,
+    this.outcomeFinalityLevel,
+    this.officialDocumentDate,
+    this.authorityNameSnapshot,
+    this.authorityUnitSnapshot,
+    this.previousResponseId,
+    this.additionalNotes,
+    this.attachmentIntegrityStatus,
   });
 
   final String responseId;
@@ -1650,6 +1692,13 @@ class CustomsAuthorityResponse {
   final List<String> attachmentHashes;
   final String? requestedDueAt;
   final String? outcomeCode;
+  final String? outcomeFinalityLevel;
+  final String? officialDocumentDate;
+  final String? authorityNameSnapshot;
+  final String? authorityUnitSnapshot;
+  final String? previousResponseId;
+  final String? additionalNotes;
+  final String? attachmentIntegrityStatus;
   final bool immutable;
 
   factory CustomsAuthorityResponse.fromMap(Map<String, dynamic> map) =>
@@ -1665,6 +1714,15 @@ class CustomsAuthorityResponse {
         attachmentHashes: _strings(map['attachmentHashes']),
         requestedDueAt: _nullableString(map['requestedDueAt']),
         outcomeCode: _nullableString(map['outcomeCode']),
+        outcomeFinalityLevel: _nullableString(map['outcomeFinalityLevel']),
+        officialDocumentDate: _nullableString(map['officialDocumentDate']),
+        authorityNameSnapshot: _nullableString(map['authorityNameSnapshot']),
+        authorityUnitSnapshot: _nullableString(map['authorityUnitSnapshot']),
+        previousResponseId: _nullableString(map['previousResponseId']),
+        additionalNotes: _nullableString(map['additionalNotes']),
+        attachmentIntegrityStatus: _nullableString(
+          map['attachmentIntegrityStatus'],
+        ),
         immutable: map['immutable'] == true,
       );
 }
