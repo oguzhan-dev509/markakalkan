@@ -66,6 +66,27 @@ const externalSubmissionNotAutomaticDescription =
     'Bu işlem paketi kuruma otomatik göndermez. Yalnız kurum dışında gerçekten '
     'tamamlanan teslimi, güncel değiştirilemez paketle ilişkilendirerek kaydeder.';
 
+const authorityReceiptSectionTitle = 'Resmî Alındı Kaydı';
+const recordAuthorityReceipt = 'Resmî Alındıyı Kaydet';
+const retryAuthorityReceipt = 'Aynı Alındıyla Yeniden Dene';
+const authorityReceiptDescription =
+    'Kurumun başvuruyu fiilen teslim aldığını gösteren resmî referans, zaman, '
+    'kanal ve isteğe bağlı belge bütünlüğü bilgilerini değiştirilemez biçimde kaydedin.';
+
+const authorityInterimResponseSectionTitle = 'Kurum Ara Cevabı';
+const appendAuthorityInterimResponse = 'Ara Cevabı Kaydet';
+const retryAuthorityInterimResponse = 'Aynı Cevapla Yeniden Dene';
+const authorityInterimResponseDescription =
+    'Kurumdan gelen teslim teyidi, ek bilgi talebi veya durum güncellemesini aynı '
+    'kanonik dosyada değiştirilemez cevap olarak kaydedin.';
+
+const authorityOutcomeSectionTitle = 'Nihai Kurum Sonucu';
+const recordAuthorityOutcome = 'Nihai Sonucu Kaydet';
+const retryAuthorityOutcome = 'Aynı Sonuçla Yeniden Dene';
+const authorityOutcomeDescription =
+    'Kurum belgesindeki nihai sonucu insan tarafından sınıflandırarak dosyayı '
+    'sonuçlandırın. Bu sınıflandırma MarkaKalkan tarafından verilmiş hukukî karar değildir.';
+
 const artifactSectionTitle = 'Resmî Paket ve Güvenli İndirme';
 const materializePackage = 'Resmî Paketi Oluştur';
 const retryMaterialization = 'Yeniden Dene';
@@ -178,6 +199,44 @@ String customsExternalReferenceTypeLabel(String value) => switch (value) {
   'telephone_reference' => 'Telefon kayıt referansı',
   'other_reference' => 'Diğer dış referans',
   _ => 'Belirsiz dış referans',
+};
+
+String customsAuthorityResponseTypeLabel(String value) => switch (value) {
+  'receipt' => 'Resmî alındı',
+  'acknowledgement' => 'Teslim / inceleme teyidi',
+  'information_request' => 'Ek bilgi talebi',
+  'status_update' => 'Durum güncellemesi',
+  'decision' => 'Kurum kararı',
+  'closure_notice' => 'Kapanış bildirimi',
+  'rejection_notice' => 'Ret bildirimi',
+  'other' => 'Diğer ara cevap',
+  _ => 'Belirsiz kurum cevabı',
+};
+
+String customsAuthorityOutcomeCodeLabel(String value) => switch (value) {
+  'pending' => 'Sonuç bekleniyor',
+  'accepted_for_review' => 'İncelemeye kabul edildi',
+  'action_taken' => 'İşlem yapıldı',
+  'temporary_measure_recorded' => 'Geçici tedbir kaydedildi',
+  'goods_detained_or_suspended' =>
+    'Eşyaya el koyma / işlemi durdurma bildirildi',
+  'goods_seizure_reported' => 'Eşya müsaderesi / yakalama bildirildi',
+  'no_action' => 'İşlem yapılmadı',
+  'referred_to_other_authority' => 'Başka kuruma sevk edildi',
+  'additional_procedure_required' => 'Ek işlem gerekiyor',
+  'closed' => 'Dosya kapatıldı',
+  'rejected' => 'Başvuru reddedildi',
+  'other' => 'Diğer sonuç',
+  _ => 'Belirsiz sonuç',
+};
+
+String customsAuthorityOutcomeFinalityLabel(String value) => switch (value) {
+  'informational' => 'Bilgilendirme',
+  'preliminary' => 'Ön değerlendirme',
+  'administrative_final' => 'İdarî olarak kesin',
+  'judicial_final' => 'Yargısal olarak kesin',
+  'not_stated' => 'Belgede belirtilmedi',
+  _ => 'Belirsiz kesinlik',
 };
 
 bool customsAuthoritySubmissionErrorIsRetryable(Object error) {

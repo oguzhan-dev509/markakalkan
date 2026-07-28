@@ -141,6 +141,125 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> pumpAuthorityOperationsDetail(
+    WidgetTester tester,
+    FakeCustomsAuthoritySubmissionRepository repository, {
+    Size size = const Size(1100, 5200),
+  }) async {
+    await tester.binding.setSurfaceSize(size);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomsAuthoritySubmissionDetailPage(
+          submissionId: 'submission-1',
+          repository: repository,
+          requestIdFactory: () => 'stable-authority-operation-id',
+          initialStage: CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> completeAuthorityReceiptForm(
+    WidgetTester tester, {
+    bool includeDocumentPair = true,
+    bool includeHash = true,
+  }) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('authority-receipt-reference')),
+      'FSMH-2026-ALINDI-1',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('authority-receipt-summary')),
+      'Başvurunun kurum sistemi tarafından teslim alındığı doğrulandı.',
+    );
+    if (includeDocumentPair) {
+      await tester.enterText(
+        find.byKey(const ValueKey('authority-receipt-document-reference')),
+        'receipt-document-1',
+      );
+    }
+    if (includeHash) {
+      await tester.enterText(
+        find.byKey(const ValueKey('authority-receipt-document-hash')),
+        List<String>.filled(64, 'a').join(),
+      );
+    }
+    await tester.tap(
+      find.byKey(const ValueKey('authority-receipt-confirmation')),
+    );
+    await tester.pump();
+  }
+
+  Future<void> completeAuthorityResponseForm(
+    WidgetTester tester, {
+    bool informationRequest = false,
+    bool addAttachment = false,
+    bool validHash = true,
+  }) async {
+    if (informationRequest) {
+      await tester.tap(find.byKey(const ValueKey('authority-response-type')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ek bilgi talebi').last);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('authority-response-add-due-date')),
+      );
+      await tester.pump();
+    }
+    await tester.enterText(
+      find.byKey(const ValueKey('authority-response-reference')),
+      'FSMH-2026-CEVAP-1',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('authority-response-summary')),
+      informationRequest
+          ? 'Kurum ek ürün görseli ve yetki belgesi talep etti.'
+          : 'Kurum başvurunun incelemeye alındığını bildirdi.',
+    );
+    if (addAttachment) {
+      await tester.tap(
+        find.byKey(const ValueKey('add-authority-response-attachment')),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('authority-response-attachment-reference-0')),
+        'authority-letter-1',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('authority-response-attachment-hash-0')),
+        validHash ? List<String>.filled(64, 'b').join() : 'invalid-hash',
+      );
+    }
+  }
+
+  Future<void> completeAuthorityOutcomeForm(
+    WidgetTester tester, {
+    bool confirmHumanEntry = true,
+    bool confirmNeutrality = true,
+  }) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('authority-outcome-reference')),
+      'FSMH-2026-SONUC-1',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('authority-outcome-summary')),
+      'Kurum inceleme sonunda işlem yapıldığını bildirdi ve dosyayı kapattı.',
+    );
+    if (confirmHumanEntry) {
+      await tester.tap(
+        find.byKey(const ValueKey('authority-outcome-human-confirmation')),
+      );
+      await tester.pump();
+    }
+    if (confirmNeutrality) {
+      await tester.tap(
+        find.byKey(const ValueKey('authority-outcome-neutrality-confirmation')),
+      );
+      await tester.pump();
+    }
+  }
+
   testWidgets('legacy artifact materializes once and reloads detail once', (
     tester,
   ) async {
@@ -546,7 +665,10 @@ void main() {
       await tester.ensureVisible(generate);
       expect(tester.widget<FilledButton>(generate).onPressed, isNull);
       expect(
-        find.text('Tenant ve marka kapsamı doğrulanamadı.'),
+        find.descendant(
+          of: find.byKey(const ValueKey('customs-package-generation-blockers')),
+          matching: find.text('Tenant ve marka kapsamı doğrulanamadı.'),
+        ),
         findsOneWidget,
       );
       expect(find.text('İnsan incelemesi referansı eksik.'), findsOneWidget);
@@ -669,7 +791,10 @@ void main() {
       await tester.ensureVisible(record);
       expect(tester.widget<FilledButton>(record).onPressed, isNull);
       expect(
-        find.text('Tenant ve marka kapsamı doğrulanamadı.'),
+        find.descendant(
+          of: find.byKey(const ValueKey('external-submission-blockers')),
+          matching: find.text('Tenant ve marka kapsamı doğrulanamadı.'),
+        ),
         findsOneWidget,
       );
       expect(repository.externalSubmissionCalls, 0);
@@ -732,6 +857,433 @@ void main() {
       expect(find.text('Resmî kanaldan iletildi'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'submitted file records immutable authority receipt and reloads canonical detail',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'submitted_externally',
+          includePackage: true,
+          includeScope: true,
+          submittedAt: '2026-07-25T10:02:00.000Z',
+          externalSubmissionStatement:
+              'Paket FSMH Portalı üzerinden teslim edildi.',
+          externalReferenceType: 'portal_transaction_id',
+          externalReferenceValue: 'PORTAL-2026-0001',
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpAuthorityOperationsDetail(tester, repository);
+
+      final record = find.byKey(
+        const ValueKey('record-customs-submission-receipt'),
+      );
+      await tester.ensureVisible(record);
+      await tester.tap(record);
+      await tester.pumpAndSettle();
+      await completeAuthorityReceiptForm(tester);
+
+      final review = find.byKey(const ValueKey('review-authority-receipt'));
+      await tester.ensureVisible(review);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-record-authority-receipt')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.receiptCalls, 1);
+      expect(repository.receiptRequestIds, ['stable-authority-operation-id']);
+      expect(repository.lastAuthorityOperationTenantId, 'tenant-1');
+      expect(repository.lastAuthorityOperationCanonicalBrandId, 'brand-1');
+      expect(repository.lastAuthorityOperationSubmissionId, 'submission-1');
+      expect(
+        repository.lastReceiptDraft?.officialReferenceNumber,
+        'FSMH-2026-ALINDI-1',
+      );
+      expect(
+        repository.lastReceiptDraft?.receiptDocumentHash,
+        List<String>.filled(64, 'a').join(),
+      );
+      expect(repository.detailCalls, 2);
+      expect(find.text('Resmî alındı kaydedildi'), findsOneWidget);
+      expect(find.text('Teslim kaydı alındı'), findsOneWidget);
+      expect(find.text('Resmî alındı'), findsWidgets);
+      expect(find.text('Resmî alındı kaydı değiştirilemez.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('authority receipt document and hash pair fails closed', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository()
+      ..detail = sampleAuthoritySubmissionDetail(
+        status: 'submitted_externally',
+        includePackage: true,
+        includeScope: true,
+        submittedAt: '2026-07-25T10:02:00.000Z',
+        externalSubmissionStatement: 'Paket dış kanalda teslim edildi.',
+      );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpAuthorityOperationsDetail(tester, repository);
+
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('record-customs-submission-receipt')),
+    );
+    await completeAuthorityReceiptForm(tester, includeHash: false);
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('review-authority-receipt')),
+    );
+
+    expect(
+      find.text('Belge SHA-256 değeri referansla birlikte girilmelidir.'),
+      findsOneWidget,
+    );
+    expect(repository.receiptCalls, 0);
+    expect(
+      find.byKey(const ValueKey('confirm-record-authority-receipt')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'information request records attachments and moves canonical file to requested state',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'submitted_externally',
+          includePackage: true,
+          includeScope: true,
+          submittedAt: '2026-07-25T10:02:00.000Z',
+          externalSubmissionStatement: 'Paket dış kanalda teslim edildi.',
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpAuthorityOperationsDetail(tester, repository);
+
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('append-customs-authority-response')),
+      );
+      await completeAuthorityResponseForm(
+        tester,
+        informationRequest: true,
+        addAttachment: true,
+      );
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('review-authority-response')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-append-authority-response')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.authorityResponseCalls, 1);
+      expect(repository.authorityResponseRequestIds, [
+        'stable-authority-operation-id',
+      ]);
+      expect(
+        repository.lastAuthorityResponseDraft?.responseType,
+        CustomsInterimAuthorityResponseType.informationRequest,
+      );
+      expect(repository.lastAuthorityResponseDraft?.requestedDueAt, isNotNull);
+      expect(repository.lastAuthorityResponseDraft?.attachmentReferences, [
+        'authority-letter-1',
+      ]);
+      expect(find.text('Ek bilgi talep edildi'), findsWidgets);
+      expect(find.text('Ek bilgi talebi'), findsWidgets);
+      expect(repository.detailCalls, 2);
+    },
+  );
+
+  testWidgets('authority response invalid attachment hash fails closed', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository()
+      ..detail = sampleAuthoritySubmissionDetail(
+        status: 'receipt_recorded',
+        includePackage: true,
+        includeScope: true,
+        submittedAt: '2026-07-25T10:02:00.000Z',
+        externalSubmissionStatement: 'Paket dış kanalda teslim edildi.',
+        officialReferenceNumber: 'FSMH-2026-ALINDI',
+        receiptRecordedAt: '2026-07-25T10:05:00.000Z',
+      );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpAuthorityOperationsDetail(tester, repository);
+
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('append-customs-authority-response')),
+    );
+    await completeAuthorityResponseForm(
+      tester,
+      addAttachment: true,
+      validHash: false,
+    );
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('review-authority-response')),
+    );
+
+    expect(
+      find.text('Ek SHA-256 değeri 64 haneli hex olmalıdır.'),
+      findsOneWidget,
+    );
+    expect(repository.authorityResponseCalls, 0);
+  });
+
+  testWidgets(
+    'recoverable authority receipt retry preserves request id and draft',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'submitted_externally',
+          includePackage: true,
+          includeScope: true,
+          submittedAt: '2026-07-25T10:02:00.000Z',
+          externalSubmissionStatement: 'Paket dış kanalda teslim edildi.',
+        )
+        ..receiptError = FirebaseFunctionsException(
+          code: 'unavailable',
+          message: 'technical',
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpAuthorityOperationsDetail(tester, repository);
+
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('record-customs-submission-receipt')),
+      );
+      await completeAuthorityReceiptForm(tester);
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('review-authority-receipt')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-record-authority-receipt')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.receiptCalls, 1);
+      expect(
+        find.byKey(const ValueKey('retry-customs-submission-receipt')),
+        findsOneWidget,
+      );
+
+      repository.receiptError = null;
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('retry-customs-submission-receipt')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-retry-authority-receipt')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.receiptCalls, 2);
+      expect(repository.receiptRequestIds, [
+        'stable-authority-operation-id',
+        'stable-authority-operation-id',
+      ]);
+      expect(
+        repository.lastReceiptDraft?.officialReferenceNumber,
+        'FSMH-2026-ALINDI-1',
+      );
+      expect(find.text('Teslim kaydı alındı'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'terminal outcome matrix and two confirmations conclude the canonical file',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'receipt_recorded',
+          includePackage: true,
+          includeScope: true,
+          submittedAt: '2026-07-25T10:02:00.000Z',
+          externalSubmissionStatement: 'Paket dış kanalda teslim edildi.',
+          officialReferenceNumber: 'FSMH-2026-ALINDI',
+          receiptRecordedAt: '2026-07-25T10:05:00.000Z',
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpAuthorityOperationsDetail(tester, repository);
+
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('record-customs-authority-outcome')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('authority-outcome-response-type')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ret bildirimi').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('authority-outcome-code')));
+      await tester.pumpAndSettle();
+      expect(find.text('Başvuru reddedildi'), findsWidgets);
+      expect(find.text('İşlem yapıldı'), findsNothing);
+      await tester.tap(find.text('Başvuru reddedildi').last);
+      await tester.pumpAndSettle();
+
+      await completeAuthorityOutcomeForm(tester, confirmNeutrality: false);
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('review-authority-outcome')),
+      );
+      expect(
+        find.text('İnsan girişi ve hukukî tarafsızlık teyitleri zorunludur.'),
+        findsOneWidget,
+      );
+      expect(repository.authorityOutcomeCalls, 0);
+
+      await tester.tap(
+        find.byKey(const ValueKey('authority-outcome-neutrality-confirmation')),
+      );
+      await tester.pump();
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('review-authority-outcome')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-record-authority-outcome')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.authorityOutcomeCalls, 1);
+      expect(repository.authorityOutcomeRequestIds, [
+        'stable-authority-operation-id',
+      ]);
+      expect(
+        repository.lastAuthorityOutcomeDraft?.responseType,
+        CustomsFinalAuthorityResponseType.rejectionNotice,
+      );
+      expect(
+        repository.lastAuthorityOutcomeDraft?.outcomeCode,
+        CustomsAuthorityOutcomeCode.rejected,
+      );
+      expect(
+        repository.lastAuthorityOutcomeDraft?.outcomeFinalityLevel,
+        CustomsAuthorityOutcomeFinalityLevel.administrativeFinal,
+      );
+      expect(repository.lastAuthorityOutcomeDraft?.humanEntryConfirmed, isTrue);
+      expect(find.text('Sonuçlandı'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('authority-outcome-summary')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'MarkaKalkan tarafından verilmiş hukukî karar değildir',
+        ),
+        findsWidgets,
+      );
+      expect(repository.detailCalls, 2);
+    },
+  );
+
+  testWidgets('concluded file locks all authority write operations', (
+    tester,
+  ) async {
+    final finalResponse = <String, dynamic>{
+      'responseId': 'final-response-1',
+      'submissionId': 'submission-1',
+      'responseType': 'decision',
+      'authorityReference': 'FSMH-2026-SONUC-1',
+      'receivedAt': '2026-07-25T11:00:00.000Z',
+      'receivedByUid': 'user-1',
+      'summary': 'Kurum nihai kararını bildirdi.',
+      'attachmentReferences': const <String>[],
+      'attachmentHashes': const <String>[],
+      'outcomeCode': 'action_taken',
+      'outcomeFinalityLevel': 'administrative_final',
+      'officialDocumentDate': '2026-07-25T10:30:00.000Z',
+      'authorityNameSnapshot': 'FSMH Programı',
+      'attachmentIntegrityStatus': 'metadata_only_unverified',
+      'immutable': true,
+    };
+    final repository = FakeCustomsAuthoritySubmissionRepository()
+      ..detail = sampleAuthoritySubmissionDetail(
+        status: 'concluded',
+        includePackage: true,
+        includeScope: true,
+        submittedAt: '2026-07-25T10:02:00.000Z',
+        externalSubmissionStatement: 'Paket dış kanalda teslim edildi.',
+        officialReferenceNumber: 'FSMH-2026-ALINDI',
+        receiptRecordedAt: '2026-07-25T10:05:00.000Z',
+        outcomeResponseId: 'final-response-1',
+        outcomeCode: 'action_taken',
+        outcomeFinalityLevel: 'administrative_final',
+        authorityReferenceNumber: 'FSMH-2026-SONUC-1',
+        officialDocumentDate: '2026-07-25T10:30:00.000Z',
+        outcomeReceivedAt: '2026-07-25T11:00:00.000Z',
+        outcomeRecordedAt: '2026-07-25T11:01:00.000Z',
+        authorityNameSnapshot: 'FSMH Programı',
+        outcomeSummary: 'Kurum nihai kararını bildirdi.',
+        responses: [finalResponse],
+      );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpAuthorityOperationsDetail(tester, repository);
+
+    expect(
+      find.byKey(const ValueKey('record-customs-submission-receipt')),
+      findsNothing,
+    );
+    final responseButton = find.byKey(
+      const ValueKey('append-customs-authority-response'),
+    );
+    final outcomeButton = find.byKey(
+      const ValueKey('record-customs-authority-outcome'),
+    );
+    await tester.ensureVisible(responseButton);
+    expect(tester.widget<FilledButton>(responseButton).onPressed, isNull);
+    await tester.ensureVisible(outcomeButton);
+    expect(tester.widget<FilledButton>(outcomeButton).onPressed, isNull);
+    expect(
+      find.text('Dosya sonucunu ve kapanış kaydını inceleyin'),
+      findsOneWidget,
+    );
+    expect(find.text('Nihai sonuç ve kapanış özeti'), findsOneWidget);
+  });
+
+  testWidgets('authority operations remain scrollable on mobile viewport', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository()
+      ..detail = sampleAuthoritySubmissionDetail(
+        status: 'submitted_externally',
+        includePackage: true,
+        includeScope: true,
+        submittedAt: '2026-07-25T10:02:00.000Z',
+        externalSubmissionStatement: 'Paket dış kanalda teslim edildi.',
+      );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpAuthorityOperationsDetail(
+      tester,
+      repository,
+      size: const Size(390, 700),
+    );
+
+    final outcome = find.byKey(
+      const ValueKey('record-customs-authority-outcome'),
+    );
+    await tester.ensureVisible(outcome);
+    await tester.pumpAndSettle();
+    expect(outcome, findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(outcome);
+    await tester.pumpAndSettle();
+    final review = find.byKey(const ValueKey('review-authority-outcome'));
+    await tester.ensureVisible(review);
+    await tester.pumpAndSettle();
+    expect(review, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('hub exposes three canonical official-operation views', (
     tester,

@@ -52,6 +52,15 @@ class _CustomsAuthoritySubmissionDetailPageState
   String? _externalSubmissionPackageId;
   int? _externalSubmissionPackageVersion;
   String? _externalSubmissionPackageHash;
+  bool _recordingReceipt = false;
+  String? _receiptRequestId;
+  CustomsSubmissionReceiptDraft? _receiptRetryDraft;
+  bool _appendingAuthorityResponse = false;
+  String? _authorityResponseRequestId;
+  CustomsAuthorityResponseDraft? _authorityResponseRetryDraft;
+  bool _recordingAuthorityOutcome = false;
+  String? _authorityOutcomeRequestId;
+  CustomsAuthorityOutcomeDraft? _authorityOutcomeRetryDraft;
   final Map<CustomsAuthoritySubmissionStage, GlobalKey> _stageKeys = {
     for (final stage in CustomsAuthoritySubmissionStage.values)
       stage: GlobalKey(debugLabel: 'customs-authority-stage-${stage.name}'),
@@ -70,6 +79,7 @@ class _CustomsAuthoritySubmissionDetailPageState
     if (newOperation) {
       _materializationRequestId = null;
       _clearExternalSubmissionRetry();
+      _clearAuthorityOperationRetries();
     }
     setState(() {
       _loading = true;
@@ -318,6 +328,315 @@ class _CustomsAuthoritySubmissionDetailPageState
     }
   }
 
+  void _clearAuthorityOperationRetries() {
+    _receiptRequestId = null;
+    _receiptRetryDraft = null;
+    _authorityResponseRequestId = null;
+    _authorityResponseRetryDraft = null;
+    _authorityOutcomeRequestId = null;
+    _authorityOutcomeRetryDraft = null;
+  }
+
+  Future<void> _recordReceipt({bool retry = false}) async {
+    if (_recordingReceipt) return;
+    final currentDetail = _detail;
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        scope == null ||
+        _authorityReceiptBlockers(currentDetail).isNotEmpty) {
+      return;
+    }
+
+    CustomsSubmissionReceiptDraft? draft;
+    if (retry) {
+      draft = _receiptRetryDraft;
+      if (draft == null || _receiptRequestId == null) {
+        _receiptRequestId = null;
+        _receiptRetryDraft = null;
+        _showMessage(
+          'Yeniden deneme bilgileri bulunamadı. Sayfayı yenileyip alındı kaydını yeniden hazırlayın.',
+        );
+        return;
+      }
+    } else {
+      draft = await showDialog<CustomsSubmissionReceiptDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) =>
+            _AuthorityReceiptDialog(submission: currentDetail.submission),
+      );
+      if (!mounted || draft == null) return;
+    }
+
+    final receiptDraft = draft;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(
+          retry ? 'Resmî alındıyı yeniden dene' : 'Resmî alındıyı kaydet',
+        ),
+        content: Text(
+          retry
+              ? 'Aynı alındı bilgileri ve aynı güvenli işlem kimliğiyle yeniden denenecek. Değiştirilemez kayıt oluşturulsun mu?'
+              : 'Kurumun başvuruyu fiilen teslim aldığına ilişkin bu bilgi değiştirilemez cevap ve olay zincirine yazılacaktır. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: ValueKey(
+              retry
+                  ? 'confirm-retry-authority-receipt'
+                  : 'confirm-record-authority-receipt',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(retry ? 'Yeniden dene' : 'Alındıyı kaydet'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    if (!retry) {
+      _receiptRequestId = _newRequestId();
+      _receiptRetryDraft = receiptDraft;
+    }
+
+    setState(() => _recordingReceipt = true);
+    try {
+      final result = await _repository.recordReceipt(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: currentDetail.submission.submissionId,
+        draft: receiptDraft,
+        requestId: _receiptRequestId!,
+      );
+      if (!mounted) return;
+      _receiptRequestId = null;
+      _receiptRetryDraft = null;
+      _showMessage(
+        result.duplicate
+            ? 'Aynı alındı kaydı daha önce uygulanmıştı; güncel kayıt yüklendi.'
+            : 'Resmî alındı kaydedildi',
+      );
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) return;
+      if (!customsAuthoritySubmissionErrorIsRetryable(error)) {
+        _receiptRequestId = null;
+        _receiptRetryDraft = null;
+      }
+      _showMessage(customsAuthoritySubmissionErrorMessage(error));
+    } finally {
+      if (mounted && _recordingReceipt) {
+        setState(() => _recordingReceipt = false);
+      }
+    }
+  }
+
+  Future<void> _appendAuthorityResponse({bool retry = false}) async {
+    if (_appendingAuthorityResponse) return;
+    final currentDetail = _detail;
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        scope == null ||
+        _authorityResponseBlockers(currentDetail).isNotEmpty) {
+      return;
+    }
+
+    CustomsAuthorityResponseDraft? draft;
+    if (retry) {
+      draft = _authorityResponseRetryDraft;
+      if (draft == null || _authorityResponseRequestId == null) {
+        _authorityResponseRequestId = null;
+        _authorityResponseRetryDraft = null;
+        _showMessage(
+          'Yeniden deneme bilgileri bulunamadı. Sayfayı yenileyip kurum cevabını yeniden hazırlayın.',
+        );
+        return;
+      }
+    } else {
+      draft = await showDialog<CustomsAuthorityResponseDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _AuthorityInterimResponseDialog(
+          submission: currentDetail.submission,
+        ),
+      );
+      if (!mounted || draft == null) return;
+    }
+
+    final responseDraft = draft;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(
+          retry ? 'Kurum cevabını yeniden dene' : 'Kurum ara cevabını kaydet',
+        ),
+        content: Text(
+          retry
+              ? 'Aynı ara cevap ve aynı güvenli işlem kimliğiyle yeniden denenecek. Değiştirilemez kayıt oluşturulsun mu?'
+              : 'Kurumdan gelen bu ara cevap aynı kanonik dosyada değiştirilemez kayıt olarak saklanacaktır. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: ValueKey(
+              retry
+                  ? 'confirm-retry-authority-response'
+                  : 'confirm-append-authority-response',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(retry ? 'Yeniden dene' : 'Cevabı kaydet'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    if (!retry) {
+      _authorityResponseRequestId = _newRequestId();
+      _authorityResponseRetryDraft = responseDraft;
+    }
+
+    setState(() => _appendingAuthorityResponse = true);
+    try {
+      final result = await _repository.appendAuthorityResponse(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: currentDetail.submission.submissionId,
+        draft: responseDraft,
+        requestId: _authorityResponseRequestId!,
+      );
+      if (!mounted) return;
+      _authorityResponseRequestId = null;
+      _authorityResponseRetryDraft = null;
+      _showMessage(
+        result.duplicate
+            ? 'Aynı kurum cevabı daha önce uygulanmıştı; güncel kayıt yüklendi.'
+            : 'Kurum ara cevabı kaydedildi',
+      );
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) return;
+      if (!customsAuthoritySubmissionErrorIsRetryable(error)) {
+        _authorityResponseRequestId = null;
+        _authorityResponseRetryDraft = null;
+      }
+      _showMessage(customsAuthoritySubmissionErrorMessage(error));
+    } finally {
+      if (mounted && _appendingAuthorityResponse) {
+        setState(() => _appendingAuthorityResponse = false);
+      }
+    }
+  }
+
+  Future<void> _recordAuthorityOutcome({bool retry = false}) async {
+    if (_recordingAuthorityOutcome) return;
+    final currentDetail = _detail;
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        scope == null ||
+        _authorityOutcomeBlockers(currentDetail).isNotEmpty) {
+      return;
+    }
+
+    CustomsAuthorityOutcomeDraft? draft;
+    if (retry) {
+      draft = _authorityOutcomeRetryDraft;
+      if (draft == null || _authorityOutcomeRequestId == null) {
+        _authorityOutcomeRequestId = null;
+        _authorityOutcomeRetryDraft = null;
+        _showMessage(
+          'Yeniden deneme bilgileri bulunamadı. Sayfayı yenileyip nihai sonucu yeniden hazırlayın.',
+        );
+        return;
+      }
+    } else {
+      draft = await showDialog<CustomsAuthorityOutcomeDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _AuthorityOutcomeDialog(detail: currentDetail),
+      );
+      if (!mounted || draft == null) return;
+    }
+
+    final outcomeDraft = draft;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(
+          retry ? 'Nihai sonucu yeniden dene' : 'Dosyayı sonuçlandır',
+        ),
+        content: Text(
+          retry
+              ? 'Aynı nihai sonuç ve aynı güvenli işlem kimliğiyle yeniden denenecek. Başarılı olursa dosya sonuçlandırılır ve kayıt değiştirilemez.'
+              : 'Bu işlem dosyayı sonuçlandırır. Kurum belgesi, sonuç sınıflandırması ve kapanış olayları sonradan değiştirilemez. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: ValueKey(
+              retry
+                  ? 'confirm-retry-authority-outcome'
+                  : 'confirm-record-authority-outcome',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(retry ? 'Yeniden dene' : 'Dosyayı sonuçlandır'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    if (!retry) {
+      _authorityOutcomeRequestId = _newRequestId();
+      _authorityOutcomeRetryDraft = outcomeDraft;
+    }
+
+    setState(() => _recordingAuthorityOutcome = true);
+    try {
+      final result = await _repository.recordAuthorityOutcome(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: currentDetail.submission.submissionId,
+        draft: outcomeDraft,
+        requestId: _authorityOutcomeRequestId!,
+      );
+      if (!mounted) return;
+      _authorityOutcomeRequestId = null;
+      _authorityOutcomeRetryDraft = null;
+      _showMessage(
+        result.duplicate
+            ? 'Aynı nihai sonuç daha önce uygulanmıştı; güncel kapanış kaydı yüklendi.'
+            : 'Nihai kurum sonucu kaydedildi ve dosya sonuçlandırıldı',
+      );
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) return;
+      if (!customsAuthoritySubmissionErrorIsRetryable(error)) {
+        _authorityOutcomeRequestId = null;
+        _authorityOutcomeRetryDraft = null;
+      }
+      _showMessage(customsAuthoritySubmissionErrorMessage(error));
+    } finally {
+      if (mounted && _recordingAuthorityOutcome) {
+        setState(() => _recordingAuthorityOutcome = false);
+      }
+    }
+  }
+
   Future<void> _materialize(CustomsSubmissionPackage package) async {
     if (_materializing) return;
     final scope = _detail?.artifactScope;
@@ -466,6 +785,17 @@ class _CustomsAuthoritySubmissionDetailPageState
               externalSubmissionRetryAvailable:
                   _externalSubmissionRetryDraft != null &&
                   _externalSubmissionRequestId != null,
+              recordingReceipt: _recordingReceipt,
+              receiptRetryAvailable:
+                  _receiptRetryDraft != null && _receiptRequestId != null,
+              appendingAuthorityResponse: _appendingAuthorityResponse,
+              authorityResponseRetryAvailable:
+                  _authorityResponseRetryDraft != null &&
+                  _authorityResponseRequestId != null,
+              recordingAuthorityOutcome: _recordingAuthorityOutcome,
+              authorityOutcomeRetryAvailable:
+                  _authorityOutcomeRetryDraft != null &&
+                  _authorityOutcomeRequestId != null,
               materializing: _materializing,
               downloadingPdf: _downloadingPdf,
               downloadingManifest: _downloadingManifest,
@@ -473,6 +803,14 @@ class _CustomsAuthoritySubmissionDetailPageState
               onRecordExternalSubmission: () => _recordExternalSubmission(),
               onRetryExternalSubmission: () =>
                   _recordExternalSubmission(retry: true),
+              onRecordReceipt: () => _recordReceipt(),
+              onRetryReceipt: () => _recordReceipt(retry: true),
+              onAppendAuthorityResponse: () => _appendAuthorityResponse(),
+              onRetryAuthorityResponse: () =>
+                  _appendAuthorityResponse(retry: true),
+              onRecordAuthorityOutcome: () => _recordAuthorityOutcome(),
+              onRetryAuthorityOutcome: () =>
+                  _recordAuthorityOutcome(retry: true),
               stageKeys: _stageKeys,
               onMaterialize: _materialize,
               onDownload: _download,
@@ -487,12 +825,24 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
     required this.generatingPackage,
     required this.recordingExternalSubmission,
     required this.externalSubmissionRetryAvailable,
+    required this.recordingReceipt,
+    required this.receiptRetryAvailable,
+    required this.appendingAuthorityResponse,
+    required this.authorityResponseRetryAvailable,
+    required this.recordingAuthorityOutcome,
+    required this.authorityOutcomeRetryAvailable,
     required this.materializing,
     required this.downloadingPdf,
     required this.downloadingManifest,
     required this.onGeneratePackage,
     required this.onRecordExternalSubmission,
     required this.onRetryExternalSubmission,
+    required this.onRecordReceipt,
+    required this.onRetryReceipt,
+    required this.onAppendAuthorityResponse,
+    required this.onRetryAuthorityResponse,
+    required this.onRecordAuthorityOutcome,
+    required this.onRetryAuthorityOutcome,
     required this.stageKeys,
     required this.onMaterialize,
     required this.onDownload,
@@ -502,12 +852,24 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
   final bool generatingPackage;
   final bool recordingExternalSubmission;
   final bool externalSubmissionRetryAvailable;
+  final bool recordingReceipt;
+  final bool receiptRetryAvailable;
+  final bool appendingAuthorityResponse;
+  final bool authorityResponseRetryAvailable;
+  final bool recordingAuthorityOutcome;
+  final bool authorityOutcomeRetryAvailable;
   final bool materializing;
   final bool downloadingPdf;
   final bool downloadingManifest;
   final VoidCallback onGeneratePackage;
   final VoidCallback onRecordExternalSubmission;
   final VoidCallback onRetryExternalSubmission;
+  final VoidCallback onRecordReceipt;
+  final VoidCallback onRetryReceipt;
+  final VoidCallback onAppendAuthorityResponse;
+  final VoidCallback onRetryAuthorityResponse;
+  final VoidCallback onRecordAuthorityOutcome;
+  final VoidCallback onRetryAuthorityOutcome;
   final Map<CustomsAuthoritySubmissionStage, GlobalKey> stageKeys;
   final ValueChanged<CustomsSubmissionPackage> onMaterialize;
   final void Function(
@@ -732,21 +1094,35 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
                     .deliveryResponseOutcome],
             stage: CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
           ),
+          _AuthorityOperationsWorkspace(
+            detail: detail,
+            recordingReceipt: recordingReceipt,
+            receiptRetryAvailable: receiptRetryAvailable,
+            appendingAuthorityResponse: appendingAuthorityResponse,
+            authorityResponseRetryAvailable: authorityResponseRetryAvailable,
+            recordingAuthorityOutcome: recordingAuthorityOutcome,
+            authorityOutcomeRetryAvailable: authorityOutcomeRetryAvailable,
+            onRecordReceipt: onRecordReceipt,
+            onRetryReceipt: onRetryReceipt,
+            onAppendAuthorityResponse: onAppendAuthorityResponse,
+            onRetryAuthorityResponse: onRetryAuthorityResponse,
+            onRecordAuthorityOutcome: onRecordAuthorityOutcome,
+            onRetryAuthorityOutcome: onRetryAuthorityOutcome,
+          ),
           _AuthoritySection(
-            title: 'Kurum yanıtları',
+            title: 'Kurum cevapları zaman çizelgesi',
             children: detail.responses.isEmpty
                 ? const [Text('Henüz kurum yanıtı veya teslim kaydı yok.')]
                 : detail.responses
                       .map(
-                        (response) => _TimelineCard(
-                          title: response.responseType,
-                          subtitle: response.summary,
-                          meta:
-                              '${_formatDateTime(response.receivedAt)} · ${response.outcomeCode ?? 'Sonuç bekleniyor'}',
-                        ),
+                        (response) =>
+                            _AuthorityResponseTimelineCard(response: response),
                       )
                       .toList(),
           ),
+          if (submission.outcomeResponseId != null ||
+              submission.status == 'concluded')
+            _AuthorityOutcomeSummary(submission: submission),
           _AuthoritySection(
             title: 'Değiştirilemez olay zaman çizelgesi',
             children: detail.events.isEmpty
@@ -798,21 +1174,35 @@ _NextStepGuidanceData _nextStepGuidance(
     );
   }
 
-  if (submission.submittedAt != null) {
-    if (submission.responseCount > 0) {
-      return const _NextStepGuidanceData(
-        title: 'Kurum cevaplarını ve nihai sonucu izleyin',
-        message:
-            'Dış teslim kaydedildi ve kurum cevabı bulunuyor. Yeni cevapları, bilgi taleplerini ve nihai sonucu aynı dosyada takip edin.',
-        result:
-            'Teslimden sonuca kadar güncel ve değiştirilemez kurum işlem geçmişi.',
-        icon: Icons.mark_email_read_outlined,
-      );
-    }
+  if (submission.status == 'additional_information_requested') {
     return const _NextStepGuidanceData(
-      title: 'Kurum alındısı veya cevabı bekleniyor',
+      title: 'Kurumun ek bilgi talebini inceleyin',
       message:
-          'Dış teslim kaydedildi. Kurumdan gelen alındı, bilgi talebi veya durum güncellemesini bu dosyada izleyin.',
+          'Kurum ek bilgi veya belge istedi. Talebi, son tarihi ve sonraki kurum cevaplarını aynı kanonik dosyada takip edin.',
+      result:
+          'Ek bilgi talebi görünür, izlenebilir ve nihai sonuç kaydına hazır bir kurum süreci.',
+      icon: Icons.playlist_add_check_circle_outlined,
+    );
+  }
+
+  if (submission.status == 'receipt_recorded' ||
+      submission.status == 'authority_review') {
+    return const _NextStepGuidanceData(
+      title: 'Kurumun ara cevabını veya nihai sonucunu izleyin',
+      message:
+          'Resmî alındı kaydedildi. Kurumun inceleme teyidini, bilgi talebini, durum güncellemesini veya nihai sonucunu aynı dosyada kaydedin.',
+      result:
+          'Alındıdan sonuca kadar değiştirilemez ve denetlenebilir kurum işlem geçmişi.',
+      icon: Icons.mark_email_read_outlined,
+    );
+  }
+
+  if (submission.status == 'submitted_externally' ||
+      submission.submittedAt != null) {
+    return const _NextStepGuidanceData(
+      title: 'Kurum alındısını veya gelen cevabı kaydedin',
+      message:
+          'Dış teslim kaydedildi. Kurumdan gelen resmî alındı, bilgi talebi veya durum güncellemesini bu dosyada değiştirilemez biçimde kaydedin.',
       result:
           'Kuruma teslim edildiği doğrulanmış ve cevap sürecine hazır bir dosya.',
       icon: Icons.schedule_send_outlined,
@@ -1106,6 +1496,1781 @@ class _ExternalSubmissionSection extends StatelessWidget {
               recording ? 'Dış teslim kaydediliyor…' : recordExternalSubmission,
             ),
           ),
+      ],
+    );
+  }
+}
+
+const _authorityResponseStatuses = <String>{
+  'submitted_externally',
+  'receipt_recorded',
+  'authority_review',
+  'additional_information_requested',
+};
+
+List<String> _authorityReceiptBlockers(
+  CustomsAuthoritySubmissionDetail detail,
+) {
+  final submission = detail.submission;
+  return <String>[
+    if (detail.artifactScope == null) 'Tenant ve marka kapsamı doğrulanamadı.',
+    if (submission.status != 'submitted_externally')
+      'Resmî alındı yalnız dış teslim kaydından sonra işlenebilir.',
+    if (submission.officialReferenceNumber != null ||
+        submission.receiptRecordedAt != null)
+      'Bu dosyada resmî alındı daha önce kaydedilmiş.',
+  ];
+}
+
+List<String> _authorityResponseBlockers(
+  CustomsAuthoritySubmissionDetail detail,
+) {
+  final submission = detail.submission;
+  return <String>[
+    if (detail.artifactScope == null) 'Tenant ve marka kapsamı doğrulanamadı.',
+    if (!_authorityResponseStatuses.contains(submission.status))
+      submission.status == 'concluded'
+          ? 'Sonuçlandırılmış dosyaya yeni ara cevap eklenemez.'
+          : 'Kurum cevabı yalnız dış teslim sonrasındaki açık süreçte kaydedilebilir.',
+  ];
+}
+
+List<String> _authorityOutcomeBlockers(
+  CustomsAuthoritySubmissionDetail detail,
+) {
+  final submission = detail.submission;
+  return <String>[
+    if (detail.artifactScope == null) 'Tenant ve marka kapsamı doğrulanamadı.',
+    if (!_authorityResponseStatuses.contains(submission.status))
+      submission.status == 'concluded'
+          ? 'Bu dosya daha önce sonuçlandırılmış.'
+          : 'Nihai sonuç yalnız dış teslim sonrasındaki açık süreçte kaydedilebilir.',
+    if (submission.submittedAt == null)
+      'Doğrulanmış dış teslim zamanı bulunamadı.',
+    if (submission.currentPackageId == null ||
+        submission.currentPackageHash == null ||
+        submission.currentPackageVersion < 1)
+      'Dış teslimle ilişkili değiştirilemez paket doğrulanamadı.',
+  ];
+}
+
+class _AuthorityOperationsWorkspace extends StatelessWidget {
+  const _AuthorityOperationsWorkspace({
+    required this.detail,
+    required this.recordingReceipt,
+    required this.receiptRetryAvailable,
+    required this.appendingAuthorityResponse,
+    required this.authorityResponseRetryAvailable,
+    required this.recordingAuthorityOutcome,
+    required this.authorityOutcomeRetryAvailable,
+    required this.onRecordReceipt,
+    required this.onRetryReceipt,
+    required this.onAppendAuthorityResponse,
+    required this.onRetryAuthorityResponse,
+    required this.onRecordAuthorityOutcome,
+    required this.onRetryAuthorityOutcome,
+  });
+
+  final CustomsAuthoritySubmissionDetail detail;
+  final bool recordingReceipt;
+  final bool receiptRetryAvailable;
+  final bool appendingAuthorityResponse;
+  final bool authorityResponseRetryAvailable;
+  final bool recordingAuthorityOutcome;
+  final bool authorityOutcomeRetryAvailable;
+  final VoidCallback onRecordReceipt;
+  final VoidCallback onRetryReceipt;
+  final VoidCallback onAppendAuthorityResponse;
+  final VoidCallback onRetryAuthorityResponse;
+  final VoidCallback onRecordAuthorityOutcome;
+  final VoidCallback onRetryAuthorityOutcome;
+
+  @override
+  Widget build(BuildContext context) {
+    final submission = detail.submission;
+    CustomsAuthorityResponse? receipt;
+    for (final response in detail.responses) {
+      if (response.responseType == 'receipt') {
+        receipt = response;
+        break;
+      }
+    }
+    final receiptBlockers = _authorityReceiptBlockers(detail);
+    final responseBlockers = _authorityResponseBlockers(detail);
+    final outcomeBlockers = _authorityOutcomeBlockers(detail);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AuthoritySection(
+          title: 'Dış teslim özeti',
+          children: [
+            _AuthorityRow(
+              label: 'Teslim durumu',
+              value: submission.submittedAt == null
+                  ? 'Henüz dış teslim kaydı yok'
+                  : 'İnsan tarafından dış kanalda teslim edildi',
+            ),
+            if (submission.submittedAt != null)
+              _AuthorityRow(
+                label: 'Teslim zamanı',
+                value: _formatDateTime(submission.submittedAt!),
+              ),
+            if (submission.externalReferenceType != null)
+              _AuthorityRow(
+                label: 'Dış referans türü',
+                value: customsExternalReferenceTypeLabel(
+                  submission.externalReferenceType!,
+                ),
+              ),
+            if (submission.externalReferenceValue != null)
+              _AuthorityRow(
+                label: 'Dış referans',
+                value: submission.externalReferenceValue!,
+              ),
+            if (submission.externalSubmissionStatement != null)
+              _AuthorityRow(
+                label: 'Teslim beyanı',
+                value: submission.externalSubmissionStatement!,
+              ),
+          ],
+        ),
+        KeyedSubtree(
+          key: const ValueKey('authority-receipt-workspace'),
+          child: _AuthoritySection(
+            title: authorityReceiptSectionTitle,
+            children: [
+              const Text(
+                authorityReceiptDescription,
+                style: TextStyle(height: 1.5),
+              ),
+              if (receipt != null ||
+                  submission.officialReferenceNumber != null) ...[
+                _AuthorityRow(
+                  label: 'Resmî referans',
+                  value:
+                      submission.officialReferenceNumber ??
+                      receipt?.authorityReference ??
+                      'Belirtilmedi',
+                ),
+                if (submission.receiptRecordedAt != null)
+                  _AuthorityRow(
+                    label: 'Alındı zamanı',
+                    value: _formatDateTime(submission.receiptRecordedAt!),
+                  ),
+                if (receipt != null)
+                  _AuthorityRow(label: 'Alındı özeti', value: receipt.summary),
+                const _ImmutableRecordNotice(
+                  text: 'Resmî alındı kaydı değiştirilemez.',
+                ),
+              ] else ...[
+                if (receiptBlockers.isNotEmpty)
+                  _AuthorityOperationBlockers(
+                    key: const ValueKey('authority-receipt-blockers'),
+                    title: 'Resmî alındı için tamamlanması gerekenler:',
+                    blockers: receiptBlockers,
+                  ),
+                if (receiptRetryAvailable)
+                  OutlinedButton.icon(
+                    key: const ValueKey('retry-customs-submission-receipt'),
+                    onPressed: receiptBlockers.isEmpty && !recordingReceipt
+                        ? onRetryReceipt
+                        : null,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text(retryAuthorityReceipt),
+                  )
+                else
+                  FilledButton.icon(
+                    key: const ValueKey('record-customs-submission-receipt'),
+                    onPressed: receiptBlockers.isEmpty && !recordingReceipt
+                        ? onRecordReceipt
+                        : null,
+                    icon: recordingReceipt
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.mark_email_read_outlined),
+                    label: Text(
+                      recordingReceipt
+                          ? 'Resmî alındı kaydediliyor…'
+                          : recordAuthorityReceipt,
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        KeyedSubtree(
+          key: const ValueKey('authority-interim-response-workspace'),
+          child: _AuthoritySection(
+            title: authorityInterimResponseSectionTitle,
+            children: [
+              const Text(
+                authorityInterimResponseDescription,
+                style: TextStyle(height: 1.5),
+              ),
+              if (responseBlockers.isNotEmpty)
+                _AuthorityOperationBlockers(
+                  key: const ValueKey('authority-response-blockers'),
+                  title: 'Ara cevap için tamamlanması gerekenler:',
+                  blockers: responseBlockers,
+                ),
+              if (authorityResponseRetryAvailable)
+                OutlinedButton.icon(
+                  key: const ValueKey('retry-customs-authority-response'),
+                  onPressed:
+                      responseBlockers.isEmpty && !appendingAuthorityResponse
+                      ? onRetryAuthorityResponse
+                      : null,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text(retryAuthorityInterimResponse),
+                )
+              else
+                FilledButton.icon(
+                  key: const ValueKey('append-customs-authority-response'),
+                  onPressed:
+                      responseBlockers.isEmpty && !appendingAuthorityResponse
+                      ? onAppendAuthorityResponse
+                      : null,
+                  icon: appendingAuthorityResponse
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_comment_outlined),
+                  label: Text(
+                    appendingAuthorityResponse
+                        ? 'Kurum cevabı kaydediliyor…'
+                        : appendAuthorityInterimResponse,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        KeyedSubtree(
+          key: const ValueKey('authority-outcome-workspace'),
+          child: _AuthoritySection(
+            title: authorityOutcomeSectionTitle,
+            children: [
+              const Text(
+                authorityOutcomeDescription,
+                style: TextStyle(height: 1.5),
+              ),
+              if (outcomeBlockers.isNotEmpty)
+                _AuthorityOperationBlockers(
+                  key: const ValueKey('authority-outcome-blockers'),
+                  title: 'Nihai sonuç için tamamlanması gerekenler:',
+                  blockers: outcomeBlockers,
+                ),
+              if (authorityOutcomeRetryAvailable)
+                OutlinedButton.icon(
+                  key: const ValueKey('retry-customs-authority-outcome'),
+                  onPressed:
+                      outcomeBlockers.isEmpty && !recordingAuthorityOutcome
+                      ? onRetryAuthorityOutcome
+                      : null,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text(retryAuthorityOutcome),
+                )
+              else
+                FilledButton.icon(
+                  key: const ValueKey('record-customs-authority-outcome'),
+                  onPressed:
+                      outcomeBlockers.isEmpty && !recordingAuthorityOutcome
+                      ? onRecordAuthorityOutcome
+                      : null,
+                  icon: recordingAuthorityOutcome
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.task_alt_outlined),
+                  label: Text(
+                    recordingAuthorityOutcome
+                        ? 'Dosya sonuçlandırılıyor…'
+                        : recordAuthorityOutcome,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ImmutableRecordNotice extends StatelessWidget {
+  const _ImmutableRecordNotice({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF6F4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_outline_rounded, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthorityOperationBlockers extends StatelessWidget {
+  const _AuthorityOperationBlockers({
+    super.key,
+    required this.title,
+    required this.blockers,
+  });
+
+  final String title;
+  final List<String> blockers;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF0D9A2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          for (final blocker in blockers)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('• '),
+                  Expanded(child: Text(blocker)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthorityResponseTimelineCard extends StatelessWidget {
+  const _AuthorityResponseTimelineCard({required this.response});
+
+  final CustomsAuthorityResponse response;
+
+  @override
+  Widget build(BuildContext context) {
+    final metadata = <String>[
+      _formatDateTime(response.receivedAt),
+      if (response.authorityReference != null) response.authorityReference!,
+      if (response.outcomeCode != null)
+        customsAuthorityOutcomeCodeLabel(response.outcomeCode!),
+      if (response.outcomeFinalityLevel != null)
+        customsAuthorityOutcomeFinalityLabel(response.outcomeFinalityLevel!),
+      if (response.attachmentReferences.isNotEmpty)
+        '${response.attachmentReferences.length} ek',
+      response.immutable ? 'Değiştirilemez' : 'Bütünlük doğrulanamadı',
+    ];
+    return KeyedSubtree(
+      key: ValueKey('authority-response-${response.responseId}'),
+      child: _TimelineCard(
+        title: customsAuthorityResponseTypeLabel(response.responseType),
+        subtitle: response.summary,
+        meta: metadata.join(' · '),
+      ),
+    );
+  }
+}
+
+class _AuthorityOutcomeSummary extends StatelessWidget {
+  const _AuthorityOutcomeSummary({required this.submission});
+
+  final CustomsAuthoritySubmission submission;
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(
+      key: const ValueKey('authority-outcome-summary'),
+      child: _AuthoritySection(
+        title: 'Nihai sonuç ve kapanış özeti',
+        children: [
+          _AuthorityRow(
+            label: 'Dosya durumu',
+            value: customsAuthoritySubmissionStatusLabel(submission.status),
+          ),
+          _AuthorityRow(
+            label: 'Sonuç kodu',
+            value: submission.outcomeCode == null
+                ? 'Belirtilmedi'
+                : customsAuthorityOutcomeCodeLabel(submission.outcomeCode!),
+          ),
+          _AuthorityRow(
+            label: 'Kesinlik seviyesi',
+            value: submission.outcomeFinalityLevel == null
+                ? 'Belirtilmedi'
+                : customsAuthorityOutcomeFinalityLabel(
+                    submission.outcomeFinalityLevel!,
+                  ),
+          ),
+          _AuthorityRow(
+            label: 'Kurum referansı',
+            value: submission.authorityReferenceNumber ?? 'Belirtilmedi',
+          ),
+          if (submission.officialDocumentDate != null)
+            _AuthorityRow(
+              label: 'Resmî belge tarihi',
+              value: _formatDateTime(submission.officialDocumentDate!),
+            ),
+          if (submission.outcomeReceivedAt != null)
+            _AuthorityRow(
+              label: 'Sonucun alındığı zaman',
+              value: _formatDateTime(submission.outcomeReceivedAt!),
+            ),
+          _AuthorityRow(
+            label: 'Kurum',
+            value: submission.authorityNameSnapshot ?? 'Belirtilmedi',
+          ),
+          if (submission.authorityUnitSnapshot != null)
+            _AuthorityRow(
+              label: 'Kurum birimi',
+              value: submission.authorityUnitSnapshot!,
+            ),
+          _AuthorityRow(
+            label: 'Sonuç özeti',
+            value: submission.outcomeSummary ?? 'Belirtilmedi',
+          ),
+          const _ImmutableRecordNotice(
+            text:
+                'Bu kapanış kaydı kurum belgesinin kullanıcı tarafından yapılan sınıflandırmasıdır; MarkaKalkan tarafından verilmiş hukukî karar değildir.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+bool _isSha256(String value) =>
+    RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(value.trim());
+
+String? _requiredTextValidator(
+  String? value,
+  String label, {
+  int minimum = 2,
+  int maximum = 500,
+}) {
+  final clean = value?.trim() ?? '';
+  if (clean.length < minimum) {
+    return '$label en az $minimum karakter olmalıdır.';
+  }
+  if (clean.length > maximum) {
+    return '$label $maximum karakteri aşamaz.';
+  }
+  return null;
+}
+
+String? _authorityDateTimeError(DateTime value, String label) {
+  final now = DateTime.now();
+  if (value.isAfter(now.add(const Duration(minutes: 5)))) {
+    return '$label 5 dakikadan fazla ileride olamaz.';
+  }
+  if (value.isBefore(now.subtract(const Duration(days: 3650)))) {
+    return '$label 10 yıldan daha eski olamaz.';
+  }
+  return null;
+}
+
+Future<DateTime?> _pickAuthorityDate(
+  BuildContext context,
+  DateTime current,
+) async {
+  final selected = await showDatePicker(
+    context: context,
+    initialDate: current,
+    firstDate: DateTime.now().subtract(const Duration(days: 3650)),
+    lastDate: DateTime.now().add(const Duration(days: 1)),
+  );
+  if (selected == null) return null;
+  return DateTime(
+    selected.year,
+    selected.month,
+    selected.day,
+    current.hour,
+    current.minute,
+  );
+}
+
+Future<DateTime?> _pickAuthorityTime(
+  BuildContext context,
+  DateTime current,
+) async {
+  final selected = await showTimePicker(
+    context: context,
+    initialTime: TimeOfDay.fromDateTime(current),
+  );
+  if (selected == null) return null;
+  return DateTime(
+    current.year,
+    current.month,
+    current.day,
+    selected.hour,
+    selected.minute,
+  );
+}
+
+class _AuthorityAttachmentDraft {
+  _AuthorityAttachmentDraft()
+    : referenceController = TextEditingController(),
+      hashController = TextEditingController();
+
+  final TextEditingController referenceController;
+  final TextEditingController hashController;
+
+  void dispose() {
+    referenceController.dispose();
+    hashController.dispose();
+  }
+}
+
+class _AuthorityReceiptDialog extends StatefulWidget {
+  const _AuthorityReceiptDialog({required this.submission});
+
+  final CustomsAuthoritySubmission submission;
+
+  @override
+  State<_AuthorityReceiptDialog> createState() =>
+      _AuthorityReceiptDialogState();
+}
+
+class _AuthorityReceiptDialogState extends State<_AuthorityReceiptDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _referenceController = TextEditingController();
+  final _summaryController = TextEditingController();
+  final _documentReferenceController = TextEditingController();
+  final _documentHashController = TextEditingController();
+  late CustomsSubmissionChannel _channel;
+  DateTime _receivedAt = DateTime.now();
+  bool _confirmed = false;
+  String? _dateError;
+  String? _confirmationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _channel = _submissionChannelFromWire(widget.submission.channelType);
+    _referenceController.text = widget.submission.externalReferenceValue ?? '';
+  }
+
+  @override
+  void dispose() {
+    _referenceController.dispose();
+    _summaryController.dispose();
+    _documentReferenceController.dispose();
+    _documentHashController.dispose();
+    super.dispose();
+  }
+
+  String? _documentReferenceValidator(String? value) {
+    final reference = value?.trim() ?? '';
+    final hash = _documentHashController.text.trim();
+    if (reference.isEmpty && hash.isEmpty) {
+      return null;
+    }
+    if (reference.isEmpty) {
+      return 'Belge referansı hash ile birlikte girilmelidir.';
+    }
+    if (reference.length > 500) {
+      return 'Belge referansı 500 karakteri aşamaz.';
+    }
+    return null;
+  }
+
+  String? _documentHashValidator(String? value) {
+    final hash = value?.trim() ?? '';
+    final reference = _documentReferenceController.text.trim();
+    if (hash.isEmpty && reference.isEmpty) {
+      return null;
+    }
+    if (hash.isEmpty) {
+      return 'Belge SHA-256 değeri referansla birlikte girilmelidir.';
+    }
+    if (!_isSha256(hash)) {
+      return 'Belge SHA-256 değeri 64 haneli hex olmalıdır.';
+    }
+    return null;
+  }
+
+  void _submit() {
+    final formValid = _formKey.currentState?.validate() == true;
+    final dateError = _authorityDateTimeError(_receivedAt, 'Alındı zamanı');
+    setState(() {
+      _dateError = dateError;
+      _confirmationError = _confirmed
+          ? null
+          : 'Fiilî kurum alındısı teyidi zorunludur.';
+    });
+    if (!formValid || dateError != null || !_confirmed) return;
+
+    Navigator.pop(
+      context,
+      CustomsSubmissionReceiptDraft(
+        officialReferenceNumber: _referenceController.text,
+        receivedAt: _receivedAt.toUtc().toIso8601String(),
+        channelType: _channel,
+        summary: _summaryController.text,
+        receiptDocumentReference:
+            _documentReferenceController.text.trim().isEmpty
+            ? null
+            : _documentReferenceController.text.trim(),
+        receiptDocumentHash: _documentHashController.text.trim().isEmpty
+            ? null
+            : _documentHashController.text.trim().toLowerCase(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      title: const Text('Resmî alındı kaydı'),
+      content: SizedBox(
+        width: 720,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(authorityReceiptDescription),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const ValueKey('authority-receipt-reference'),
+                  controller: _referenceController,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Kurum resmî referans numarası',
+                  ),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Resmî referans',
+                    minimum: 2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<CustomsSubmissionChannel>(
+                  key: const ValueKey('authority-receipt-channel'),
+                  initialValue: _channel,
+                  decoration: const InputDecoration(labelText: 'Alındı kanalı'),
+                  items: CustomsSubmissionChannel.values
+                      .map(
+                        (channel) => DropdownMenuItem(
+                          value: channel,
+                          child: Text(
+                            customsAuthorityChannelLabel(channel.wireValue),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value != null) setState(() => _channel = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Alındı tarihi ve saati',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('authority-receipt-pick-date'),
+                      onPressed: () async {
+                        final value = await _pickAuthorityDate(
+                          context,
+                          _receivedAt,
+                        );
+                        if (value != null && mounted) {
+                          setState(() {
+                            _receivedAt = value;
+                            _dateError = null;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.calendar_today_outlined),
+                      label: Text(_formatLocalDate(_receivedAt)),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('authority-receipt-pick-time'),
+                      onPressed: () async {
+                        final value = await _pickAuthorityTime(
+                          context,
+                          _receivedAt,
+                        );
+                        if (value != null && mounted) {
+                          setState(() {
+                            _receivedAt = value;
+                            _dateError = null;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.schedule_outlined),
+                      label: Text(_formatLocalTime(_receivedAt)),
+                    ),
+                  ],
+                ),
+                if (_dateError != null)
+                  Text(
+                    _dateError!,
+                    key: const ValueKey('authority-receipt-date-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-receipt-summary'),
+                  controller: _summaryController,
+                  minLines: 3,
+                  maxLines: 6,
+                  maxLength: 3000,
+                  decoration: const InputDecoration(labelText: 'Alındı özeti'),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Alındı özeti',
+                    minimum: 10,
+                    maximum: 3000,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-receipt-document-reference'),
+                  controller: _documentReferenceController,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Alındı belgesi referansı (isteğe bağlı)',
+                  ),
+                  validator: _documentReferenceValidator,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-receipt-document-hash'),
+                  controller: _documentHashController,
+                  maxLength: 64,
+                  decoration: const InputDecoration(
+                    labelText: 'Alındı belgesi SHA-256 (isteğe bağlı)',
+                  ),
+                  validator: _documentHashValidator,
+                ),
+                CheckboxListTile(
+                  key: const ValueKey('authority-receipt-confirmation'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _confirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _confirmed = value == true;
+                      if (_confirmed) _confirmationError = null;
+                    });
+                  },
+                  title: const Text(
+                    'Bu bilgiler kurumdan fiilen alınan resmî alındıya dayanır ve kayıt sonradan değiştirilemez.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (_confirmationError != null)
+                  Text(
+                    _confirmationError!,
+                    key: const ValueKey('authority-receipt-confirmation-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-authority-receipt'),
+          onPressed: _submit,
+          child: const Text('Kaydı gözden geçir'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthorityInterimResponseDialog extends StatefulWidget {
+  const _AuthorityInterimResponseDialog({required this.submission});
+
+  final CustomsAuthoritySubmission submission;
+
+  @override
+  State<_AuthorityInterimResponseDialog> createState() =>
+      _AuthorityInterimResponseDialogState();
+}
+
+class _AuthorityInterimResponseDialogState
+    extends State<_AuthorityInterimResponseDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _authorityReferenceController = TextEditingController();
+  final _summaryController = TextEditingController();
+  final List<_AuthorityAttachmentDraft> _attachments = [];
+  CustomsInterimAuthorityResponseType _responseType =
+      CustomsInterimAuthorityResponseType.acknowledgement;
+  CustomsAuthorityOutcomeCode? _outcomeCode;
+  DateTime _receivedAt = DateTime.now();
+  DateTime? _requestedDueAt;
+  String? _receivedAtError;
+  String? _dueAtError;
+
+  static const _interimCodes = <CustomsAuthorityOutcomeCode>[
+    CustomsAuthorityOutcomeCode.acceptedForReview,
+    CustomsAuthorityOutcomeCode.temporaryMeasureRecorded,
+    CustomsAuthorityOutcomeCode.goodsDetainedOrSuspended,
+    CustomsAuthorityOutcomeCode.goodsSeizureReported,
+    CustomsAuthorityOutcomeCode.additionalProcedureRequired,
+  ];
+
+  @override
+  void dispose() {
+    _authorityReferenceController.dispose();
+    _summaryController.dispose();
+    for (final attachment in _attachments) {
+      attachment.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addAttachment() {
+    setState(() => _attachments.add(_AuthorityAttachmentDraft()));
+  }
+
+  void _removeAttachment(int index) {
+    final removed = _attachments.removeAt(index);
+    removed.dispose();
+    setState(() {});
+  }
+
+  void _submit() {
+    final formValid = _formKey.currentState?.validate() == true;
+    final receivedAtError = _authorityDateTimeError(
+      _receivedAt,
+      'Cevabın alınma zamanı',
+    );
+    String? dueAtError;
+    if (_requestedDueAt != null && !_requestedDueAt!.isAfter(_receivedAt)) {
+      dueAtError = 'Talep edilen son tarih cevap zamanından sonra olmalıdır.';
+    }
+    setState(() {
+      _receivedAtError = receivedAtError;
+      _dueAtError = dueAtError;
+    });
+    if (!formValid || receivedAtError != null || dueAtError != null) return;
+
+    Navigator.pop(
+      context,
+      CustomsAuthorityResponseDraft(
+        responseType: _responseType,
+        authorityReference: _authorityReferenceController.text.trim().isEmpty
+            ? null
+            : _authorityReferenceController.text.trim(),
+        receivedAt: _receivedAt.toUtc().toIso8601String(),
+        summary: _summaryController.text,
+        attachmentReferences: _attachments
+            .map((item) => item.referenceController.text.trim())
+            .toList(growable: false),
+        attachmentHashes: _attachments
+            .map((item) => item.hashController.text.trim().toLowerCase())
+            .toList(growable: false),
+        requestedDueAt: _requestedDueAt?.toUtc().toIso8601String(),
+        outcomeCode: _outcomeCode,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      title: const Text('Kurum ara cevabı'),
+      content: SizedBox(
+        width: 760,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(authorityInterimResponseDescription),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<CustomsInterimAuthorityResponseType>(
+                  key: const ValueKey('authority-response-type'),
+                  initialValue: _responseType,
+                  decoration: const InputDecoration(labelText: 'Cevap türü'),
+                  items: CustomsInterimAuthorityResponseType.values
+                      .map(
+                        (type) => DropdownMenuItem(
+                          value: type,
+                          child: Text(
+                            customsAuthorityResponseTypeLabel(type.wireValue),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _responseType = value;
+                      if (value !=
+                          CustomsInterimAuthorityResponseType
+                              .informationRequest) {
+                        _requestedDueAt = null;
+                        _dueAtError = null;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-response-reference'),
+                  controller: _authorityReferenceController,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Kurum referansı (isteğe bağlı)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Cevabın alınma tarihi ve saati',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('authority-response-pick-date'),
+                      onPressed: () async {
+                        final value = await _pickAuthorityDate(
+                          context,
+                          _receivedAt,
+                        );
+                        if (value != null && mounted) {
+                          setState(() {
+                            _receivedAt = value;
+                            _receivedAtError = null;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.calendar_today_outlined),
+                      label: Text(_formatLocalDate(_receivedAt)),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('authority-response-pick-time'),
+                      onPressed: () async {
+                        final value = await _pickAuthorityTime(
+                          context,
+                          _receivedAt,
+                        );
+                        if (value != null && mounted) {
+                          setState(() {
+                            _receivedAt = value;
+                            _receivedAtError = null;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.schedule_outlined),
+                      label: Text(_formatLocalTime(_receivedAt)),
+                    ),
+                  ],
+                ),
+                if (_receivedAtError != null)
+                  Text(
+                    _receivedAtError!,
+                    key: const ValueKey('authority-response-date-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-response-summary'),
+                  controller: _summaryController,
+                  minLines: 3,
+                  maxLines: 7,
+                  maxLength: 5000,
+                  decoration: const InputDecoration(labelText: 'Cevap özeti'),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Cevap özeti',
+                    minimum: 10,
+                    maximum: 5000,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<CustomsAuthorityOutcomeCode>(
+                  key: const ValueKey('authority-response-outcome-code'),
+                  initialValue: _outcomeCode,
+                  decoration: const InputDecoration(
+                    labelText: 'Ara sonuç sınıflandırması (isteğe bağlı)',
+                  ),
+                  items: <DropdownMenuItem<CustomsAuthorityOutcomeCode>>[
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('Ara sonuç sınıflandırması yok'),
+                    ),
+                    ..._interimCodes.map(
+                      (code) => DropdownMenuItem(
+                        value: code,
+                        child: Text(
+                          customsAuthorityOutcomeCodeLabel(code.wireValue),
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(() => _outcomeCode = value),
+                ),
+                if (_responseType ==
+                    CustomsInterimAuthorityResponseType.informationRequest) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Talep edilen son tarih',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_requestedDueAt == null)
+                    OutlinedButton.icon(
+                      key: const ValueKey('authority-response-add-due-date'),
+                      onPressed: () => setState(() {
+                        _requestedDueAt = DateTime.now().add(
+                          const Duration(days: 7),
+                        );
+                      }),
+                      icon: const Icon(Icons.event_available_outlined),
+                      label: const Text('Son tarih ekle'),
+                    )
+                  else
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        OutlinedButton.icon(
+                          key: const ValueKey(
+                            'authority-response-pick-due-date',
+                          ),
+                          onPressed: () async {
+                            final value = await _pickAuthorityDate(
+                              context,
+                              _requestedDueAt!,
+                            );
+                            if (value != null && mounted) {
+                              setState(() {
+                                _requestedDueAt = value;
+                                _dueAtError = null;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          label: Text(_formatLocalDate(_requestedDueAt!)),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey(
+                            'authority-response-pick-due-time',
+                          ),
+                          onPressed: () async {
+                            final value = await _pickAuthorityTime(
+                              context,
+                              _requestedDueAt!,
+                            );
+                            if (value != null && mounted) {
+                              setState(() {
+                                _requestedDueAt = value;
+                                _dueAtError = null;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.schedule_outlined),
+                          label: Text(_formatLocalTime(_requestedDueAt!)),
+                        ),
+                        TextButton(
+                          key: const ValueKey(
+                            'authority-response-clear-due-date',
+                          ),
+                          onPressed: () => setState(() {
+                            _requestedDueAt = null;
+                            _dueAtError = null;
+                          }),
+                          child: const Text('Kaldır'),
+                        ),
+                      ],
+                    ),
+                  if (_dueAtError != null)
+                    Text(
+                      _dueAtError!,
+                      key: const ValueKey('authority-response-due-date-error'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Ekler ve bütünlük değerleri',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('add-authority-response-attachment'),
+                      onPressed: _addAttachment,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Ek ekle'),
+                    ),
+                  ],
+                ),
+                for (var index = 0; index < _attachments.length; index++)
+                  _AuthorityAttachmentFields(
+                    key: ValueKey('authority-response-attachment-$index'),
+                    prefix: 'authority-response-attachment',
+                    index: index,
+                    draft: _attachments[index],
+                    onRemove: () => _removeAttachment(index),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-authority-response'),
+          onPressed: _submit,
+          child: const Text('Kaydı gözden geçir'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthorityAttachmentFields extends StatelessWidget {
+  const _AuthorityAttachmentFields({
+    super.key,
+    required this.prefix,
+    required this.index,
+    required this.draft,
+    required this.onRemove,
+  });
+
+  final String prefix;
+  final int index;
+  final _AuthorityAttachmentDraft draft;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD8E1E7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Ek ${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                key: ValueKey('$prefix-remove-$index'),
+                tooltip: 'Eki kaldır',
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          ),
+          TextFormField(
+            key: ValueKey('$prefix-reference-$index'),
+            controller: draft.referenceController,
+            maxLength: 500,
+            decoration: const InputDecoration(labelText: 'Ek referansı'),
+            validator: (value) =>
+                _requiredTextValidator(value, 'Ek referansı', minimum: 1),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            key: ValueKey('$prefix-hash-$index'),
+            controller: draft.hashController,
+            maxLength: 64,
+            decoration: const InputDecoration(labelText: 'Ek SHA-256'),
+            validator: (value) => _isSha256(value ?? '')
+                ? null
+                : 'Ek SHA-256 değeri 64 haneli hex olmalıdır.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<CustomsAuthorityOutcomeCode> _terminalOutcomeCodes(
+  CustomsFinalAuthorityResponseType type,
+) => switch (type) {
+  CustomsFinalAuthorityResponseType.decision => const [
+    CustomsAuthorityOutcomeCode.actionTaken,
+    CustomsAuthorityOutcomeCode.noAction,
+    CustomsAuthorityOutcomeCode.referredToOtherAuthority,
+    CustomsAuthorityOutcomeCode.closed,
+    CustomsAuthorityOutcomeCode.rejected,
+    CustomsAuthorityOutcomeCode.other,
+  ],
+  CustomsFinalAuthorityResponseType.closureNotice => const [
+    CustomsAuthorityOutcomeCode.closed,
+    CustomsAuthorityOutcomeCode.noAction,
+    CustomsAuthorityOutcomeCode.referredToOtherAuthority,
+    CustomsAuthorityOutcomeCode.other,
+  ],
+  CustomsFinalAuthorityResponseType.rejectionNotice => const [
+    CustomsAuthorityOutcomeCode.rejected,
+  ],
+};
+
+List<CustomsAuthorityOutcomeFinalityLevel> _terminalFinalityLevels(
+  CustomsFinalAuthorityResponseType type,
+) => switch (type) {
+  CustomsFinalAuthorityResponseType.decision => const [
+    CustomsAuthorityOutcomeFinalityLevel.administrativeFinal,
+    CustomsAuthorityOutcomeFinalityLevel.judicialFinal,
+  ],
+  CustomsFinalAuthorityResponseType.closureNotice ||
+  CustomsFinalAuthorityResponseType.rejectionNotice => const [
+    CustomsAuthorityOutcomeFinalityLevel.administrativeFinal,
+    CustomsAuthorityOutcomeFinalityLevel.judicialFinal,
+    CustomsAuthorityOutcomeFinalityLevel.notStated,
+  ],
+};
+
+class _AuthorityOutcomeDialog extends StatefulWidget {
+  const _AuthorityOutcomeDialog({required this.detail});
+
+  final CustomsAuthoritySubmissionDetail detail;
+
+  @override
+  State<_AuthorityOutcomeDialog> createState() =>
+      _AuthorityOutcomeDialogState();
+}
+
+class _AuthorityOutcomeDialogState extends State<_AuthorityOutcomeDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _referenceController = TextEditingController();
+  final _authorityNameController = TextEditingController();
+  final _authorityUnitController = TextEditingController();
+  final _summaryController = TextEditingController();
+  final _notesController = TextEditingController();
+  final List<_AuthorityAttachmentDraft> _attachments = [];
+  CustomsFinalAuthorityResponseType _responseType =
+      CustomsFinalAuthorityResponseType.decision;
+  CustomsAuthorityOutcomeCode _outcomeCode =
+      CustomsAuthorityOutcomeCode.actionTaken;
+  CustomsAuthorityOutcomeFinalityLevel _finality =
+      CustomsAuthorityOutcomeFinalityLevel.administrativeFinal;
+  DateTime _officialDocumentDate = DateTime.now();
+  DateTime _receivedAt = DateTime.now();
+  String? _previousResponseId;
+  bool _humanEntryConfirmed = false;
+  bool _legalNeutralityConfirmed = false;
+  String? _officialDateError;
+  String? _receivedAtError;
+  String? _confirmationError;
+
+  @override
+  void initState() {
+    super.initState();
+    final submission = widget.detail.submission;
+    _referenceController.text = submission.officialReferenceNumber ?? '';
+    _authorityNameController.text =
+        submission.targetUnit ??
+        customsAuthorityTargetLabel(submission.targetAuthority);
+    _authorityUnitController.text = submission.targetUnit ?? '';
+  }
+
+  @override
+  void dispose() {
+    _referenceController.dispose();
+    _authorityNameController.dispose();
+    _authorityUnitController.dispose();
+    _summaryController.dispose();
+    _notesController.dispose();
+    for (final attachment in _attachments) {
+      attachment.dispose();
+    }
+    super.dispose();
+  }
+
+  void _changeResponseType(CustomsFinalAuthorityResponseType? value) {
+    if (value == null) return;
+    setState(() {
+      _responseType = value;
+      _outcomeCode = _terminalOutcomeCodes(value).first;
+      _finality = _terminalFinalityLevels(value).first;
+    });
+  }
+
+  void _addAttachment() {
+    setState(() => _attachments.add(_AuthorityAttachmentDraft()));
+  }
+
+  void _removeAttachment(int index) {
+    final removed = _attachments.removeAt(index);
+    removed.dispose();
+    setState(() {});
+  }
+
+  void _submit() {
+    final formValid = _formKey.currentState?.validate() == true;
+    final officialDateError = _authorityDateTimeError(
+      _officialDocumentDate,
+      'Resmî belge tarihi',
+    );
+    final receivedAtError = _authorityDateTimeError(
+      _receivedAt,
+      'Sonucun alınma zamanı',
+    );
+    String? orderError;
+    if (_officialDocumentDate.isAfter(
+      _receivedAt.add(const Duration(days: 1)),
+    )) {
+      orderError =
+          'Resmî belge tarihi alınma zamanından bir günden fazla sonra olamaz.';
+    }
+    setState(() {
+      _officialDateError = officialDateError ?? orderError;
+      _receivedAtError = receivedAtError;
+      _confirmationError = _humanEntryConfirmed && _legalNeutralityConfirmed
+          ? null
+          : 'İnsan girişi ve hukukî tarafsızlık teyitleri zorunludur.';
+    });
+    if (!formValid ||
+        officialDateError != null ||
+        receivedAtError != null ||
+        orderError != null ||
+        !_humanEntryConfirmed ||
+        !_legalNeutralityConfirmed) {
+      return;
+    }
+
+    Navigator.pop(
+      context,
+      CustomsAuthorityOutcomeDraft(
+        responseType: _responseType,
+        outcomeCode: _outcomeCode,
+        outcomeFinalityLevel: _finality,
+        authorityReferenceNumber: _referenceController.text,
+        officialDocumentDate: _officialDocumentDate.toUtc().toIso8601String(),
+        receivedAt: _receivedAt.toUtc().toIso8601String(),
+        authorityNameSnapshot: _authorityNameController.text,
+        authorityUnitSnapshot: _authorityUnitController.text.trim().isEmpty
+            ? null
+            : _authorityUnitController.text.trim(),
+        summary: _summaryController.text,
+        previousResponseId: _previousResponseId,
+        attachmentReferences: _attachments
+            .map((item) => item.referenceController.text.trim())
+            .toList(growable: false),
+        attachmentHashes: _attachments
+            .map((item) => item.hashController.text.trim().toLowerCase())
+            .toList(growable: false),
+        additionalNotes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+        humanEntryConfirmed: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final outcomeCodes = _terminalOutcomeCodes(_responseType);
+    final finalityLevels = _terminalFinalityLevels(_responseType);
+    final responses = widget.detail.responses;
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      title: const Text('Nihai kurum sonucu'),
+      content: SizedBox(
+        width: 780,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(authorityOutcomeDescription),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<CustomsFinalAuthorityResponseType>(
+                  key: const ValueKey('authority-outcome-response-type'),
+                  initialValue: _responseType,
+                  decoration: const InputDecoration(
+                    labelText: 'Nihai cevap türü',
+                  ),
+                  items: CustomsFinalAuthorityResponseType.values
+                      .map(
+                        (type) => DropdownMenuItem(
+                          value: type,
+                          child: Text(
+                            customsAuthorityResponseTypeLabel(type.wireValue),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: _changeResponseType,
+                ),
+                const SizedBox(height: 12),
+                InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Sonuç kodu'),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<CustomsAuthorityOutcomeCode>(
+                      key: const ValueKey('authority-outcome-code'),
+                      value: _outcomeCode,
+                      isExpanded: true,
+                      items: outcomeCodes
+                          .map(
+                            (code) => DropdownMenuItem(
+                              value: code,
+                              child: Text(
+                                customsAuthorityOutcomeCodeLabel(
+                                  code.wireValue,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _outcomeCode = value);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Kesinlik seviyesi',
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<CustomsAuthorityOutcomeFinalityLevel>(
+                      key: const ValueKey('authority-outcome-finality'),
+                      value: _finality,
+                      isExpanded: true,
+                      items: finalityLevels
+                          .map(
+                            (level) => DropdownMenuItem(
+                              value: level,
+                              child: Text(
+                                customsAuthorityOutcomeFinalityLabel(
+                                  level.wireValue,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value != null) setState(() => _finality = value);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-outcome-reference'),
+                  controller: _referenceController,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Kurum referans numarası',
+                  ),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Kurum referansı',
+                    minimum: 2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Resmî belge tarihi',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  key: const ValueKey('authority-outcome-pick-document-date'),
+                  onPressed: () async {
+                    final value = await _pickAuthorityDate(
+                      context,
+                      _officialDocumentDate,
+                    );
+                    if (value != null && mounted) {
+                      setState(() {
+                        _officialDocumentDate = value;
+                        _officialDateError = null;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.calendar_today_outlined),
+                  label: Text(_formatLocalDate(_officialDocumentDate)),
+                ),
+                if (_officialDateError != null)
+                  Text(
+                    _officialDateError!,
+                    key: const ValueKey(
+                      'authority-outcome-document-date-error',
+                    ),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Sonucun alındığı tarih ve saat',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('authority-outcome-pick-date'),
+                      onPressed: () async {
+                        final value = await _pickAuthorityDate(
+                          context,
+                          _receivedAt,
+                        );
+                        if (value != null && mounted) {
+                          setState(() {
+                            _receivedAt = value;
+                            _receivedAtError = null;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.calendar_today_outlined),
+                      label: Text(_formatLocalDate(_receivedAt)),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('authority-outcome-pick-time'),
+                      onPressed: () async {
+                        final value = await _pickAuthorityTime(
+                          context,
+                          _receivedAt,
+                        );
+                        if (value != null && mounted) {
+                          setState(() {
+                            _receivedAt = value;
+                            _receivedAtError = null;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.schedule_outlined),
+                      label: Text(_formatLocalTime(_receivedAt)),
+                    ),
+                  ],
+                ),
+                if (_receivedAtError != null)
+                  Text(
+                    _receivedAtError!,
+                    key: const ValueKey('authority-outcome-date-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-outcome-authority-name'),
+                  controller: _authorityNameController,
+                  maxLength: 300,
+                  decoration: const InputDecoration(labelText: 'Kurum adı'),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Kurum adı',
+                    minimum: 2,
+                    maximum: 300,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-outcome-authority-unit'),
+                  controller: _authorityUnitController,
+                  maxLength: 300,
+                  decoration: const InputDecoration(
+                    labelText: 'Kurum birimi (isteğe bağlı)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-outcome-summary'),
+                  controller: _summaryController,
+                  minLines: 3,
+                  maxLines: 7,
+                  maxLength: 5000,
+                  decoration: const InputDecoration(labelText: 'Sonuç özeti'),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Sonuç özeti',
+                    minimum: 10,
+                    maximum: 5000,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('authority-outcome-previous-response'),
+                  initialValue: _previousResponseId,
+                  decoration: const InputDecoration(
+                    labelText: 'Önceki cevap bağlantısı (isteğe bağlı)',
+                  ),
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('Bağlantı yok'),
+                    ),
+                    ...responses.map(
+                      (response) => DropdownMenuItem(
+                        value: response.responseId,
+                        child: Text(
+                          '${customsAuthorityResponseTypeLabel(response.responseType)} · ${_formatDateTime(response.receivedAt)}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _previousResponseId = value),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('authority-outcome-notes'),
+                  controller: _notesController,
+                  minLines: 2,
+                  maxLines: 5,
+                  maxLength: 3000,
+                  decoration: const InputDecoration(
+                    labelText: 'İlave notlar (isteğe bağlı)',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Resmî belge ekleri',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('add-authority-outcome-attachment'),
+                      onPressed: _addAttachment,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Ek ekle'),
+                    ),
+                  ],
+                ),
+                for (var index = 0; index < _attachments.length; index++)
+                  _AuthorityAttachmentFields(
+                    key: ValueKey('authority-outcome-attachment-$index'),
+                    prefix: 'authority-outcome-attachment',
+                    index: index,
+                    draft: _attachments[index],
+                    onRemove: () => _removeAttachment(index),
+                  ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  key: const ValueKey('authority-outcome-human-confirmation'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _humanEntryConfirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _humanEntryConfirmed = value == true;
+                      if (_humanEntryConfirmed && _legalNeutralityConfirmed) {
+                        _confirmationError = null;
+                      }
+                    });
+                  },
+                  title: const Text(
+                    'Bu sonuç kurum tarafından düzenlenen belgeye dayanarak bir insan tarafından girilmiştir.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                CheckboxListTile(
+                  key: const ValueKey(
+                    'authority-outcome-neutrality-confirmation',
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  value: _legalNeutralityConfirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _legalNeutralityConfirmed = value == true;
+                      if (_humanEntryConfirmed && _legalNeutralityConfirmed) {
+                        _confirmationError = null;
+                      }
+                    });
+                  },
+                  title: const Text(
+                    'Seçilen sonuç kodunun MarkaKalkan tarafından verilmiş hukukî karar olmadığını; kurum belgesinin kullanıcı sınıflandırması olduğunu anlıyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (_confirmationError != null)
+                  Text(
+                    _confirmationError!,
+                    key: const ValueKey('authority-outcome-confirmation-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-authority-outcome'),
+          onPressed: _submit,
+          child: const Text('Sonucu gözden geçir'),
+        ),
       ],
     );
   }
