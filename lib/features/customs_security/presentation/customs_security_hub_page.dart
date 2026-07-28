@@ -605,31 +605,32 @@ class _CustomsOperationInformationBand extends StatelessWidget {
           stage: CustomsAuthoritySubmissionStage.submissionContent,
           icon: Icons.description_outlined,
           label: 'Başvuru içeriği',
-          hint: 'Resmî başvuru veya ihbar dosyasını seçin.',
+          hint: 'Kurum, konu, hak sahibi ve delil bilgilerini inceleyin.',
         ),
         (
           stage: CustomsAuthoritySubmissionStage.submissionPackage,
           icon: Icons.inventory_2_outlined,
           label: 'Başvuru paketi',
-          hint: 'Paket hazırlama ve paket durumuna gidin.',
+          hint: 'Onaylanan içeriği değiştirilemez resmî pakete dönüştürün.',
         ),
         (
           stage: CustomsAuthoritySubmissionStage.downloadableOfficialFile,
           icon: Icons.picture_as_pdf_outlined,
           label: 'İndirilebilir resmî dosya',
-          hint: 'PDF ve JSON güvenli dosya alanına gidin.',
+          hint: 'PDF ve JSON dosyalarının durumunu görün; hazırsa indirin.',
         ),
         (
           stage: CustomsAuthoritySubmissionStage.authorityDelivery,
           icon: Icons.send_outlined,
           label: 'Kuruma iletim',
-          hint: 'Kuruma dış teslim kaydı alanına gidin.',
+          hint:
+              'Başka bir kanalda yapılan gerçek teslimi tarih ve referansıyla kaydedin.',
         ),
         (
           stage: CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
           icon: Icons.fact_check_outlined,
           label: 'Teslim, cevap ve sonuç',
-          hint: 'Dış teslimden sonraki kurum sürecine gidin.',
+          hint: 'Alındı, kurum cevapları ve nihai sonucu aynı dosyada izleyin.',
         ),
       ];
 
@@ -672,7 +673,7 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Operasyon Bilgi Bandı',
+                        'Bu dosyada hangi işlemi yapmak istiyorsunuz?',
                         style: TextStyle(
                           color: MarkaKalkanTheme.navy,
                           fontSize: 16,
@@ -681,7 +682,7 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                       ),
                       SizedBox(height: 3),
                       Text(
-                        'Bir aşama seçin; ardından aynı kanonik resmî iletim dosyasını listeden açın.',
+                        'İşlemi seçin. Sistem sizi doğru çalışma alanına götürür; dosyayı açtığınızda ilgili bölümü doğrudan gösterir.',
                         style: TextStyle(
                           color: Color(0xFF687580),
                           fontSize: 13,
@@ -722,7 +723,7 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                 }
 
                 return SizedBox(
-                  height: 72,
+                  height: 116,
                   child: ListView.separated(
                     key: const ValueKey(
                       'customs-operation-information-horizontal-list',
@@ -731,7 +732,7 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                     itemCount: _stages.length,
                     separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (context, index) => SizedBox(
-                      width: 220,
+                      width: 270,
                       child: _CustomsOperationInformationStage(
                         index: index + 1,
                         stage: _stages[index].stage,
@@ -789,8 +790,8 @@ class _CustomsOperationInformationStage extends StatelessWidget {
           child: AnimatedContainer(
             key: ValueKey('customs-operation-information-stage-$index'),
             duration: const Duration(milliseconds: 180),
-            constraints: const BoxConstraints(minHeight: 64),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            constraints: const BoxConstraints(minHeight: 104),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
             decoration: BoxDecoration(
               color: selected
                   ? const Color(0xFFE6F7F4)
@@ -803,41 +804,59 @@ class _CustomsOperationInformationStage extends StatelessWidget {
                 width: selected ? 1.5 : 1,
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? MarkaKalkanTheme.navy
-                        : MarkaKalkanTheme.teal,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '$index',
-                    style: TextStyle(
-                      color: selected ? Colors.white : MarkaKalkanTheme.navy,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? MarkaKalkanTheme.navy
+                            : MarkaKalkanTheme.teal,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$index',
+                        style: TextStyle(
+                          color: selected
+                              ? Colors.white
+                              : MarkaKalkanTheme.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Icon(icon, color: MarkaKalkanTheme.navy, size: 18),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MarkaKalkanTheme.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Icon(icon, color: MarkaKalkanTheme.navy, size: 18),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MarkaKalkanTheme.navy,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
-                    ),
+                const SizedBox(height: 7),
+                Text(
+                  hint,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF687580),
+                    fontSize: 11,
+                    height: 1.3,
                   ),
                 ),
               ],
@@ -868,6 +887,17 @@ class _ProfileWorkspace extends StatelessWidget {
       title: 'Gümrük Koruma Profilleri',
       description:
           'Hak sahipliği, ürün doğrulama yöntemi, GTİP/HS kodu, riskli rota ve acil temas bilgilerini sınır müdahalesine hazır tutun.',
+      guidanceKey: 'customs-profile-workspace-guidance',
+      guidance: const _WorkspaceGuidance(
+        purpose:
+            'Marka ve ürünlerinizin gümrükte nasıl doğrulanacağını tek koruma profilinde tanımlar.',
+        whenToUse:
+            'Gümrük başvurusu veya sınır müdahalesi başlamadan önce ve koruma kapsamı değiştiğinde.',
+        requirements:
+            'Hak sahibi bilgileri, korunan ürünler, HS/GTİP kodları, doğrulama talimatları ve acil temaslar.',
+        result:
+            'Aktifleştirilebilen ve sınır müdahalelerine bağlanabilen güncel bir koruma profili.',
+      ),
       filter: DropdownButtonFormField<String?>(
         key: const ValueKey('customs-profile-status-filter'),
         initialValue: selectedStatus,
@@ -910,6 +940,7 @@ class _ProfileWorkspace extends StatelessWidget {
                     '${profile.protectedProductIds.length} korunan ürün · ${profile.hsCodes.length} HS/GTİP kodu',
                     'Son güncelleme: ${_formatDateTime(profile.updatedAt)}',
                   ],
+                  actionLabel: 'Profili aç',
                   onTap: () => onOpen(profile),
                 );
               },
@@ -937,6 +968,17 @@ class _InterventionWorkspace extends StatelessWidget {
       title: 'Sınır Müdahale Dosyaları',
       description:
           'Sevkiyat, sınır noktası, ürün beyanı, doğrulama sonucu, süreler ve karar dayanaklarını tek operasyon dosyasında izleyin.',
+      guidanceKey: 'customs-intervention-workspace-guidance',
+      guidance: const _WorkspaceGuidance(
+        purpose:
+            'Şüpheli sevkiyat veya sınır olayını, delilleri ve karar dayanaklarıyla operasyon dosyasına dönüştürür.',
+        whenToUse:
+            'Gümrük bildirimi, şüpheli sevkiyat, numune veya ürün doğrulama ihtiyacı oluştuğunda.',
+        requirements:
+            'Aktif koruma profili, sınır noktası, sevkiyat bilgileri, şüphe nedenleri ve işlem süreleri.',
+        result:
+            'Resmî başvuruya bağlanabilen izlenebilir bir sınır müdahale dosyası.',
+      ),
       filter: DropdownButtonFormField<String?>(
         key: const ValueKey('customs-intervention-status-filter'),
         initialValue: selectedStatus,
@@ -984,6 +1026,7 @@ class _InterventionWorkspace extends StatelessWidget {
                     '${customsBorderPointTypeLabel(intervention.borderPointType)} · ${intervention.borderPointName}',
                     '${customsPriorityLabel(intervention.priority)} öncelik · ${customsAuthenticationResultLabel(intervention.authenticationResult)}',
                   ],
+                  actionLabel: 'Müdahaleyi aç',
                   onTap: () => onOpen(intervention),
                 );
               },
@@ -1024,6 +1067,48 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
       'Değiştirilemez başvuru paketini, sürüm ve hash bilgisini, kuruma dış teslimi ve resmî alındı kaydını aynı dosyada izleyin.',
     _AuthorityWorkspaceKind.responseOutcome =>
       'Kurumun ara cevaplarını, teslim alındısını, son işlem zamanını ve insan tarafından kaydedilen nihai sonucu izleyin.',
+  };
+
+  String get _guidanceKey => switch (kind) {
+    _AuthorityWorkspaceKind.applications =>
+      'customs-authority-applications-workspace-guidance',
+    _AuthorityWorkspaceKind.packageDelivery =>
+      'customs-package-delivery-workspace-guidance',
+    _AuthorityWorkspaceKind.responseOutcome =>
+      'customs-authority-response-workspace-guidance',
+  };
+
+  _WorkspaceGuidance get _guidance => switch (kind) {
+    _AuthorityWorkspaceKind.applications => const _WorkspaceGuidance(
+      purpose:
+          'Kuruma sunulacak başvuru veya ihbar içeriğini, hedef kurumu ve insan kontrol kapılarını aynı dosyada hazırlar.',
+      whenToUse:
+          'Aktif koruma profili veya sınır müdahalesinden resmî bir başvuru ya da ihbar hazırlanacağında.',
+      requirements:
+          'Kurum hedefi, olay referansı, hak sahibi onayı, insan incelemesi, veri minimizasyonu ve nötr dil.',
+      result:
+          'Paket hazırlama onayına taşınabilen kanonik bir resmî iletim dosyası.',
+    ),
+    _AuthorityWorkspaceKind.packageDelivery => const _WorkspaceGuidance(
+      purpose:
+          'Onaylanan başvuruyu değiştirilemez pakete dönüştürür, resmî dosyaları ve dış teslim kaydını yönetir.',
+      whenToUse:
+          'Başvuru içeriği ve kontrol kapıları tamamlandıktan sonra; paket veya teslim işlemi yapılacağında.',
+      requirements:
+          'Paket hazırlama onayı, insan ve hak sahibi kontrolleri, en az bir belge veya delil kaydı.',
+      result:
+          'Sürüm ve hash ile korunan paket, güvenli PDF/JSON dosyaları ve izlenebilir dış teslim kaydı.',
+    ),
+    _AuthorityWorkspaceKind.responseOutcome => const _WorkspaceGuidance(
+      purpose:
+          'Kuruma yapılan teslimden sonraki alındı, ara cevap ve nihai sonuç sürecini aynı dosyada izler.',
+      whenToUse:
+          'Dış teslim kaydedildikten sonra kurumdan alındı, bilgi talebi, durum güncellemesi veya sonuç geldiğinde.',
+      requirements:
+          'Kayıtlı dış teslim zamanı ve kurumdan gelen doğrulanabilir cevap veya sonuç bilgisi.',
+      result:
+          'Teslimden kapanışa kadar değiştirilemez olay zinciriyle izlenen kurum süreci.',
+    ),
   };
 
   String get _filterKey => switch (kind) {
@@ -1108,11 +1193,60 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
     ],
   };
 
+  CustomsAuthoritySubmissionStage get _effectiveStage =>
+      selectedStage ??
+      switch (kind) {
+        _AuthorityWorkspaceKind.applications =>
+          CustomsAuthoritySubmissionStage.submissionContent,
+        _AuthorityWorkspaceKind.packageDelivery =>
+          CustomsAuthoritySubmissionStage.submissionPackage,
+        _AuthorityWorkspaceKind.responseOutcome =>
+          CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
+      };
+
+  String _actionLabel(CustomsAuthoritySubmission submission) =>
+      switch (_effectiveStage) {
+        CustomsAuthoritySubmissionStage.submissionContent => 'Başvuruyu incele',
+        CustomsAuthoritySubmissionStage.submissionPackage =>
+          submission.currentPackageHash == null
+              ? 'Paket hazırlığını aç'
+              : 'Paket durumunu aç',
+        CustomsAuthoritySubmissionStage.downloadableOfficialFile =>
+          'Resmî dosya durumunu aç',
+        CustomsAuthoritySubmissionStage.authorityDelivery =>
+          submission.submittedAt == null
+              ? 'Teslim kaydını aç'
+              : 'Teslim kaydını incele',
+        CustomsAuthoritySubmissionStage.deliveryResponseOutcome =>
+          'Cevap ve sonucu izle',
+      };
+
+  String? _stageWarning(CustomsAuthoritySubmission submission) {
+    final stage = _effectiveStage;
+    if (stage == CustomsAuthoritySubmissionStage.deliveryResponseOutcome &&
+        submission.submittedAt == null) {
+      return 'Önce kuruma dış teslim kaydedilmelidir.';
+    }
+    if ((stage == CustomsAuthoritySubmissionStage.downloadableOfficialFile ||
+            stage == CustomsAuthoritySubmissionStage.authorityDelivery) &&
+        submission.currentPackageHash == null) {
+      return 'Önce başvuru paketi oluşturulmalıdır.';
+    }
+    if (stage == CustomsAuthoritySubmissionStage.submissionPackage &&
+        submission.currentPackageHash == null &&
+        submission.status != 'approved_for_package') {
+      return 'Paket hazırlığı için önce başvuru ve insan kontrol kapılarını tamamlayın.';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return _WorkspaceShell(
       title: _title,
       description: _description,
+      guidanceKey: _guidanceKey,
+      guidance: _guidance,
       filter: DropdownButtonFormField<String?>(
         key: ValueKey(_filterKey),
         initialValue: selectedStatus,
@@ -1153,13 +1287,11 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
                   statusCode: submission.status,
                   statusColorResolver: customsAuthoritySubmissionStatusColor,
                   lines: _lines(submission),
-                  warning:
-                      selectedStage ==
-                              CustomsAuthoritySubmissionStage
-                                  .deliveryResponseOutcome &&
-                          submission.submittedAt == null
-                      ? 'Önce kuruma dış teslim kaydedilmelidir.'
-                      : null,
+                  actionLabel: _actionLabel(submission),
+                  actionKey: ValueKey(
+                    '$_cardKeyPrefix${submission.submissionId}-action',
+                  ),
+                  warning: _stageWarning(submission),
                   onTap: () => onOpen(submission),
                 );
               },
@@ -1171,68 +1303,258 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
 String _shortHash(String value) =>
     value.length <= 12 ? value : '${value.substring(0, 12)}…';
 
+class _WorkspaceGuidance {
+  const _WorkspaceGuidance({
+    required this.purpose,
+    required this.whenToUse,
+    required this.requirements,
+    required this.result,
+  });
+
+  final String purpose;
+  final String whenToUse;
+  final String requirements;
+  final String result;
+}
+
+class _WorkspaceGuidancePanel extends StatelessWidget {
+  const _WorkspaceGuidancePanel({
+    required this.panelKey,
+    required this.guidance,
+  });
+
+  final String panelKey;
+  final _WorkspaceGuidance guidance;
+
+  List<({IconData icon, String title, String body})> get _items => [
+    (
+      icon: Icons.info_outline_rounded,
+      title: 'Bu bölüm ne işe yarar?',
+      body: guidance.purpose,
+    ),
+    (
+      icon: Icons.schedule_outlined,
+      title: 'Ne zaman kullanmalısınız?',
+      body: guidance.whenToUse,
+    ),
+    (
+      icon: Icons.fact_check_outlined,
+      title: 'Bu işlem için ne gerekir?',
+      body: guidance.requirements,
+    ),
+    (
+      icon: Icons.task_alt_rounded,
+      title: 'İşlem sonunda ne elde edersiniz?',
+      body: guidance.result,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 720) {
+          final itemWidth = (constraints.maxWidth * 0.86)
+              .clamp(248.0, 320.0)
+              .toDouble();
+          return SizedBox(
+            key: ValueKey(panelKey),
+            height: 174,
+            child: ListView.separated(
+              key: ValueKey('$panelKey-horizontal-list'),
+              scrollDirection: Axis.horizontal,
+              itemCount: _items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (context, index) => SizedBox(
+                width: itemWidth,
+                child: _WorkspaceGuidanceItem(
+                  icon: _items[index].icon,
+                  title: _items[index].title,
+                  body: _items[index].body,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final columns = constraints.maxWidth >= 1080 ? 4 : 2;
+        const spacing = 12.0;
+        final itemWidth =
+            (constraints.maxWidth - (columns - 1) * spacing) / columns;
+        return SizedBox(
+          key: ValueKey(panelKey),
+          width: double.infinity,
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              for (final item in _items)
+                SizedBox(
+                  width: itemWidth,
+                  child: _WorkspaceGuidanceItem(
+                    icon: item.icon,
+                    title: item.title,
+                    body: item.body,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WorkspaceGuidanceItem extends StatelessWidget {
+  const _WorkspaceGuidanceItem({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 128),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F9FA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDDE6EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 19, color: MarkaKalkanTheme.teal),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            body,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF687580),
+              fontSize: 11.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WorkspaceShell extends StatelessWidget {
   const _WorkspaceShell({
     required this.title,
     required this.description,
+    required this.guidanceKey,
+    required this.guidance,
     required this.filter,
     required this.child,
   });
 
   final String title;
   final String description;
+  final String guidanceKey;
+  final _WorkspaceGuidance guidance;
   final Widget filter;
   final Widget child;
+
+  Widget _headingAndGuidance() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final heading = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: Color(0xFF687580),
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            );
+            if (constraints.maxWidth < 720) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [heading, const SizedBox(height: 14), filter],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: heading),
+                const SizedBox(width: 20),
+                SizedBox(width: 280, child: filter),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        _WorkspaceGuidancePanel(panelKey: guidanceKey, guidance: guidance),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 100),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final heading = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: MarkaKalkanTheme.navy,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final headingAndGuidance = _headingAndGuidance();
+          if (constraints.maxHeight < 720) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Flexible(
+                  flex: 3,
+                  fit: FlexFit.loose,
+                  child: SingleChildScrollView(
+                    key: ValueKey('$guidanceKey-vertical-scroll'),
+                    child: headingAndGuidance,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      color: Color(0xFF687580),
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              );
-              if (constraints.maxWidth < 720) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [heading, const SizedBox(height: 14), filter],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: heading),
-                  const SizedBox(width: 20),
-                  SizedBox(width: 280, child: filter),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 18),
-          Expanded(child: child),
-        ],
+                ),
+                const SizedBox(height: 12),
+                Expanded(flex: 2, child: child),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              headingAndGuidance,
+              const SizedBox(height: 18),
+              Expanded(child: child),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1248,6 +1570,8 @@ class _RecordCard extends StatelessWidget {
     required this.statusCode,
     required this.lines,
     required this.onTap,
+    this.actionLabel = 'Kaydı aç',
+    this.actionKey,
     this.warning,
     this.statusColorResolver,
   });
@@ -1259,6 +1583,8 @@ class _RecordCard extends StatelessWidget {
   final String statusCode;
   final List<String> lines;
   final VoidCallback onTap;
+  final String actionLabel;
+  final Key? actionKey;
   final String? warning;
   final Color Function(String status)? statusColorResolver;
 
@@ -1345,10 +1671,48 @@ class _RecordCard extends StatelessWidget {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 10),
+                    Container(
+                      key: actionKey,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F6F4),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: MarkaKalkanTheme.teal.withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              actionLabel,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: MarkaKalkanTheme.navy,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 16,
+                            color: MarkaKalkanTheme.teal,
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               const Icon(Icons.chevron_right_rounded),
             ],
           ),
@@ -1398,32 +1762,51 @@ class _EmptyPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 54, color: const Color(0xFF9AA6AE)),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MarkaKalkanTheme.navy,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minimumHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : 0.0;
+        return SingleChildScrollView(
+          key: const ValueKey('customs-empty-panel-scroll'),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minimumHeight),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 54, color: const Color(0xFF9AA6AE)),
+                      const SizedBox(height: 16),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: MarkaKalkanTheme.navy,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        description,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFF687580),
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF687580), height: 1.45),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

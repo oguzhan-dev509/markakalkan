@@ -20,6 +20,13 @@ Future<void> fillActivationProfile(WidgetTester tester) async {
   }
 }
 
+Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('hub renders legally neutral hero and both workspaces', (
     tester,
@@ -43,7 +50,7 @@ void main() {
       findsOneWidget,
     );
     for (final label in [
-      'Operasyon Bilgi Bandı',
+      'Bu dosyada hangi işlemi yapmak istiyorsunuz?',
       'Başvuru içeriği',
       'Başvuru paketi',
       'İndirilebilir resmî dosya',
@@ -51,6 +58,27 @@ void main() {
       'Teslim, cevap ve sonuç',
     ]) {
       expect(find.text(label), findsOneWidget);
+    }
+    for (final description in [
+      'Kurum, konu, hak sahibi ve delil bilgilerini inceleyin.',
+      'Onaylanan içeriği değiştirilemez resmî pakete dönüştürün.',
+      'PDF ve JSON dosyalarının durumunu görün; hazırsa indirin.',
+      'Başka bir kanalda yapılan gerçek teslimi tarih ve referansıyla kaydedin.',
+      'Alındı, kurum cevapları ve nihai sonucu aynı dosyada izleyin.',
+    ]) {
+      expect(find.text(description), findsOneWidget);
+    }
+    expect(
+      find.byKey(const ValueKey('customs-profile-workspace-guidance')),
+      findsOneWidget,
+    );
+    for (final guidanceLabel in [
+      'Bu bölüm ne işe yarar?',
+      'Ne zaman kullanmalısınız?',
+      'Bu işlem için ne gerekir?',
+      'İşlem sonunda ne elde edersiniz?',
+    ]) {
+      expect(find.text(guidanceLabel), findsOneWidget);
     }
     expect(find.text('GKP-2026-ABC12345'), findsOneWidget);
 
@@ -111,6 +139,16 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('customs-operation-information-band')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('customs-profile-workspace-guidance-vertical-scroll'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('customs-profile-profile-1')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -237,8 +275,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('customs-profile-profile-1')));
-    await tester.pumpAndSettle();
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('customs-profile-profile-1')),
+    );
     expect(openedId, 'profile-1');
   });
 
@@ -624,14 +664,14 @@ void main() {
       expect(semantics.properties.selected, isTrue);
     }
 
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.byKey(
         const ValueKey(
           'customs-operation-stage-action-deliveryResponseOutcome',
         ),
       ),
     );
-    await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('customs-authority-response-status-filter')),
       findsOneWidget,
@@ -663,8 +703,7 @@ void main() {
       const ValueKey('customs-operation-stage-action-deliveryResponseOutcome'),
     );
     expect(outcomeAction, findsOneWidget);
-    await tester.tap(outcomeAction);
-    await tester.pumpAndSettle();
+    await tapVisible(tester, outcomeAction);
 
     expect(
       find.byKey(const ValueKey('customs-authority-response-status-filter')),
@@ -672,6 +711,42 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'each customs workspace explains purpose timing needs and result',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository();
+      await tester.binding.setSurfaceSize(const Size(1200, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+      );
+      await tester.pumpAndSettle();
+
+      for (final entry in {
+        'customs-profile-tab': 'customs-profile-workspace-guidance',
+        'customs-intervention-tab': 'customs-intervention-workspace-guidance',
+        'customs-authority-submission-tab':
+            'customs-authority-applications-workspace-guidance',
+        'customs-package-delivery-tab':
+            'customs-package-delivery-workspace-guidance',
+        'customs-authority-response-tab':
+            'customs-authority-response-workspace-guidance',
+      }.entries) {
+        final tab = find.byKey(ValueKey(entry.key));
+        await tester.ensureVisible(tab);
+        await tester.tap(tab);
+        await tester.pumpAndSettle();
+        expect(find.byKey(ValueKey(entry.value)), findsOneWidget);
+        expect(find.text('Bu bölüm ne işe yarar?'), findsOneWidget);
+        expect(find.text('Ne zaman kullanmalısınız?'), findsOneWidget);
+        expect(find.text('Bu işlem için ne gerekir?'), findsOneWidget);
+        expect(find.text('İşlem sonunda ne elde edersiniz?'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 
   testWidgets('corporate hub opens KTG through injectable route opener', (
     tester,

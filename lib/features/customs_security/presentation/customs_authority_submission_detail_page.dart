@@ -532,6 +532,10 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
           ),
           _AuthorityHeader(submission: submission),
           const SizedBox(height: 16),
+          _NextStepGuidancePanel(
+            data: _nextStepGuidance(detail, currentPackage),
+          ),
+          const SizedBox(height: 16),
           const _LegalNotice(),
           const SizedBox(height: 16),
           if (currentPackage == null) ...[
@@ -757,6 +761,197 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
                         ),
                       )
                       .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NextStepGuidanceData {
+  const _NextStepGuidanceData({
+    required this.title,
+    required this.message,
+    required this.result,
+    required this.icon,
+  });
+
+  final String title;
+  final String message;
+  final String result;
+  final IconData icon;
+}
+
+_NextStepGuidanceData _nextStepGuidance(
+  CustomsAuthoritySubmissionDetail detail,
+  CustomsSubmissionPackage? currentPackage,
+) {
+  final submission = detail.submission;
+  if (submission.status == 'concluded') {
+    return const _NextStepGuidanceData(
+      title: 'Dosya sonucunu ve kapanış kaydını inceleyin',
+      message:
+          'Nihai sonuç kaydedildi. Kurum cevaplarını, karar dayanaklarını ve değiştirilemez olay zaman çizelgesini kontrol edin.',
+      result:
+          'Tamamlanmış ve denetlenebilir bir kurum süreci ile kapanış kaydı.',
+      icon: Icons.task_alt_rounded,
+    );
+  }
+
+  if (submission.submittedAt != null) {
+    if (submission.responseCount > 0) {
+      return const _NextStepGuidanceData(
+        title: 'Kurum cevaplarını ve nihai sonucu izleyin',
+        message:
+            'Dış teslim kaydedildi ve kurum cevabı bulunuyor. Yeni cevapları, bilgi taleplerini ve nihai sonucu aynı dosyada takip edin.',
+        result:
+            'Teslimden sonuca kadar güncel ve değiştirilemez kurum işlem geçmişi.',
+        icon: Icons.mark_email_read_outlined,
+      );
+    }
+    return const _NextStepGuidanceData(
+      title: 'Kurum alındısı veya cevabı bekleniyor',
+      message:
+          'Dış teslim kaydedildi. Kurumdan gelen alındı, bilgi talebi veya durum güncellemesini bu dosyada izleyin.',
+      result:
+          'Kuruma teslim edildiği doğrulanmış ve cevap sürecine hazır bir dosya.',
+      icon: Icons.schedule_send_outlined,
+    );
+  }
+
+  if (currentPackage != null) {
+    final artifactsReady =
+        currentPackage.artifactStatus ==
+            CustomsSubmissionArtifactStatus.ready &&
+        currentPackage.pdfArtifact?.ready == true &&
+        currentPackage.jsonManifestArtifact?.ready == true;
+    if (artifactsReady) {
+      return const _NextStepGuidanceData(
+        title: 'Resmî dosyaları indirin veya dış teslimi kaydedin',
+        message:
+            'Değiştirilemez paket ile PDF ve JSON dosyaları hazır. Dosyaları güvenli biçimde indirin ya da insan tarafından yapılmış gerçek teslimi kaydedin.',
+        result:
+            'İndirilebilir resmî dosyalar veya izlenebilir dış teslim kaydı.',
+        icon: Icons.picture_as_pdf_outlined,
+      );
+    }
+    return const _NextStepGuidanceData(
+      title: 'Resmî dosyaları hazırlayın veya dış teslimi kaydedin',
+      message:
+          'Başvuru paketi hazır. PDF/JSON üretimini başlatabilirsiniz. Güvenli indirme dosyalarının hazır olması, insan tarafından yapılmış dış teslimi kaydetmek için zorunlu değildir.',
+      result:
+          'Güvenli resmî dosyalar veya aynı paket üzerinden doğrulanmış dış teslim kaydı.',
+      icon: Icons.inventory_2_outlined,
+    );
+  }
+
+  final missingControls = <String>[
+    if (submission.humanReviewReference == null) 'insan incelemesi',
+    if (submission.rightsHolderApprovalReference == null)
+      'hak sahibi veya temsilci onayı',
+    if (!submission.dataMinimizationConfirmed) 'veri minimizasyonu',
+    if (!submission.nonAccusatoryLanguageConfirmed) 'hukuken nötr dil',
+  ];
+  if (missingControls.isNotEmpty) {
+    return _NextStepGuidanceData(
+      title: 'Başvuru ve insan kontrol kapılarını tamamlayın',
+      message:
+          'Eksik kontroller: ${missingControls.join(', ')}. Bu kontroller tamamlanmadan değiştirilemez başvuru paketi oluşturulamaz.',
+      result:
+          'Paket hazırlama onayına taşınabilecek doğrulanmış başvuru içeriği.',
+      icon: Icons.fact_check_outlined,
+    );
+  }
+
+  if (submission.status != 'approved_for_package') {
+    return const _NextStepGuidanceData(
+      title: 'Başvuruyu paket hazırlama onayına taşıyın',
+      message:
+          'İnsan ve hak sahibi kontrolleri tamamlanmış görünüyor. Dosyanın yetkili insan incelemesiyle paket hazırlama onayına geçirilmesi gerekir.',
+      result:
+          'Değiştirilemez paket üretimine hazır ve onaylanmış resmî iletim dosyası.',
+      icon: Icons.approval_outlined,
+    );
+  }
+
+  return const _NextStepGuidanceData(
+    title: 'Başvuru paketini oluşturun',
+    message:
+        'Kontrol kapıları ve paket hazırlama onayı tamamlandı. En az bir belge veya delil kaydı ekleyerek değiştirilemez paketi oluşturun.',
+    result: 'Sürüm ve hash ile korunan kanonik bir resmî başvuru paketi.',
+    icon: Icons.inventory_2_outlined,
+  );
+}
+
+class _NextStepGuidancePanel extends StatelessWidget {
+  const _NextStepGuidancePanel({required this.data});
+
+  final _NextStepGuidanceData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('authority-next-step-guidance'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF6F4),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: MarkaKalkanTheme.teal.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(data.icon, color: MarkaKalkanTheme.teal),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Şimdi ne yapmalısınız?',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.teal,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  data.title,
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  data.message,
+                  style: const TextStyle(
+                    color: Color(0xFF44535E),
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  'Bu adımın çıktısı: ${data.result}',
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

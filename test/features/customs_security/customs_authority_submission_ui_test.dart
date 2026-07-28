@@ -13,6 +13,13 @@ import 'customs_authority_submission_test_fakes.dart';
 import 'customs_security_test_fakes.dart';
 
 void main() {
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
   Future<void> pumpArtifactDetail(
     WidgetTester tester,
     FakeCustomsAuthoritySubmissionRepository repository, {
@@ -268,12 +275,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     for (var attempt = 0; attempt < 2; attempt++) {
-      await tester.tap(find.byKey(const ValueKey('retry-materialize-package')));
-      await tester.pumpAndSettle();
-      await tester.tap(
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('retry-materialize-package')),
+      );
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('confirm-materialize-package')),
       );
-      await tester.pumpAndSettle();
     }
     expect(repository.materializationRequestIds, ['retry-0', 'retry-0']);
   });
@@ -754,11 +763,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Resmî Başvurular ve İhbarlar'), findsWidgets);
     expect(find.text('İnsan incelemesi kaydı bekleniyor'), findsOneWidget);
+    expect(find.text('Başvuruyu incele'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('customs-authority-submission-submission-1-action'),
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(FloatingActionButton), findsNothing);
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.byKey(const ValueKey('customs-authority-submission-submission-1')),
     );
-    await tester.pumpAndSettle();
     expect(openedId, 'submission-1');
 
     openedId = null;
@@ -770,10 +786,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Paket ve Resmî Teslim'), findsWidgets);
     expect(find.text('Başvuru paketi henüz oluşturulmadı'), findsOneWidget);
-    await tester.tap(
+    expect(find.text('Paket hazırlığını aç'), findsOneWidget);
+    expect(
+      find.text(
+        'Paket hazırlığı için önce başvuru ve insan kontrol kapılarını tamamlayın.',
+      ),
+      findsOneWidget,
+    );
+    await tapVisible(
+      tester,
       find.byKey(const ValueKey('customs-package-delivery-submission-1')),
     );
-    await tester.pumpAndSettle();
     expect(openedId, 'submission-1');
 
     openedId = null;
@@ -785,10 +808,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Kurum Cevapları ve Sonuçlar'), findsWidgets);
     expect(find.text('Kurum cevabı henüz kaydedilmedi'), findsOneWidget);
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.byKey(const ValueKey('customs-authority-response-submission-1')),
     );
-    await tester.pumpAndSettle();
     expect(openedId, isNull);
     expect(find.text('Önce kuruma dış teslim kaydedilmelidir.'), findsWidgets);
   });
@@ -818,18 +841,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(
           const ValueKey(
             'customs-operation-stage-action-downloadableOfficialFile',
           ),
         ),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(
+      expect(find.text('Resmî dosya durumunu aç'), findsOneWidget);
+      expect(
+        find.text('Önce başvuru paketi oluşturulmalıdır.'),
+        findsOneWidget,
+      );
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('customs-package-delivery-submission-1')),
       );
-      await tester.pumpAndSettle();
 
       expect(openedId, 'submission-1');
       expect(
@@ -870,14 +898,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(
           const ValueKey(
             'customs-operation-stage-action-downloadableOfficialFile',
           ),
         ),
       );
-      await tester.pumpAndSettle();
 
       final tabView = find.byType(TabBarView);
       await tester.ensureVisible(tabView);
@@ -903,10 +931,10 @@ void main() {
         isTrue,
       );
 
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('customs-authority-response-submission-1')),
       );
-      await tester.pumpAndSettle();
 
       expect(
         openedStage,
@@ -938,23 +966,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(
           const ValueKey(
             'customs-operation-stage-action-deliveryResponseOutcome',
           ),
         ),
       );
-      await tester.pumpAndSettle();
       expect(
         find.text('Önce kuruma dış teslim kaydedilmelidir.'),
         findsOneWidget,
       );
 
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('customs-authority-response-submission-1')),
       );
-      await tester.pumpAndSettle();
 
       expect(openedId, isNull);
       expect(
@@ -1060,6 +1088,81 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('detail guidance explains the missing human control gates', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository();
+    await tester.binding.setSurfaceSize(const Size(1100, 1100));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomsAuthoritySubmissionDetailPage(
+          submissionId: 'submission-1',
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('authority-next-step-guidance')),
+      findsOneWidget,
+    );
+    expect(find.text('Şimdi ne yapmalısınız?'), findsOneWidget);
+    expect(
+      find.text('Başvuru ve insan kontrol kapılarını tamamlayın'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('insan incelemesi, hak sahibi veya temsilci onayı'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Bu adımın çıktısı:'), findsOneWidget);
+  });
+
+  testWidgets(
+    'detail guidance keeps artifact preparation and delivery independent',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'package_generated',
+          includePackage: true,
+          includeScope: true,
+          artifactStatus: 'legacy_not_materialized',
+          humanReviewReference: 'review-1',
+          rightsHolderApprovalReference: 'approval-1',
+          dataMinimizationConfirmed: true,
+          nonAccusatoryLanguageConfirmed: true,
+        );
+      await tester.binding.setSurfaceSize(const Size(1100, 1500));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CustomsAuthoritySubmissionDetailPage(
+            submissionId: 'submission-1',
+            repository: repository,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Resmî dosyaları hazırlayın veya dış teslimi kaydedin'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Güvenli indirme dosyalarının hazır olması'),
+        findsWidgets,
+      );
+      expect(
+        find.byKey(const ValueKey('record-external-submission')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('active profile creates an FSMH submission draft', (
     tester,
