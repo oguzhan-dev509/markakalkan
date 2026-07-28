@@ -25,7 +25,7 @@ void main() {
     tester,
   ) async {
     final repository = FakeCustomsSecurityRepository();
-    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
@@ -579,6 +579,98 @@ void main() {
       find.textContaining('taslak müdahale dosyası oluşturuldu'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('operation stages switch the canonical official workspaces', (
+    tester,
+  ) async {
+    final repository = FakeCustomsSecurityRepository();
+    await tester.binding.setSurfaceSize(const Size(1100, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('customs-operation-stage-action-submissionContent'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('customs-authority-application-status-filter')),
+      findsOneWidget,
+    );
+
+    for (final stageName in [
+      'submissionPackage',
+      'downloadableOfficialFile',
+      'authorityDelivery',
+    ]) {
+      await tester.tap(
+        find.byKey(ValueKey('customs-operation-stage-action-$stageName')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('customs-package-delivery-status-filter')),
+        findsOneWidget,
+      );
+      final semantics = tester.widget<Semantics>(
+        find.byKey(ValueKey('customs-operation-stage-semantics-$stageName')),
+      );
+      expect(semantics.properties.button, isTrue);
+      expect(semantics.properties.selected, isTrue);
+    }
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'customs-operation-stage-action-deliveryResponseOutcome',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('customs-authority-response-status-filter')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('narrow operation stages remain horizontal and actionable', (
+    tester,
+  ) async {
+    final repository = FakeCustomsSecurityRepository();
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(home: CustomsSecurityHubPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    final horizontalList = find.byKey(
+      const ValueKey('customs-operation-information-horizontal-list'),
+    );
+    expect(horizontalList, findsOneWidget);
+    await tester.ensureVisible(horizontalList);
+    await tester.pumpAndSettle();
+    await tester.drag(horizontalList, const Offset(-900, 0));
+    await tester.pumpAndSettle();
+
+    final outcomeAction = find.byKey(
+      const ValueKey('customs-operation-stage-action-deliveryResponseOutcome'),
+    );
+    expect(outcomeAction, findsOneWidget);
+    await tester.tap(outcomeAction);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('customs-authority-response-status-filter')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('corporate hub opens KTG through injectable route opener', (

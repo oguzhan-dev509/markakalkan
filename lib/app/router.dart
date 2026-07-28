@@ -460,14 +460,18 @@ abstract final class AppRouter {
   static Future<void> openCustomsAuthoritySubmissionDetail(
     BuildContext context, {
     required String submissionId,
+    CustomsAuthoritySubmissionStage initialStage =
+        CustomsAuthoritySubmissionStage.submissionContent,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         settings: const RouteSettings(
           name: '/customs-security/authority-submission-detail',
         ),
-        builder: (_) =>
-            CustomsAuthoritySubmissionDetailPage(submissionId: submissionId),
+        builder: (_) => CustomsAuthoritySubmissionDetailPage(
+          submissionId: submissionId,
+          initialStage: initialStage,
+        ),
       ),
     );
   }

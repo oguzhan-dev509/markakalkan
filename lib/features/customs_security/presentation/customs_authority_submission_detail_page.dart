@@ -6,6 +6,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 typedef CustomsArtifactUrlOpener = Future<bool> Function(Uri uri);
 
+enum CustomsAuthoritySubmissionStage {
+  submissionContent,
+  submissionPackage,
+  downloadableOfficialFile,
+  authorityDelivery,
+  deliveryResponseOutcome,
+}
+
 class CustomsAuthoritySubmissionDetailPage extends StatefulWidget {
   const CustomsAuthoritySubmissionDetailPage({
     super.key,
@@ -13,12 +21,14 @@ class CustomsAuthoritySubmissionDetailPage extends StatefulWidget {
     this.repository,
     this.urlOpener,
     this.requestIdFactory,
+    this.initialStage = CustomsAuthoritySubmissionStage.submissionContent,
   });
 
   final String submissionId;
   final CustomsAuthoritySubmissionRepository? repository;
   final CustomsArtifactUrlOpener? urlOpener;
   final String Function()? requestIdFactory;
+  final CustomsAuthoritySubmissionStage initialStage;
 
   @override
   State<CustomsAuthoritySubmissionDetailPage> createState() =>
@@ -42,6 +52,11 @@ class _CustomsAuthoritySubmissionDetailPageState
   String? _externalSubmissionPackageId;
   int? _externalSubmissionPackageVersion;
   String? _externalSubmissionPackageHash;
+  final Map<CustomsAuthoritySubmissionStage, GlobalKey> _stageKeys = {
+    for (final stage in CustomsAuthoritySubmissionStage.values)
+      stage: GlobalKey(debugLabel: 'customs-authority-stage-${stage.name}'),
+  };
+  bool _initialStageApplied = false;
 
   @override
   void initState() {
@@ -67,6 +82,7 @@ class _CustomsAuthoritySubmissionDetailPageState
         _detail = detail;
         _loading = false;
       });
+      _scheduleInitialStageScroll();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -74,6 +90,22 @@ class _CustomsAuthoritySubmissionDetailPageState
         _error = customsAuthoritySubmissionErrorMessage(error);
       });
     }
+  }
+
+  void _scheduleInitialStageScroll() {
+    if (_initialStageApplied) return;
+    _initialStageApplied = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final targetContext = _stageKeys[widget.initialStage]?.currentContext;
+      if (targetContext == null) return;
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: 0.05,
+      );
+    });
   }
 
   Future<bool> _defaultUrlOpener(Uri uri) =>
@@ -441,6 +473,7 @@ class _CustomsAuthoritySubmissionDetailPageState
               onRecordExternalSubmission: () => _recordExternalSubmission(),
               onRetryExternalSubmission: () =>
                   _recordExternalSubmission(retry: true),
+              stageKeys: _stageKeys,
               onMaterialize: _materialize,
               onDownload: _download,
             ),
@@ -460,6 +493,7 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
     required this.onGeneratePackage,
     required this.onRecordExternalSubmission,
     required this.onRetryExternalSubmission,
+    required this.stageKeys,
     required this.onMaterialize,
     required this.onDownload,
   });
@@ -474,6 +508,7 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
   final VoidCallback onGeneratePackage;
   final VoidCallback onRecordExternalSubmission;
   final VoidCallback onRetryExternalSubmission;
+  final Map<CustomsAuthoritySubmissionStage, GlobalKey> stageKeys;
   final ValueChanged<CustomsSubmissionPackage> onMaterialize;
   final void Function(
     CustomsSubmissionPackage package,
@@ -485,196 +520,260 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
   Widget build(BuildContext context) {
     final submission = detail.submission;
     final currentPackage = _currentSubmissionPackage(detail);
-    return ListView(
+    return SingleChildScrollView(
       key: const ValueKey('customs-authority-submission-detail'),
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
-      children: [
-        _AuthorityHeader(submission: submission),
-        const SizedBox(height: 16),
-        const _LegalNotice(),
-        const SizedBox(height: 16),
-        if (currentPackage == null)
-          _PackageGenerationSection(
-            submission: submission,
-            scopeAvailable: detail.artifactScope != null,
-            generating: generatingPackage,
-            onGenerate: onGeneratePackage,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AuthorityStageAnchor(
+            key: stageKeys[CustomsAuthoritySubmissionStage.submissionContent],
+            stage: CustomsAuthoritySubmissionStage.submissionContent,
           ),
-        _AuthoritySection(
-          title: 'İletim kimliği ve yönlendirme',
-          children: [
-            _AuthorityRow(
-              label: 'İletim türü',
-              value: customsAuthoritySubmissionTypeLabel(
-                submission.submissionType,
-              ),
+          _AuthorityHeader(submission: submission),
+          const SizedBox(height: 16),
+          const _LegalNotice(),
+          const SizedBox(height: 16),
+          if (currentPackage == null) ...[
+            _AuthorityStageAnchor(
+              key: stageKeys[CustomsAuthoritySubmissionStage.submissionPackage],
+              stage: CustomsAuthoritySubmissionStage.submissionPackage,
             ),
-            _AuthorityRow(
-              label: 'Hedef kurum',
-              value: customsAuthorityTargetLabel(submission.targetAuthority),
-            ),
-            _AuthorityRow(
-              label: 'Hedef birim',
-              value: submission.targetUnit ?? 'Belirtilmedi',
-            ),
-            _AuthorityRow(
-              label: 'İletim kanalı',
-              value: submission.channelType == null
-                  ? 'Henüz seçilmedi'
-                  : customsAuthorityChannelLabel(submission.channelType!),
-            ),
-            _AuthorityRow(
-              label: 'Olay / kaynak referansı',
-              value: submission.incidentReference,
-            ),
-            _AuthorityRow(
-              label: 'Koruma profili',
-              value: submission.protectionProfileId ?? 'Bağlı değil',
-            ),
-            _AuthorityRow(
-              label: 'Sınır müdahalesi',
-              value: submission.interventionId ?? 'Bağlı değil',
+            _PackageGenerationSection(
+              submission: submission,
+              scopeAvailable: detail.artifactScope != null,
+              generating: generatingPackage,
+              onGenerate: onGeneratePackage,
             ),
           ],
-        ),
-        _AuthoritySection(
-          title: 'Kuruma sunulacak özet',
-          children: [
-            Text(
-              submission.authoritySummary,
-              style: const TextStyle(height: 1.5),
-            ),
-          ],
-        ),
-        _AuthoritySection(
-          title: 'İnsan kontrolü ve hak sahibi kapıları',
-          children: [
-            _GateRow(
-              label: 'İnsan incelemesi',
-              passed: submission.humanReviewReference != null,
-              detail: submission.humanReviewReference ?? 'Henüz kaydedilmedi',
-            ),
-            _GateRow(
-              label: 'Hak sahibi / temsilci onayı',
-              passed: submission.rightsHolderApprovalReference != null,
-              detail:
-                  submission.rightsHolderApprovalReference ??
-                  'Henüz kaydedilmedi',
-            ),
-            _GateRow(
-              label: 'Veri minimizasyonu',
-              passed: submission.dataMinimizationConfirmed,
-              detail: submission.dataMinimizationConfirmed
-                  ? 'Kontrol edildi'
-                  : 'Kontrol bekleniyor',
-            ),
-            _GateRow(
-              label: 'Hukuken nötr dil',
-              passed: submission.nonAccusatoryLanguageConfirmed,
-              detail: submission.nonAccusatoryLanguageConfirmed
-                  ? 'Kontrol edildi'
-                  : 'Kontrol bekleniyor',
-            ),
-          ],
-        ),
-        _AuthoritySection(
-          title: 'Paket ve resmî teslim durumu',
-          children: [
-            _AuthorityRow(
-              label: 'Paket sayısı',
-              value: '${submission.packageCount}',
-            ),
-            _AuthorityRow(
-              label: 'Güncel paket sürümü',
-              value: submission.currentPackageVersion == 0
-                  ? 'Henüz yok'
-                  : 'v${submission.currentPackageVersion}',
-            ),
-            _AuthorityRow(
-              label: 'Güncel paket hash’i',
-              value: submission.currentPackageHash ?? 'Henüz yok',
-              monospace: true,
-            ),
-            _AuthorityRow(
-              label: 'Resmî başvuru / ihbar numarası',
-              value: submission.officialReferenceNumber ?? 'Henüz kaydedilmedi',
-            ),
-            if (submission.submittedAt != null)
+          _AuthoritySection(
+            title: 'İletim kimliği ve yönlendirme',
+            children: [
               _AuthorityRow(
-                label: 'Kuruma dış teslim zamanı',
-                value: _formatDateTime(submission.submittedAt!),
+                label: 'İletim türü',
+                value: customsAuthoritySubmissionTypeLabel(
+                  submission.submissionType,
+                ),
               ),
-            if (submission.externalSubmissionStatement != null)
               _AuthorityRow(
-                label: 'Dış teslim beyanı',
-                value: submission.externalSubmissionStatement!,
+                label: 'Hedef kurum',
+                value: customsAuthorityTargetLabel(submission.targetAuthority),
               ),
-            _AuthorityRow(
-              label: 'Paket bütünlüğü',
-              value: currentPackage == null
-                  ? 'Paket hazırlanmadı'
-                  : '${currentPackage.aggregateHashAlgorithm} · ${currentPackage.aggregateHash}',
-              monospace: currentPackage != null,
+              _AuthorityRow(
+                label: 'Hedef birim',
+                value: submission.targetUnit ?? 'Belirtilmedi',
+              ),
+              _AuthorityRow(
+                label: 'İletim kanalı',
+                value: submission.channelType == null
+                    ? 'Henüz seçilmedi'
+                    : customsAuthorityChannelLabel(submission.channelType!),
+              ),
+              _AuthorityRow(
+                label: 'Olay / kaynak referansı',
+                value: submission.incidentReference,
+              ),
+              _AuthorityRow(
+                label: 'Koruma profili',
+                value: submission.protectionProfileId ?? 'Bağlı değil',
+              ),
+              _AuthorityRow(
+                label: 'Sınır müdahalesi',
+                value: submission.interventionId ?? 'Bağlı değil',
+              ),
+            ],
+          ),
+          _AuthoritySection(
+            title: 'Kuruma sunulacak özet',
+            children: [
+              Text(
+                submission.authoritySummary,
+                style: const TextStyle(height: 1.5),
+              ),
+            ],
+          ),
+          _AuthoritySection(
+            title: 'İnsan kontrolü ve hak sahibi kapıları',
+            children: [
+              _GateRow(
+                label: 'İnsan incelemesi',
+                passed: submission.humanReviewReference != null,
+                detail: submission.humanReviewReference ?? 'Henüz kaydedilmedi',
+              ),
+              _GateRow(
+                label: 'Hak sahibi / temsilci onayı',
+                passed: submission.rightsHolderApprovalReference != null,
+                detail:
+                    submission.rightsHolderApprovalReference ??
+                    'Henüz kaydedilmedi',
+              ),
+              _GateRow(
+                label: 'Veri minimizasyonu',
+                passed: submission.dataMinimizationConfirmed,
+                detail: submission.dataMinimizationConfirmed
+                    ? 'Kontrol edildi'
+                    : 'Kontrol bekleniyor',
+              ),
+              _GateRow(
+                label: 'Hukuken nötr dil',
+                passed: submission.nonAccusatoryLanguageConfirmed,
+                detail: submission.nonAccusatoryLanguageConfirmed
+                    ? 'Kontrol edildi'
+                    : 'Kontrol bekleniyor',
+              ),
+            ],
+          ),
+          if (currentPackage != null)
+            _AuthorityStageAnchor(
+              key: stageKeys[CustomsAuthoritySubmissionStage.submissionPackage],
+              stage: CustomsAuthoritySubmissionStage.submissionPackage,
             ),
-            _AuthorityRow(
-              label: 'Detay bütünlüğü',
-              value: detail.integrityStatus,
+          if (currentPackage == null)
+            _AuthorityStageAnchor(
+              key:
+                  stageKeys[CustomsAuthoritySubmissionStage
+                      .downloadableOfficialFile],
+              stage: CustomsAuthoritySubmissionStage.downloadableOfficialFile,
+            ),
+          if (currentPackage == null ||
+              submission.status != 'package_generated')
+            _AuthorityStageAnchor(
+              key: stageKeys[CustomsAuthoritySubmissionStage.authorityDelivery],
+              stage: CustomsAuthoritySubmissionStage.authorityDelivery,
+            ),
+          _AuthoritySection(
+            title: 'Paket ve resmî teslim durumu',
+            children: [
+              _AuthorityRow(
+                label: 'Paket sayısı',
+                value: '${submission.packageCount}',
+              ),
+              _AuthorityRow(
+                label: 'Güncel paket sürümü',
+                value: submission.currentPackageVersion == 0
+                    ? 'Henüz yok'
+                    : 'v${submission.currentPackageVersion}',
+              ),
+              _AuthorityRow(
+                label: 'Güncel paket hash’i',
+                value: submission.currentPackageHash ?? 'Henüz yok',
+                monospace: true,
+              ),
+              _AuthorityRow(
+                label: 'Resmî başvuru / ihbar numarası',
+                value:
+                    submission.officialReferenceNumber ?? 'Henüz kaydedilmedi',
+              ),
+              if (submission.submittedAt != null)
+                _AuthorityRow(
+                  label: 'Kuruma dış teslim zamanı',
+                  value: _formatDateTime(submission.submittedAt!),
+                ),
+              if (submission.externalSubmissionStatement != null)
+                _AuthorityRow(
+                  label: 'Dış teslim beyanı',
+                  value: submission.externalSubmissionStatement!,
+                ),
+              _AuthorityRow(
+                label: 'Paket bütünlüğü',
+                value: currentPackage == null
+                    ? 'Paket hazırlanmadı'
+                    : '${currentPackage.aggregateHashAlgorithm} · ${currentPackage.aggregateHash}',
+                monospace: currentPackage != null,
+              ),
+              _AuthorityRow(
+                label: 'Detay bütünlüğü',
+                value: detail.integrityStatus,
+              ),
+            ],
+          ),
+          if (currentPackage != null) ...[
+            _AuthorityStageAnchor(
+              key:
+                  stageKeys[CustomsAuthoritySubmissionStage
+                      .downloadableOfficialFile],
+              stage: CustomsAuthoritySubmissionStage.downloadableOfficialFile,
+            ),
+            _ArtifactSection(
+              package: currentPackage,
+              scopeAvailable: detail.artifactScope != null,
+              materializing: materializing,
+              downloadingPdf: downloadingPdf,
+              downloadingManifest: downloadingManifest,
+              onMaterialize: () => onMaterialize(currentPackage),
+              onDownloadPdf: () =>
+                  onDownload(currentPackage, CustomsArtifactType.pdf),
+              onDownloadManifest: () =>
+                  onDownload(currentPackage, CustomsArtifactType.jsonManifest),
             ),
           ],
-        ),
-        if (currentPackage != null)
-          _ArtifactSection(
-            package: currentPackage,
-            scopeAvailable: detail.artifactScope != null,
-            materializing: materializing,
-            downloadingPdf: downloadingPdf,
-            downloadingManifest: downloadingManifest,
-            onMaterialize: () => onMaterialize(currentPackage),
-            onDownloadPdf: () =>
-                onDownload(currentPackage, CustomsArtifactType.pdf),
-            onDownloadManifest: () =>
-                onDownload(currentPackage, CustomsArtifactType.jsonManifest),
+          if (currentPackage != null &&
+              submission.status == 'package_generated') ...[
+            _AuthorityStageAnchor(
+              key: stageKeys[CustomsAuthoritySubmissionStage.authorityDelivery],
+              stage: CustomsAuthoritySubmissionStage.authorityDelivery,
+            ),
+            _ExternalSubmissionSection(
+              detail: detail,
+              package: currentPackage,
+              recording: recordingExternalSubmission,
+              retryAvailable: externalSubmissionRetryAvailable,
+              onRecord: onRecordExternalSubmission,
+              onRetry: onRetryExternalSubmission,
+            ),
+          ],
+          _AuthorityStageAnchor(
+            key:
+                stageKeys[CustomsAuthoritySubmissionStage
+                    .deliveryResponseOutcome],
+            stage: CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
           ),
-        if (currentPackage != null && submission.status == 'package_generated')
-          _ExternalSubmissionSection(
-            detail: detail,
-            package: currentPackage,
-            recording: recordingExternalSubmission,
-            retryAvailable: externalSubmissionRetryAvailable,
-            onRecord: onRecordExternalSubmission,
-            onRetry: onRetryExternalSubmission,
+          _AuthoritySection(
+            title: 'Kurum yanıtları',
+            children: detail.responses.isEmpty
+                ? const [Text('Henüz kurum yanıtı veya teslim kaydı yok.')]
+                : detail.responses
+                      .map(
+                        (response) => _TimelineCard(
+                          title: response.responseType,
+                          subtitle: response.summary,
+                          meta:
+                              '${_formatDateTime(response.receivedAt)} · ${response.outcomeCode ?? 'Sonuç bekleniyor'}',
+                        ),
+                      )
+                      .toList(),
           ),
-        _AuthoritySection(
-          title: 'Kurum yanıtları',
-          children: detail.responses.isEmpty
-              ? const [Text('Henüz kurum yanıtı veya teslim kaydı yok.')]
-              : detail.responses
-                    .map(
-                      (response) => _TimelineCard(
-                        title: response.responseType,
-                        subtitle: response.summary,
-                        meta:
-                            '${_formatDateTime(response.receivedAt)} · ${response.outcomeCode ?? 'Sonuç bekleniyor'}',
-                      ),
-                    )
-                    .toList(),
-        ),
-        _AuthoritySection(
-          title: 'Değiştirilemez olay zaman çizelgesi',
-          children: detail.events.isEmpty
-              ? const [Text('Henüz olay kaydı yok.')]
-              : detail.events
-                    .map(
-                      (event) => _TimelineCard(
-                        title: '#${event.sequence} · ${event.eventType}',
-                        subtitle: event.summary,
-                        meta:
-                            '${event.actorLabel} · ${_formatDateTime(event.recordedAt)}',
-                      ),
-                    )
-                    .toList(),
-        ),
-      ],
+          _AuthoritySection(
+            title: 'Değiştirilemez olay zaman çizelgesi',
+            children: detail.events.isEmpty
+                ? const [Text('Henüz olay kaydı yok.')]
+                : detail.events
+                      .map(
+                        (event) => _TimelineCard(
+                          title: '#${event.sequence} · ${event.eventType}',
+                          subtitle: event.summary,
+                          meta:
+                              '${event.actorLabel} · ${_formatDateTime(event.recordedAt)}',
+                        ),
+                      )
+                      .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthorityStageAnchor extends StatelessWidget {
+  const _AuthorityStageAnchor({super.key, required this.stage});
+
+  final CustomsAuthoritySubmissionStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 1,
+      child: SizedBox(key: ValueKey('authority-stage-anchor-${stage.name}')),
     );
   }
 }

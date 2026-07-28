@@ -5,6 +5,7 @@ import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/customs_security/data/customs_authority_submission_repository.dart';
 import 'package:markakalkan/features/customs_security/data/customs_security_repository.dart';
+import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_detail_page.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_labels.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_security_labels.dart';
 
@@ -13,7 +14,11 @@ typedef CustomsProfileDetailOpener =
 typedef CustomsInterventionDetailOpener =
     Future<void> Function(BuildContext context, String interventionId);
 typedef CustomsAuthoritySubmissionDetailOpener =
-    Future<void> Function(BuildContext context, String submissionId);
+    Future<void> Function(
+      BuildContext context,
+      String submissionId,
+      CustomsAuthoritySubmissionStage initialStage,
+    );
 
 class CustomsSecurityHubPage extends StatefulWidget {
   const CustomsSecurityHubPage({
@@ -51,6 +56,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
   List<CustomsProtectionProfile> _profiles = const [];
   List<CustomsBorderIntervention> _interventions = const [];
   List<CustomsAuthoritySubmission> _submissions = const [];
+  CustomsAuthoritySubmissionStage? _selectedOperationStage;
 
   @override
   void initState() {
@@ -62,13 +68,28 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
             ? CallableCustomsAuthoritySubmissionRepository()
             : const EmptyCustomsAuthoritySubmissionRepository());
     _tabController = TabController(length: 5, vsync: this);
+    _tabController.addListener(_syncOperationStageWithTabController);
     _load();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_syncOperationStageWithTabController);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _syncOperationStageWithTabController() {
+    if (!mounted) return;
+    final tabIndex = _tabController.index;
+    final selectedStage = _selectedOperationStage;
+    final selectedStageMatchesTab =
+        selectedStage != null && _tabIndexForStage(selectedStage) == tabIndex;
+    final nextStage = selectedStageMatchesTab
+        ? selectedStage
+        : _stageForTopTab(tabIndex);
+    if (nextStage == selectedStage) return;
+    setState(() => _selectedOperationStage = nextStage);
   }
 
   Future<void> _load() async {
@@ -131,16 +152,72 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
   }
 
   Future<void> _openSubmission(CustomsAuthoritySubmission submission) async {
+    final stage =
+        _selectedOperationStage ??
+        _stageForTopTab(_tabController.index) ??
+        CustomsAuthoritySubmissionStage.submissionContent;
+    if (stage == CustomsAuthoritySubmissionStage.deliveryResponseOutcome &&
+        submission.submittedAt == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Önce kuruma dış teslim kaydedilmelidir.'),
+          ),
+        );
+      return;
+    }
+
     final opener = widget.submissionDetailOpener;
     if (opener != null) {
-      await opener(context, submission.submissionId);
+      await opener(context, submission.submissionId, stage);
     } else {
       await AppRouter.openCustomsAuthoritySubmissionDetail(
         context,
         submissionId: submission.submissionId,
+        initialStage: stage,
       );
     }
     if (mounted) await _load();
+  }
+
+  int _tabIndexForStage(CustomsAuthoritySubmissionStage stage) {
+    switch (stage) {
+      case CustomsAuthoritySubmissionStage.submissionContent:
+        return 2;
+      case CustomsAuthoritySubmissionStage.submissionPackage:
+      case CustomsAuthoritySubmissionStage.downloadableOfficialFile:
+      case CustomsAuthoritySubmissionStage.authorityDelivery:
+        return 3;
+      case CustomsAuthoritySubmissionStage.deliveryResponseOutcome:
+        return 4;
+    }
+  }
+
+  CustomsAuthoritySubmissionStage? _stageForTopTab(int index) =>
+      switch (index) {
+        2 => CustomsAuthoritySubmissionStage.submissionContent,
+        3 => CustomsAuthoritySubmissionStage.submissionPackage,
+        4 => CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
+        _ => null,
+      };
+
+  Future<void> _selectOperationStage(
+    CustomsAuthoritySubmissionStage stage,
+  ) async {
+    final hadStatusFilter = _submissionStatus != null;
+    setState(() {
+      _selectedOperationStage = stage;
+      _submissionStatus = null;
+    });
+    _tabController.animateTo(_tabIndexForStage(stage));
+    if (hadStatusFilter) await _load();
+  }
+
+  void _handleTopTabTap(int index) {
+    final stage = _stageForTopTab(index);
+    if (stage == null || stage == _selectedOperationStage) return;
+    setState(() => _selectedOperationStage = stage);
   }
 
   Future<void> _createProfile() async {
@@ -230,6 +307,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
               return TabBar(
                 key: const ValueKey('customs-security-tab-bar'),
                 controller: _tabController,
+                onTap: _handleTopTabTap,
                 isScrollable: scrollable,
                 tabAlignment: scrollable
                     ? TabAlignment.start
@@ -314,7 +392,10 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
             child: Column(
               children: [
                 const _CustomsHero(),
-                const _CustomsOperationInformationBand(),
+                _CustomsOperationInformationBand(
+                  selectedStage: _selectedOperationStage,
+                  onStageSelected: _selectOperationStage,
+                ),
                 if (compact && !_loading)
                   AnimatedBuilder(
                     animation: _tabController,
@@ -387,6 +468,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                             ),
                             _AuthoritySubmissionWorkspace(
                               kind: _AuthorityWorkspaceKind.applications,
+                              selectedStage: _selectedOperationStage,
                               submissions: _submissions,
                               selectedStatus: _submissionStatus,
                               onStatusChanged: (value) {
@@ -397,6 +479,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                             ),
                             _AuthoritySubmissionWorkspace(
                               kind: _AuthorityWorkspaceKind.packageDelivery,
+                              selectedStage: _selectedOperationStage,
                               submissions: _submissions,
                               selectedStatus: _submissionStatus,
                               onStatusChanged: (value) {
@@ -407,6 +490,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                             ),
                             _AuthoritySubmissionWorkspace(
                               kind: _AuthorityWorkspaceKind.responseOutcome,
+                              selectedStage: _selectedOperationStage,
                               submissions: _submissions,
                               selectedStatus: _submissionStatus,
                               onStatusChanged: (value) {
@@ -500,21 +584,60 @@ class _LegalLanguageNotice extends StatelessWidget {
 }
 
 class _CustomsOperationInformationBand extends StatelessWidget {
-  const _CustomsOperationInformationBand();
+  const _CustomsOperationInformationBand({
+    required this.selectedStage,
+    required this.onStageSelected,
+  });
 
-  static const _stages = <({IconData icon, String label})>[
-    (icon: Icons.description_outlined, label: 'Başvuru içeriği'),
-    (icon: Icons.inventory_2_outlined, label: 'Başvuru paketi'),
-    (icon: Icons.picture_as_pdf_outlined, label: 'İndirilebilir resmî dosya'),
-    (icon: Icons.send_outlined, label: 'Kuruma iletim'),
-    (icon: Icons.fact_check_outlined, label: 'Teslim, cevap ve sonuç'),
-  ];
+  final CustomsAuthoritySubmissionStage? selectedStage;
+  final ValueChanged<CustomsAuthoritySubmissionStage> onStageSelected;
+
+  static const _stages =
+      <
+        ({
+          CustomsAuthoritySubmissionStage stage,
+          IconData icon,
+          String label,
+          String hint,
+        })
+      >[
+        (
+          stage: CustomsAuthoritySubmissionStage.submissionContent,
+          icon: Icons.description_outlined,
+          label: 'Başvuru içeriği',
+          hint: 'Resmî başvuru veya ihbar dosyasını seçin.',
+        ),
+        (
+          stage: CustomsAuthoritySubmissionStage.submissionPackage,
+          icon: Icons.inventory_2_outlined,
+          label: 'Başvuru paketi',
+          hint: 'Paket hazırlama ve paket durumuna gidin.',
+        ),
+        (
+          stage: CustomsAuthoritySubmissionStage.downloadableOfficialFile,
+          icon: Icons.picture_as_pdf_outlined,
+          label: 'İndirilebilir resmî dosya',
+          hint: 'PDF ve JSON güvenli dosya alanına gidin.',
+        ),
+        (
+          stage: CustomsAuthoritySubmissionStage.authorityDelivery,
+          icon: Icons.send_outlined,
+          label: 'Kuruma iletim',
+          hint: 'Kuruma dış teslim kaydı alanına gidin.',
+        ),
+        (
+          stage: CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
+          icon: Icons.fact_check_outlined,
+          label: 'Teslim, cevap ve sonuç',
+          hint: 'Dış teslimden sonraki kurum sürecine gidin.',
+        ),
+      ];
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
-      label: 'Gümrük operasyon bilgi bandı',
+      label: 'Gümrük operasyon aşama navigasyonu',
       child: Container(
         key: const ValueKey('customs-operation-information-band'),
         width: double.infinity,
@@ -558,7 +681,7 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                       ),
                       SizedBox(height: 3),
                       Text(
-                        'Başvurudan kurum cevabı ve nihai sonuca kadar beş aşamayı aynı operasyon zincirinde izleyin.',
+                        'Bir aşama seçin; ardından aynı kanonik resmî iletim dosyasını listeden açın.',
                         style: TextStyle(
                           color: Color(0xFF687580),
                           fontSize: 13,
@@ -583,8 +706,12 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                         Expanded(
                           child: _CustomsOperationInformationStage(
                             index: index + 1,
+                            stage: _stages[index].stage,
                             icon: _stages[index].icon,
                             label: _stages[index].label,
+                            hint: _stages[index].hint,
+                            selected: selectedStage == _stages[index].stage,
+                            onTap: () => onStageSelected(_stages[index].stage),
                           ),
                         ),
                         if (index != _stages.length - 1)
@@ -595,7 +722,7 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                 }
 
                 return SizedBox(
-                  height: 64,
+                  height: 72,
                   child: ListView.separated(
                     key: const ValueKey(
                       'customs-operation-information-horizontal-list',
@@ -604,11 +731,15 @@ class _CustomsOperationInformationBand extends StatelessWidget {
                     itemCount: _stages.length,
                     separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (context, index) => SizedBox(
-                      width: 210,
+                      width: 220,
                       child: _CustomsOperationInformationStage(
                         index: index + 1,
+                        stage: _stages[index].stage,
                         icon: _stages[index].icon,
                         label: _stages[index].label,
+                        hint: _stages[index].hint,
+                        selected: selectedStage == _stages[index].stage,
+                        onTap: () => onStageSelected(_stages[index].stage),
                       ),
                     ),
                   ),
@@ -625,61 +756,94 @@ class _CustomsOperationInformationBand extends StatelessWidget {
 class _CustomsOperationInformationStage extends StatelessWidget {
   const _CustomsOperationInformationStage({
     required this.index,
+    required this.stage,
     required this.icon,
     required this.label,
+    required this.hint,
+    required this.selected,
+    required this.onTap,
   });
 
   final int index;
+  final CustomsAuthoritySubmissionStage stage;
   final IconData icon;
   final String label;
+  final String hint;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      key: ValueKey('customs-operation-information-stage-$index'),
-      constraints: const BoxConstraints(minHeight: 64),
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F8FA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E9ED)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: MarkaKalkanTheme.teal,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '$index',
-              style: const TextStyle(
-                color: MarkaKalkanTheme.navy,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
+    return Semantics(
+      key: ValueKey('customs-operation-stage-semantics-${stage.name}'),
+      button: true,
+      selected: selected,
+      label: '$index. $label',
+      hint: hint,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('customs-operation-stage-action-${stage.name}'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            key: ValueKey('customs-operation-information-stage-$index'),
+            duration: const Duration(milliseconds: 180),
+            constraints: const BoxConstraints(minHeight: 64),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFFE6F7F4)
+                  : const Color(0xFFF5F8FA),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected
+                    ? MarkaKalkanTheme.teal
+                    : const Color(0xFFE2E9ED),
+                width: selected ? 1.5 : 1,
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Icon(icon, color: MarkaKalkanTheme.navy, size: 18),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MarkaKalkanTheme.navy,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                height: 1.2,
-              ),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? MarkaKalkanTheme.navy
+                        : MarkaKalkanTheme.teal,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$index',
+                    style: TextStyle(
+                      color: selected ? Colors.white : MarkaKalkanTheme.navy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(icon, color: MarkaKalkanTheme.navy, size: 18),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: MarkaKalkanTheme.navy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -833,6 +997,7 @@ enum _AuthorityWorkspaceKind { applications, packageDelivery, responseOutcome }
 class _AuthoritySubmissionWorkspace extends StatelessWidget {
   const _AuthoritySubmissionWorkspace({
     required this.kind,
+    required this.selectedStage,
     required this.submissions,
     required this.selectedStatus,
     required this.onStatusChanged,
@@ -840,6 +1005,7 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
   });
 
   final _AuthorityWorkspaceKind kind;
+  final CustomsAuthoritySubmissionStage? selectedStage;
   final List<CustomsAuthoritySubmission> submissions;
   final String? selectedStatus;
   final ValueChanged<String?> onStatusChanged;
@@ -987,6 +1153,13 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
                   statusCode: submission.status,
                   statusColorResolver: customsAuthoritySubmissionStatusColor,
                   lines: _lines(submission),
+                  warning:
+                      selectedStage ==
+                              CustomsAuthoritySubmissionStage
+                                  .deliveryResponseOutcome &&
+                          submission.submittedAt == null
+                      ? 'Önce kuruma dış teslim kaydedilmelidir.'
+                      : null,
                   onTap: () => onOpen(submission),
                 );
               },

@@ -225,9 +225,17 @@ void main() {
     expect(find.text('Manifest İndir'), findsOneWidget);
     expect(find.textContaining('https://'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('download-package-pdf')));
+    final pdfButton = find.byKey(const ValueKey('download-package-pdf'));
+    final manifestButton = find.byKey(
+      const ValueKey('download-package-manifest'),
+    );
+    await tester.ensureVisible(pdfButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('download-package-manifest')));
+    await tester.tap(pdfButton);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(manifestButton);
+    await tester.pumpAndSettle();
+    await tester.tap(manifestButton);
     await tester.pumpAndSettle();
     expect(repository.pdfAuthorizationCalls, 1);
     expect(repository.manifestAuthorizationCalls, 1);
@@ -467,7 +475,13 @@ void main() {
         'mask',
       );
       expect(repository.detailCalls, 2);
-      expect(find.text('Başvuru paketi hazırlandı'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text('Başvuru paketi hazırlandı'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Resmî Paket ve Güvenli İndirme'), findsOneWidget);
     },
   );
@@ -724,7 +738,7 @@ void main() {
         home: CustomsSecurityHubPage(
           repository: repository,
           authorityRepository: authorityRepository,
-          submissionDetailOpener: (context, submissionId) async {
+          submissionDetailOpener: (context, submissionId, initialStage) async {
             openedId = submissionId;
           },
         ),
@@ -775,7 +789,276 @@ void main() {
       find.byKey(const ValueKey('customs-authority-response-submission-1')),
     );
     await tester.pumpAndSettle();
-    expect(openedId, 'submission-1');
+    expect(openedId, isNull);
+    expect(find.text('Önce kuruma dış teslim kaydedilmelidir.'), findsWidgets);
+  });
+
+  testWidgets(
+    'operation stage selection opens the canonical submission at artifact target',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository();
+      final authorityRepository = FakeCustomsAuthoritySubmissionRepository();
+      String? openedId;
+      CustomsAuthoritySubmissionStage? openedStage;
+
+      await tester.binding.setSurfaceSize(const Size(1100, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CustomsSecurityHubPage(
+            repository: repository,
+            authorityRepository: authorityRepository,
+            submissionDetailOpener:
+                (context, submissionId, initialStage) async {
+                  openedId = submissionId;
+                  openedStage = initialStage;
+                },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'customs-operation-stage-action-downloadableOfficialFile',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('customs-package-delivery-submission-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(openedId, 'submission-1');
+      expect(
+        openedStage,
+        CustomsAuthoritySubmissionStage.downloadableOfficialFile,
+      );
+    },
+  );
+
+  testWidgets(
+    'workspace swipe keeps the operation stage aligned with the visible tab',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository();
+      final authorityRepository = FakeCustomsAuthoritySubmissionRepository()
+        ..submissions = [
+          sampleAuthoritySubmissionDetail(
+            status: 'submitted_externally',
+            includePackage: true,
+            includeScope: true,
+            submittedAt: '2026-07-28T12:00:00.000Z',
+          ).submission,
+        ];
+      CustomsAuthoritySubmissionStage? openedStage;
+
+      await tester.binding.setSurfaceSize(const Size(1100, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CustomsSecurityHubPage(
+            repository: repository,
+            authorityRepository: authorityRepository,
+            submissionDetailOpener:
+                (context, submissionId, initialStage) async {
+                  openedStage = initialStage;
+                },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'customs-operation-stage-action-downloadableOfficialFile',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final tabView = find.byType(TabBarView);
+      await tester.ensureVisible(tabView);
+      await tester.pumpAndSettle();
+      await tester.drag(tabView, const Offset(-900, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('customs-authority-response-status-filter')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Semantics>(
+              find.byKey(
+                const ValueKey(
+                  'customs-operation-stage-semantics-deliveryResponseOutcome',
+                ),
+              ),
+            )
+            .properties
+            .selected,
+        isTrue,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('customs-authority-response-submission-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        openedStage,
+        CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
+      );
+    },
+  );
+
+  testWidgets(
+    'outcome stage stays locked until external delivery is recorded',
+    (tester) async {
+      final repository = FakeCustomsSecurityRepository();
+      final authorityRepository = FakeCustomsAuthoritySubmissionRepository();
+      String? openedId;
+
+      await tester.binding.setSurfaceSize(const Size(1100, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CustomsSecurityHubPage(
+            repository: repository,
+            authorityRepository: authorityRepository,
+            submissionDetailOpener:
+                (context, submissionId, initialStage) async {
+                  openedId = submissionId;
+                },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'customs-operation-stage-action-deliveryResponseOutcome',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Önce kuruma dış teslim kaydedilmelidir.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('customs-authority-response-submission-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(openedId, isNull);
+      expect(
+        find.text('Önce kuruma dış teslim kaydedilmelidir.'),
+        findsWidgets,
+      );
+    },
+  );
+
+  testWidgets('detail page scrolls to the requested operation stage', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository();
+    await tester.binding.setSurfaceSize(const Size(1100, 650));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomsAuthoritySubmissionDetailPage(
+          submissionId: 'submission-1',
+          repository: repository,
+          initialStage: CustomsAuthoritySubmissionStage.deliveryResponseOutcome,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final anchor = find.byKey(
+      const ValueKey('authority-stage-anchor-deliveryResponseOutcome'),
+    );
+    expect(anchor, findsOneWidget);
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).first,
+    );
+    expect(scrollable.position.pixels, greaterThan(0));
+    expect(tester.getTopLeft(anchor).dy, inInclusiveRange(0, 650));
+  });
+
+  testWidgets(
+    'authority delivery target remains available before artifact materialization',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'package_generated',
+          includePackage: true,
+          includeScope: true,
+          artifactStatus: 'legacy_not_materialized',
+        );
+      await tester.binding.setSurfaceSize(const Size(1100, 760));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CustomsAuthoritySubmissionDetailPage(
+            submissionId: 'submission-1',
+            repository: repository,
+            initialStage: CustomsAuthoritySubmissionStage.authorityDelivery,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('authority-stage-anchor-authorityDelivery')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('record-external-submission')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'Güvenli indirme dosyalarının hazır olması bu kayıt için',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('default detail target keeps submission content at the top', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository();
+    await tester.binding.setSurfaceSize(const Size(1100, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomsAuthoritySubmissionDetailPage(
+          submissionId: 'submission-1',
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).first,
+    );
+    expect(scrollable.position.pixels, 0);
+    expect(
+      find.byKey(const ValueKey('authority-stage-anchor-submissionContent')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('active profile creates an FSMH submission draft', (
