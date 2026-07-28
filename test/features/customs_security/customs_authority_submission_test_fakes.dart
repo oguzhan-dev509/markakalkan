@@ -18,15 +18,20 @@ Map<String, dynamic> _submissionMap({
   int currentPackageVersion = 0,
   String? currentPackageHash,
   int packageCount = 0,
+  String? channelType,
+  String? submittedAt,
+  String? externalSubmissionStatement,
 }) => <String, dynamic>{
   'submissionId': submissionId,
   'submissionNumber': 'KRI-2026-ABC12345',
   'submissionType': submissionType,
   'targetAuthority': targetAuthority,
   'targetUnit': null,
-  'channelType': submissionType == 'fsmh_protection_application'
-      ? 'fsmh_portal'
-      : 'official_online_form',
+  'channelType':
+      channelType ??
+      (submissionType == 'fsmh_protection_application'
+          ? 'fsmh_portal'
+          : 'official_online_form'),
   'protectionProfileId': protectionProfileId,
   'interventionId': interventionId,
   'caseId': null,
@@ -49,16 +54,22 @@ Map<String, dynamic> _submissionMap({
   'preparedByUid': 'user-1',
   'reviewedByUid': humanReviewReference == null ? null : 'reviewer-1',
   'approvedByUid': rightsHolderApprovalReference == null ? null : 'approver-1',
-  'submittedByUid': null,
-  'submittedAt': null,
-  'externalSubmissionStatement': null,
+  'submittedByUid': submittedAt == null ? null : 'user-1',
+  'submittedAt': submittedAt,
+  'externalSubmissionStatement': externalSubmissionStatement,
   'officialReferenceNumber': null,
   'receiptRecordedAt': null,
   'packageCount': packageCount,
   'responseCount': 0,
-  'eventCount': packageCount == 0 ? 1 : 2,
+  'eventCount': packageCount == 0
+      ? 1
+      : status == 'submitted_externally'
+      ? 3
+      : 2,
   'lastEventType': packageCount == 0
       ? 'authority_submission_created'
+      : status == 'submitted_externally'
+      ? 'customs_submission_recorded_as_submitted_externally'
       : 'customs_submission_package_generated',
   'lastEventAt': '2026-07-25T10:00:00.000Z',
   'createdAt': '2026-07-25T10:00:00.000Z',
@@ -156,6 +167,9 @@ CustomsAuthoritySubmissionDetail sampleAuthoritySubmissionDetail({
   String? rightsHolderApprovalReference,
   bool dataMinimizationConfirmed = false,
   bool nonAccusatoryLanguageConfirmed = false,
+  String? channelType,
+  String? submittedAt,
+  String? externalSubmissionStatement,
 }) => CustomsAuthoritySubmissionDetail.fromMap(<String, dynamic>{
   'contractVersion': 'customs-authority-submission-detail-v1',
   'submission': _submissionMap(
@@ -171,6 +185,9 @@ CustomsAuthoritySubmissionDetail sampleAuthoritySubmissionDetail({
         ? List<String>.filled(64, 'a').join()
         : null,
     packageCount: includePackage ? 1 : 0,
+    channelType: channelType,
+    submittedAt: submittedAt,
+    externalSubmissionStatement: externalSubmissionStatement,
   ),
   'packages': includePackage
       ? <Map<String, dynamic>>[
@@ -207,6 +224,20 @@ CustomsAuthoritySubmissionDetail sampleAuthoritySubmissionDetail({
         'actorLabel': 'Yetkili kullanıcı',
         'recordedAt': '2026-07-25T10:01:00.000Z',
       },
+    if (status == 'submitted_externally')
+      <String, dynamic>{
+        'submissionId': submissionId,
+        'sequence': 3,
+        'eventType': 'customs_submission_recorded_as_submitted_externally',
+        'previousStatus': 'package_generated',
+        'nextStatus': 'submitted_externally',
+        'summary': 'Resmî iletim dış kanalda gönderilmiş olarak kaydedildi.',
+        'reason':
+            externalSubmissionStatement ??
+            'Paket yetkili kullanıcı tarafından dış kanalda teslim edildi.',
+        'actorLabel': 'Yetkili kullanıcı',
+        'recordedAt': '2026-07-25T10:02:00.000Z',
+      },
   ],
   'integrityStatus': 'verified',
   'readOnly': true,
@@ -227,23 +258,34 @@ class FakeCustomsAuthoritySubmissionRepository
   int createCalls = 0;
   int detailCalls = 0;
   int generatePackageCalls = 0;
+  int externalSubmissionCalls = 0;
   int materializeCalls = 0;
   int pdfAuthorizationCalls = 0;
   int manifestAuthorizationCalls = 0;
   CustomsAuthoritySubmissionDraft? lastDraft;
   CustomsSubmissionPackageDraft? lastPackageDraft;
+  CustomsExternalSubmissionDraft? lastExternalSubmissionDraft;
   String? lastPackageTenantId;
   String? lastPackageCanonicalBrandId;
   String? lastPackageSubmissionId;
+  String? lastExternalSubmissionTenantId;
+  String? lastExternalSubmissionCanonicalBrandId;
+  String? lastExternalSubmissionSubmissionId;
+  String? lastExternalSubmissionPackageId;
+  int? lastExternalSubmissionPackageVersion;
+  String? lastExternalSubmissionPackageHash;
   CustomsAuthoritySubmissionDetail? detail;
   Object? packageGenerationError;
+  Object? externalSubmissionError;
   Object? materializationError;
   Object? authorizationError;
   Completer<void>? packageGenerationGate;
+  Completer<void>? externalSubmissionGate;
   Completer<void>? materializationGate;
   Completer<void>? pdfAuthorizationGate;
   Completer<void>? manifestAuthorizationGate;
   final List<String> packageGenerationRequestIds = [];
+  final List<String> externalSubmissionRequestIds = [];
   final List<String> materializationRequestIds = [];
   final List<String> authorizationRequestIds = [];
 
@@ -382,9 +424,83 @@ class FakeCustomsAuthoritySubmissionRepository
     required String packageHash,
     required CustomsExternalSubmissionDraft draft,
     required String requestId,
-  }) async => throw UnsupportedError(
-    'FakeCustomsAuthoritySubmissionRepository.recordExternalSubmission is not configured.',
-  );
+  }) async {
+    externalSubmissionCalls++;
+    lastExternalSubmissionTenantId = tenantId;
+    lastExternalSubmissionCanonicalBrandId = canonicalBrandId;
+    lastExternalSubmissionSubmissionId = submissionId;
+    lastExternalSubmissionPackageId = packageId;
+    lastExternalSubmissionPackageVersion = packageVersion;
+    lastExternalSubmissionPackageHash = packageHash;
+    lastExternalSubmissionDraft = draft;
+    externalSubmissionRequestIds.add(requestId);
+    draft.toRequestMap();
+    await externalSubmissionGate?.future;
+    final error = externalSubmissionError;
+    if (error != null) throw error;
+
+    final current = detail?.submission;
+    final result = CustomsExternalSubmissionResult.fromMap(<String, dynamic>{
+      'contractVersion': 'customs-external-submission-record-result-v1',
+      'ok': true,
+      'duplicate': false,
+      'transactionApplied': true,
+      'submission': _submissionMap(
+        submissionId: submissionId,
+        status: 'submitted_externally',
+        submissionType:
+            current?.submissionType ?? 'fsmh_protection_application',
+        targetAuthority: current?.targetAuthority ?? 'fsmh_program',
+        protectionProfileId: current?.protectionProfileId ?? 'profile-1',
+        interventionId: current?.interventionId,
+        title: current?.title ?? 'Bosch FSMH koruma başvurusu',
+        humanReviewReference:
+            current?.humanReviewReference ?? 'review-reference-1',
+        rightsHolderApprovalReference:
+            current?.rightsHolderApprovalReference ?? 'approval-reference-1',
+        dataMinimizationConfirmed: current?.dataMinimizationConfirmed ?? true,
+        nonAccusatoryLanguageConfirmed:
+            current?.nonAccusatoryLanguageConfirmed ?? true,
+        currentPackageId: packageId,
+        currentPackageVersion: packageVersion,
+        currentPackageHash: packageHash,
+        packageCount: 1,
+        channelType: draft.submissionChannel.wireValue,
+        submittedAt: draft.submittedAt,
+        externalSubmissionStatement: draft.externalSubmissionStatement,
+      ),
+      'event': <String, dynamic>{
+        'submissionId': submissionId,
+        'sequence': 3,
+        'eventType': 'customs_submission_recorded_as_submitted_externally',
+        'previousStatus': 'package_generated',
+        'nextStatus': 'submitted_externally',
+        'summary': 'Resmî iletim dış kanalda gönderilmiş olarak kaydedildi.',
+        'reason': draft.externalSubmissionStatement,
+        'actorLabel': 'Yetkili kullanıcı',
+        'recordedAt': '2026-07-25T10:02:00.000Z',
+      },
+    });
+
+    detail = sampleAuthoritySubmissionDetail(
+      submissionId: submissionId,
+      status: 'submitted_externally',
+      includePackage: true,
+      includeScope: true,
+      artifactStatus: 'legacy_not_materialized',
+      humanReviewReference:
+          current?.humanReviewReference ?? 'review-reference-1',
+      rightsHolderApprovalReference:
+          current?.rightsHolderApprovalReference ?? 'approval-reference-1',
+      dataMinimizationConfirmed: current?.dataMinimizationConfirmed ?? true,
+      nonAccusatoryLanguageConfirmed:
+          current?.nonAccusatoryLanguageConfirmed ?? true,
+      channelType: draft.submissionChannel.wireValue,
+      submittedAt: draft.submittedAt,
+      externalSubmissionStatement: draft.externalSubmissionStatement,
+    );
+    return result;
+  }
 
   @override
   Future<CustomsSubmissionReceiptResult> recordReceipt({

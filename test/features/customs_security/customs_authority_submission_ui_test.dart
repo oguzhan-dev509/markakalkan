@@ -91,6 +91,49 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> pumpExternalSubmissionDetail(
+    WidgetTester tester,
+    FakeCustomsAuthoritySubmissionRepository repository,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1100, 3200));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomsAuthoritySubmissionDetailPage(
+          submissionId: 'submission-1',
+          repository: repository,
+          requestIdFactory: () => 'stable-request-id',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> completeExternalSubmissionForm(WidgetTester tester) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('external-submission-statement')),
+      'Paket FSMH Portalı üzerinden yetkili kullanıcı tarafından teslim edildi.',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('external-reference-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Portal işlem numarası').last);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('external-reference-value')),
+      'PORTAL-2026-0001',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('external-submission-confirmation')),
+    );
+    await tester.pump();
+
+    final review = find.byKey(const ValueKey('review-external-submission'));
+    await tester.ensureVisible(review);
+    await tester.tap(review);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('legacy artifact materializes once and reloads detail once', (
     tester,
   ) async {
@@ -489,6 +532,181 @@ void main() {
         findsOneWidget,
       );
       expect(repository.generatePackageCalls, 0);
+    },
+  );
+
+  testWidgets(
+    'package generated submission records one external delivery without artifact',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'package_generated',
+          includePackage: true,
+          includeScope: true,
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpExternalSubmissionDetail(tester, repository);
+
+      final record = find.byKey(const ValueKey('record-external-submission'));
+      await tester.ensureVisible(record);
+      expect(tester.widget<FilledButton>(record).onPressed, isNotNull);
+      expect(
+        find.textContaining(
+          'Güvenli indirme dosyalarının hazır olması bu kayıt için zorunlu değildir.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(record);
+      await tester.pumpAndSettle();
+      expect(find.text('Kuruma dış teslim kaydı'), findsWidgets);
+      await completeExternalSubmissionForm(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-record-external-submission')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.externalSubmissionCalls, 1);
+      expect(repository.externalSubmissionRequestIds, ['stable-request-id']);
+      expect(repository.lastExternalSubmissionTenantId, 'tenant-1');
+      expect(repository.lastExternalSubmissionCanonicalBrandId, 'brand-1');
+      expect(repository.lastExternalSubmissionSubmissionId, 'submission-1');
+      expect(repository.lastExternalSubmissionPackageId, 'package-1');
+      expect(repository.lastExternalSubmissionPackageVersion, 1);
+      expect(
+        repository.lastExternalSubmissionPackageHash,
+        List<String>.filled(64, 'a').join(),
+      );
+      expect(
+        repository.lastExternalSubmissionDraft?.submissionChannel,
+        CustomsSubmissionChannel.fsmhPortal,
+      );
+      expect(
+        repository.lastExternalSubmissionDraft?.externalReferenceType,
+        CustomsExternalReferenceType.portalTransactionId,
+      );
+      expect(
+        repository.lastExternalSubmissionDraft?.externalReferenceValue,
+        'PORTAL-2026-0001',
+      );
+      expect(
+        repository.lastExternalSubmissionDraft?.externalSubmissionConfirmed,
+        isTrue,
+      );
+      expect(repository.detailCalls, 2);
+      expect(find.text('Kuruma dış teslim kaydedildi'), findsOneWidget);
+      expect(find.text('Resmî kanaldan iletildi'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'customs_submission_recorded_as_submitted_externally',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'external delivery final confirmation cancellation writes nothing',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'package_generated',
+          includePackage: true,
+          includeScope: true,
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpExternalSubmissionDetail(tester, repository);
+
+      final record = find.byKey(const ValueKey('record-external-submission'));
+      await tester.ensureVisible(record);
+      await tester.tap(record);
+      await tester.pumpAndSettle();
+      await completeExternalSubmissionForm(tester);
+      await tester.tap(find.text('Vazgeç'));
+      await tester.pumpAndSettle();
+
+      expect(repository.externalSubmissionCalls, 0);
+      expect(repository.externalSubmissionRequestIds, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'external delivery stays fail closed without tenant and brand scope',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'package_generated',
+          includePackage: true,
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpExternalSubmissionDetail(tester, repository);
+
+      final record = find.byKey(const ValueKey('record-external-submission'));
+      await tester.ensureVisible(record);
+      expect(tester.widget<FilledButton>(record).onPressed, isNull);
+      expect(
+        find.text('Tenant ve marka kapsamı doğrulanamadı.'),
+        findsOneWidget,
+      );
+      expect(repository.externalSubmissionCalls, 0);
+    },
+  );
+
+  testWidgets(
+    'recoverable external delivery retry preserves request id and draft',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'package_generated',
+          includePackage: true,
+          includeScope: true,
+        )
+        ..externalSubmissionError = FirebaseFunctionsException(
+          code: 'unavailable',
+          message: 'technical',
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpExternalSubmissionDetail(tester, repository);
+
+      final record = find.byKey(const ValueKey('record-external-submission'));
+      await tester.ensureVisible(record);
+      await tester.tap(record);
+      await tester.pumpAndSettle();
+      await completeExternalSubmissionForm(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-record-external-submission')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.externalSubmissionCalls, 1);
+      expect(repository.externalSubmissionRequestIds, ['stable-request-id']);
+      expect(
+        find.byKey(const ValueKey('retry-external-submission')),
+        findsOneWidget,
+      );
+
+      repository.externalSubmissionError = null;
+      final retry = find.byKey(const ValueKey('retry-external-submission'));
+      await tester.ensureVisible(retry);
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-retry-external-submission')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.externalSubmissionCalls, 2);
+      expect(repository.externalSubmissionRequestIds, [
+        'stable-request-id',
+        'stable-request-id',
+      ]);
+      expect(
+        repository.lastExternalSubmissionDraft?.externalReferenceValue,
+        'PORTAL-2026-0001',
+      );
+      expect(repository.detailCalls, 2);
+      expect(find.text('Resmî kanaldan iletildi'), findsOneWidget);
     },
   );
 

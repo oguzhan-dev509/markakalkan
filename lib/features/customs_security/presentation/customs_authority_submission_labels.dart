@@ -49,6 +49,23 @@ const customsAuthorityChannels = <String>[
   'other',
 ];
 
+const customsExternalReferenceTypes = <String>[
+  'none',
+  'kep_message_id',
+  'portal_transaction_id',
+  'physical_delivery_reference',
+  'official_correspondence_reference',
+  'telephone_reference',
+  'other_reference',
+];
+
+const externalSubmissionSectionTitle = 'Kuruma Dış Teslim Kaydı';
+const recordExternalSubmission = 'Dış Teslimi Kaydet';
+const retryExternalSubmission = 'Aynı Kayıtla Yeniden Dene';
+const externalSubmissionNotAutomaticDescription =
+    'Bu işlem paketi kuruma otomatik göndermez. Yalnız kurum dışında gerçekten '
+    'tamamlanan teslimi, güncel değiştirilemez paketle ilişkilendirerek kaydeder.';
+
 const artifactSectionTitle = 'Resmî Paket ve Güvenli İndirme';
 const materializePackage = 'Resmî Paketi Oluştur';
 const retryMaterialization = 'Yeniden Dene';
@@ -151,6 +168,32 @@ String customsAuthorityChannelLabel(String value) => switch (value) {
   'other' => 'Diğer',
   _ => 'Belirsiz kanal',
 };
+
+String customsExternalReferenceTypeLabel(String value) => switch (value) {
+  'none' => 'Dış referans yok',
+  'kep_message_id' => 'KEP ileti numarası',
+  'portal_transaction_id' => 'Portal işlem numarası',
+  'physical_delivery_reference' => 'Fiziksel teslim referansı',
+  'official_correspondence_reference' => 'Resmî yazışma referansı',
+  'telephone_reference' => 'Telefon kayıt referansı',
+  'other_reference' => 'Diğer dış referans',
+  _ => 'Belirsiz dış referans',
+};
+
+bool customsAuthoritySubmissionErrorIsRetryable(Object error) {
+  if (error is FormatException) return false;
+  if (error is FirebaseFunctionsException) {
+    return !{
+      'unauthenticated',
+      'permission-denied',
+      'failed-precondition',
+      'already-exists',
+      'resource-exhausted',
+      'invalid-argument',
+    }.contains(error.code);
+  }
+  return true;
+}
 
 Color customsAuthoritySubmissionStatusColor(String status) {
   if (status == 'concluded' || status == 'receipt_recorded') {

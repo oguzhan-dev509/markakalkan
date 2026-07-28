@@ -36,6 +36,12 @@ class _CustomsAuthoritySubmissionDetailPageState
   bool _downloadingPdf = false;
   bool _downloadingManifest = false;
   String? _materializationRequestId;
+  bool _recordingExternalSubmission = false;
+  String? _externalSubmissionRequestId;
+  CustomsExternalSubmissionDraft? _externalSubmissionRetryDraft;
+  String? _externalSubmissionPackageId;
+  int? _externalSubmissionPackageVersion;
+  String? _externalSubmissionPackageHash;
 
   @override
   void initState() {
@@ -46,7 +52,10 @@ class _CustomsAuthoritySubmissionDetailPageState
   }
 
   Future<void> _load({bool newOperation = true}) async {
-    if (newOperation) _materializationRequestId = null;
+    if (newOperation) {
+      _materializationRequestId = null;
+      _clearExternalSubmissionRetry();
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -142,6 +151,137 @@ class _CustomsAuthoritySubmissionDetailPageState
     } finally {
       if (mounted && _generatingPackage) {
         setState(() => _generatingPackage = false);
+      }
+    }
+  }
+
+  void _clearExternalSubmissionRetry() {
+    _externalSubmissionRequestId = null;
+    _externalSubmissionRetryDraft = null;
+    _externalSubmissionPackageId = null;
+    _externalSubmissionPackageVersion = null;
+    _externalSubmissionPackageHash = null;
+  }
+
+  Future<void> _recordExternalSubmission({bool retry = false}) async {
+    if (_recordingExternalSubmission) return;
+    final currentDetail = _detail;
+    final currentPackage = _currentSubmissionPackage(currentDetail);
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        currentPackage == null ||
+        scope == null ||
+        _externalSubmissionBlockers(currentDetail, currentPackage).isNotEmpty) {
+      return;
+    }
+
+    CustomsExternalSubmissionDraft? draft;
+    if (retry) {
+      final retryDraft = _externalSubmissionRetryDraft;
+      final retryRequestId = _externalSubmissionRequestId;
+      final retryMatchesPackage =
+          _externalSubmissionPackageId == currentPackage.packageId &&
+          _externalSubmissionPackageVersion == currentPackage.version &&
+          _externalSubmissionPackageHash == currentPackage.aggregateHash;
+      if (retryDraft == null ||
+          retryRequestId == null ||
+          !retryMatchesPackage) {
+        _clearExternalSubmissionRetry();
+        _showMessage(
+          'Yeniden deneme bilgileri güncel paketle eşleşmiyor. '
+          'Sayfayı yenileyip teslim kaydını yeniden hazırlayın.',
+        );
+        return;
+      }
+      draft = retryDraft;
+    } else {
+      draft = await showDialog<CustomsExternalSubmissionDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _ExternalSubmissionDialog(
+          submission: currentDetail.submission,
+          package: currentPackage,
+        ),
+      );
+      if (!mounted || draft == null) return;
+    }
+
+    final submissionDraft = draft;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(
+          retry ? 'Dış teslim kaydını yeniden dene' : 'Dış teslimi kaydet',
+        ),
+        content: Text(
+          retry
+              ? 'Aynı teslim beyanı ve aynı güvenli işlem kimliğiyle yeniden '
+                    'denenecek. Güncel paket v${currentPackage.version} ile '
+                    'eşleşen kayıt değiştirilemez olay zincirine yazılsın mı?'
+              : 'Paket v${currentPackage.version}, '
+                    '${customsAuthorityChannelLabel(submissionDraft.submissionChannel.wireValue)} '
+                    'kanalından gerçekten teslim edilmiş olarak kaydedilecek. '
+                    'Bu kayıt değiştirilemez olay zincirine eklenir ve işlem '
+                    'geri alınamaz. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: ValueKey(
+              retry
+                  ? 'confirm-retry-external-submission'
+                  : 'confirm-record-external-submission',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(retry ? 'Yeniden dene' : 'Teslimi kaydet'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    if (!retry) {
+      _externalSubmissionRequestId = _newRequestId();
+      _externalSubmissionRetryDraft = submissionDraft;
+      _externalSubmissionPackageId = currentPackage.packageId;
+      _externalSubmissionPackageVersion = currentPackage.version;
+      _externalSubmissionPackageHash = currentPackage.aggregateHash;
+    }
+
+    setState(() => _recordingExternalSubmission = true);
+    try {
+      final result = await _repository.recordExternalSubmission(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: currentDetail.submission.submissionId,
+        packageId: currentPackage.packageId,
+        packageVersion: currentPackage.version,
+        packageHash: currentPackage.aggregateHash,
+        draft: submissionDraft,
+        requestId: _externalSubmissionRequestId!,
+      );
+      if (!mounted) return;
+      _clearExternalSubmissionRetry();
+      _showMessage(
+        result.duplicate
+            ? 'Aynı dış teslim kaydı daha önce uygulanmıştı; güncel kayıt yüklendi.'
+            : 'Kuruma dış teslim kaydedildi',
+      );
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) return;
+      if (!customsAuthoritySubmissionErrorIsRetryable(error)) {
+        _clearExternalSubmissionRetry();
+      }
+      _showMessage(customsAuthoritySubmissionErrorMessage(error));
+    } finally {
+      if (mounted && _recordingExternalSubmission) {
+        setState(() => _recordingExternalSubmission = false);
       }
     }
   }
@@ -290,10 +430,17 @@ class _CustomsAuthoritySubmissionDetailPageState
           : _AuthoritySubmissionDetailView(
               detail: _detail!,
               generatingPackage: _generatingPackage,
+              recordingExternalSubmission: _recordingExternalSubmission,
+              externalSubmissionRetryAvailable:
+                  _externalSubmissionRetryDraft != null &&
+                  _externalSubmissionRequestId != null,
               materializing: _materializing,
               downloadingPdf: _downloadingPdf,
               downloadingManifest: _downloadingManifest,
               onGeneratePackage: _generatePackage,
+              onRecordExternalSubmission: () => _recordExternalSubmission(),
+              onRetryExternalSubmission: () =>
+                  _recordExternalSubmission(retry: true),
               onMaterialize: _materialize,
               onDownload: _download,
             ),
@@ -305,20 +452,28 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
   const _AuthoritySubmissionDetailView({
     required this.detail,
     required this.generatingPackage,
+    required this.recordingExternalSubmission,
+    required this.externalSubmissionRetryAvailable,
     required this.materializing,
     required this.downloadingPdf,
     required this.downloadingManifest,
     required this.onGeneratePackage,
+    required this.onRecordExternalSubmission,
+    required this.onRetryExternalSubmission,
     required this.onMaterialize,
     required this.onDownload,
   });
 
   final CustomsAuthoritySubmissionDetail detail;
   final bool generatingPackage;
+  final bool recordingExternalSubmission;
+  final bool externalSubmissionRetryAvailable;
   final bool materializing;
   final bool downloadingPdf;
   final bool downloadingManifest;
   final VoidCallback onGeneratePackage;
+  final VoidCallback onRecordExternalSubmission;
+  final VoidCallback onRetryExternalSubmission;
   final ValueChanged<CustomsSubmissionPackage> onMaterialize;
   final void Function(
     CustomsSubmissionPackage package,
@@ -329,9 +484,7 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final submission = detail.submission;
-    final currentPackage = detail.packages.isEmpty
-        ? null
-        : detail.packages.last;
+    final currentPackage = _currentSubmissionPackage(detail);
     return ListView(
       key: const ValueKey('customs-authority-submission-detail'),
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
@@ -446,6 +599,16 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
               label: 'Resmî başvuru / ihbar numarası',
               value: submission.officialReferenceNumber ?? 'Henüz kaydedilmedi',
             ),
+            if (submission.submittedAt != null)
+              _AuthorityRow(
+                label: 'Kuruma dış teslim zamanı',
+                value: _formatDateTime(submission.submittedAt!),
+              ),
+            if (submission.externalSubmissionStatement != null)
+              _AuthorityRow(
+                label: 'Dış teslim beyanı',
+                value: submission.externalSubmissionStatement!,
+              ),
             _AuthorityRow(
               label: 'Paket bütünlüğü',
               value: currentPackage == null
@@ -471,6 +634,15 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
                 onDownload(currentPackage, CustomsArtifactType.pdf),
             onDownloadManifest: () =>
                 onDownload(currentPackage, CustomsArtifactType.jsonManifest),
+          ),
+        if (currentPackage != null && submission.status == 'package_generated')
+          _ExternalSubmissionSection(
+            detail: detail,
+            package: currentPackage,
+            recording: recordingExternalSubmission,
+            retryAvailable: externalSubmissionRetryAvailable,
+            onRecord: onRecordExternalSubmission,
+            onRetry: onRetryExternalSubmission,
           ),
         _AuthoritySection(
           title: 'Kurum yanıtları',
@@ -502,6 +674,144 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
                     )
                     .toList(),
         ),
+      ],
+    );
+  }
+}
+
+CustomsSubmissionPackage? _currentSubmissionPackage(
+  CustomsAuthoritySubmissionDetail? detail,
+) {
+  if (detail == null || detail.packages.isEmpty) return null;
+  final currentPackageId = detail.submission.currentPackageId;
+  if (currentPackageId != null) {
+    for (final package in detail.packages.reversed) {
+      if (package.packageId == currentPackageId) return package;
+    }
+  }
+  return detail.packages.last;
+}
+
+List<String> _externalSubmissionBlockers(
+  CustomsAuthoritySubmissionDetail detail,
+  CustomsSubmissionPackage package,
+) {
+  final submission = detail.submission;
+  final currentHash = submission.currentPackageHash?.toLowerCase();
+  final packageHash = package.aggregateHash.toLowerCase();
+  return <String>[
+    if (detail.artifactScope == null) 'Tenant ve marka kapsamı doğrulanamadı.',
+    if (submission.status != 'package_generated')
+      'Dosya “Başvuru paketi hazırlandı” durumunda olmalıdır.',
+    if (submission.currentPackageId != package.packageId)
+      'Güncel paket kimliği doğrulanamadı.',
+    if (submission.currentPackageVersion != package.version)
+      'Güncel paket sürümü doğrulanamadı.',
+    if (currentHash == null || currentHash != packageHash)
+      'Güncel paket hash’i doğrulanamadı.',
+    if (package.submissionId != submission.submissionId)
+      'Paket ile resmî iletim dosyası eşleşmiyor.',
+    if (!package.immutable) 'Paket değiştirilemez olarak doğrulanamadı.',
+  ];
+}
+
+class _ExternalSubmissionSection extends StatelessWidget {
+  const _ExternalSubmissionSection({
+    required this.detail,
+    required this.package,
+    required this.recording,
+    required this.retryAvailable,
+    required this.onRecord,
+    required this.onRetry,
+  });
+
+  final CustomsAuthoritySubmissionDetail detail;
+  final CustomsSubmissionPackage package;
+  final bool recording;
+  final bool retryAvailable;
+  final VoidCallback onRecord;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final blockers = _externalSubmissionBlockers(detail, package);
+    final allowed = blockers.isEmpty;
+
+    return _AuthoritySection(
+      title: externalSubmissionSectionTitle,
+      children: [
+        const Text(
+          externalSubmissionNotAutomaticDescription,
+          style: TextStyle(height: 1.5),
+        ),
+        _AuthorityRow(label: 'Güncel paket', value: package.packageId),
+        _AuthorityRow(label: 'Paket sürümü', value: 'v${package.version}'),
+        _AuthorityRow(
+          label: 'Paket hash’i',
+          value: package.aggregateHash,
+          monospace: true,
+        ),
+        Text(
+          package.artifactStatus == CustomsSubmissionArtifactStatus.ready
+              ? 'Güvenli indirme dosyaları hazır. Dış teslim kaydı yine insan '
+                    'beyanı ve açık teyitle yapılır.'
+              : 'Güvenli indirme dosyalarının hazır olması bu kayıt için '
+                    'zorunlu değildir. Kurum dışında gerçekten tamamlanan '
+                    'teslimi kaydedin.',
+          style: const TextStyle(height: 1.45),
+        ),
+        if (blockers.isNotEmpty)
+          Container(
+            key: const ValueKey('external-submission-blockers'),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E8),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF0D9A2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Dış teslim kaydı için tamamlanması gerekenler:',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                for (final blocker in blockers)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('• '),
+                        Expanded(child: Text(blocker)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (retryAvailable)
+          OutlinedButton.icon(
+            key: const ValueKey('retry-external-submission'),
+            onPressed: allowed && !recording ? onRetry : null,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text(retryExternalSubmission),
+          )
+        else
+          FilledButton.icon(
+            key: const ValueKey('record-external-submission'),
+            onPressed: allowed && !recording ? onRecord : null,
+            icon: recording
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.outbox_outlined),
+            label: Text(
+              recording ? 'Dış teslim kaydediliyor…' : recordExternalSubmission,
+            ),
+          ),
       ],
     );
   }
@@ -601,6 +911,387 @@ class _PackageGenerationSection extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ExternalSubmissionDialog extends StatefulWidget {
+  const _ExternalSubmissionDialog({
+    required this.submission,
+    required this.package,
+  });
+
+  final CustomsAuthoritySubmission submission;
+  final CustomsSubmissionPackage package;
+
+  @override
+  State<_ExternalSubmissionDialog> createState() =>
+      _ExternalSubmissionDialogState();
+}
+
+class _ExternalSubmissionDialogState extends State<_ExternalSubmissionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _statementController = TextEditingController();
+  final _referenceController = TextEditingController();
+  late CustomsSubmissionChannel _channel;
+  CustomsExternalReferenceType _referenceType =
+      CustomsExternalReferenceType.none;
+  DateTime _submittedAt = DateTime.now();
+  bool _confirmed = false;
+  String? _confirmationError;
+  String? _submittedAtError;
+
+  @override
+  void initState() {
+    super.initState();
+    _channel = _submissionChannelFromWire(widget.submission.channelType);
+  }
+
+  @override
+  void dispose() {
+    _statementController.dispose();
+    _referenceController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _submittedAt,
+      firstDate: DateTime.now().subtract(const Duration(days: 3650)),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _submittedAt = DateTime(
+        selected.year,
+        selected.month,
+        selected.day,
+        _submittedAt.hour,
+        _submittedAt.minute,
+      );
+      _submittedAtError = null;
+    });
+  }
+
+  Future<void> _pickTime() async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_submittedAt),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _submittedAt = DateTime(
+        _submittedAt.year,
+        _submittedAt.month,
+        _submittedAt.day,
+        selected.hour,
+        selected.minute,
+      );
+      _submittedAtError = null;
+    });
+  }
+
+  void _changeChannel(CustomsSubmissionChannel? value) {
+    if (value == null) return;
+    final allowed = _externalReferenceTypesForChannel(value);
+    setState(() {
+      _channel = value;
+      if (!allowed.contains(_referenceType)) {
+        _referenceType = CustomsExternalReferenceType.none;
+        _referenceController.clear();
+      }
+    });
+  }
+
+  void _changeReferenceType(CustomsExternalReferenceType? value) {
+    if (value == null) return;
+    setState(() {
+      _referenceType = value;
+      if (value == CustomsExternalReferenceType.none) {
+        _referenceController.clear();
+      }
+    });
+  }
+
+  String? _statementValidator(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.length < 20) {
+      return 'Teslim beyanı en az 20 karakter olmalıdır.';
+    }
+    if (trimmed.length > 2000) {
+      return 'Teslim beyanı 2000 karakteri aşamaz.';
+    }
+    return null;
+  }
+
+  String? _referenceValidator(String? value) {
+    if (_referenceType == CustomsExternalReferenceType.none) return null;
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.length < 3) {
+      return 'Dış referans en az 3 karakter olmalıdır.';
+    }
+    if (trimmed.length > 300) {
+      return 'Dış referans 300 karakteri aşamaz.';
+    }
+    return null;
+  }
+
+  void _submit() {
+    final now = DateTime.now();
+    final oldestAccepted = now.subtract(const Duration(days: 3650));
+    String? submittedAtError;
+    if (_submittedAt.isAfter(now.add(const Duration(minutes: 5)))) {
+      submittedAtError = 'Teslim zamanı 5 dakikadan fazla ileride olamaz.';
+    } else if (_submittedAt.isBefore(oldestAccepted)) {
+      submittedAtError = 'Teslim zamanı 10 yıldan daha eski olamaz.';
+    }
+
+    final formValid = _formKey.currentState?.validate() == true;
+    setState(() {
+      _submittedAtError = submittedAtError;
+      _confirmationError = _confirmed
+          ? null
+          : 'Gerçek dış teslim teyidi zorunludur.';
+    });
+    if (!formValid || submittedAtError != null || !_confirmed) return;
+
+    Navigator.pop(
+      context,
+      CustomsExternalSubmissionDraft(
+        submissionChannel: _channel,
+        submittedAt: _submittedAt.toUtc().toIso8601String(),
+        externalSubmissionStatement: _statementController.text,
+        externalReferenceType: _referenceType,
+        externalReferenceValue:
+            _referenceType == CustomsExternalReferenceType.none
+            ? null
+            : _referenceController.text.trim(),
+        externalSubmissionConfirmed: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final referenceTypes = _externalReferenceTypesForChannel(_channel);
+    return AlertDialog(
+      title: const Text('Kuruma dış teslim kaydı'),
+      content: SizedBox(
+        width: 700,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  externalSubmissionNotAutomaticDescription,
+                  style: TextStyle(height: 1.45),
+                ),
+                const SizedBox(height: 16),
+                _AuthorityRow(
+                  label: 'Güncel paket',
+                  value:
+                      '${widget.package.packageId} · v${widget.package.version}',
+                ),
+                _AuthorityRow(
+                  label: 'Paket hash’i',
+                  value: widget.package.aggregateHash,
+                  monospace: true,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<CustomsSubmissionChannel>(
+                  key: const ValueKey('external-submission-channel'),
+                  initialValue: _channel,
+                  decoration: const InputDecoration(labelText: 'Teslim kanalı'),
+                  items: CustomsSubmissionChannel.values
+                      .map(
+                        (channel) => DropdownMenuItem(
+                          value: channel,
+                          child: Text(
+                            customsAuthorityChannelLabel(channel.wireValue),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: _changeChannel,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Teslim tarihi ve saati',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('external-submission-pick-date'),
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.calendar_today_outlined),
+                      label: Text(_formatLocalDate(_submittedAt)),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('external-submission-pick-time'),
+                      onPressed: _pickTime,
+                      icon: const Icon(Icons.schedule_outlined),
+                      label: Text(_formatLocalTime(_submittedAt)),
+                    ),
+                  ],
+                ),
+                if (_submittedAtError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      _submittedAtError!,
+                      key: const ValueKey('external-submission-date-error'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('external-submission-statement'),
+                  controller: _statementController,
+                  minLines: 3,
+                  maxLines: 7,
+                  maxLength: 2000,
+                  decoration: const InputDecoration(
+                    labelText: 'Dış teslim beyanı',
+                    helperText:
+                        'Teslimin kim tarafından, hangi kanaldan ve nasıl '
+                        'tamamlandığını açıkça yazın.',
+                  ),
+                  validator: _statementValidator,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<CustomsExternalReferenceType>(
+                  key: const ValueKey('external-reference-type'),
+                  initialValue: _referenceType,
+                  decoration: const InputDecoration(
+                    labelText: 'Dış referans türü',
+                  ),
+                  items: referenceTypes
+                      .map(
+                        (type) => DropdownMenuItem(
+                          value: type,
+                          child: Text(
+                            customsExternalReferenceTypeLabel(type.wireValue),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: _changeReferenceType,
+                ),
+                if (_referenceType != CustomsExternalReferenceType.none) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('external-reference-value'),
+                    controller: _referenceController,
+                    maxLength: 300,
+                    decoration: const InputDecoration(
+                      labelText: 'Dış referans değeri',
+                    ),
+                    validator: _referenceValidator,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  key: const ValueKey('external-submission-confirmation'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _confirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _confirmed = value == true;
+                      if (_confirmed) _confirmationError = null;
+                    });
+                  },
+                  title: const Text(
+                    'Bu paketin seçilen kanaldan gerçekten teslim edildiğini '
+                    've bu kaydın değiştirilemez olay zincirine yazılacağını '
+                    'teyit ediyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (_confirmationError != null)
+                  Text(
+                    _confirmationError!,
+                    key: const ValueKey(
+                      'external-submission-confirmation-error',
+                    ),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-external-submission'),
+          onPressed: _submit,
+          child: const Text('Kaydı gözden geçir'),
+        ),
+      ],
+    );
+  }
+}
+
+CustomsSubmissionChannel _submissionChannelFromWire(String? value) {
+  for (final channel in CustomsSubmissionChannel.values) {
+    if (channel.wireValue == value) return channel;
+  }
+  return CustomsSubmissionChannel.other;
+}
+
+List<CustomsExternalReferenceType> _externalReferenceTypesForChannel(
+  CustomsSubmissionChannel channel,
+) => switch (channel) {
+  CustomsSubmissionChannel.fsmhPortal ||
+  CustomsSubmissionChannel.officialOnlineForm ||
+  CustomsSubmissionChannel.electronicSignature => const [
+    CustomsExternalReferenceType.none,
+    CustomsExternalReferenceType.portalTransactionId,
+  ],
+  CustomsSubmissionChannel.registeredEmail => const [
+    CustomsExternalReferenceType.none,
+    CustomsExternalReferenceType.kepMessageId,
+  ],
+  CustomsSubmissionChannel.physicalDelivery => const [
+    CustomsExternalReferenceType.none,
+    CustomsExternalReferenceType.physicalDeliveryReference,
+  ],
+  CustomsSubmissionChannel.telephone136 ||
+  CustomsSubmissionChannel.emergency112 => const [
+    CustomsExternalReferenceType.none,
+    CustomsExternalReferenceType.telephoneReference,
+  ],
+  CustomsSubmissionChannel.officialCorrespondence => const [
+    CustomsExternalReferenceType.none,
+    CustomsExternalReferenceType.officialCorrespondenceReference,
+  ],
+  CustomsSubmissionChannel.other => const [
+    CustomsExternalReferenceType.none,
+    CustomsExternalReferenceType.otherReference,
+  ],
+};
+
+String _formatLocalDate(DateTime value) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(value.day)}.${two(value.month)}.${value.year}';
+}
+
+String _formatLocalTime(DateTime value) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(value.hour)}:${two(value.minute)}';
 }
 
 enum _PackageManifestKind { document, evidence }
