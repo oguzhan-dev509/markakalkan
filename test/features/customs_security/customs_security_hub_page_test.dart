@@ -132,9 +132,16 @@ void main() {
         find.byKey(const ValueKey('customs-security-tab-bar')),
       );
       expect(tabBar.isScrollable, isTrue);
-      expect(find.text('Koruma Profilleri'), findsOneWidget);
-      expect(find.text('Sınır Müdahaleleri'), findsOneWidget);
-      expect(find.text('Resmî İletimler'), findsOneWidget);
+      for (final entry in {
+        'customs-profile-tab': 'Gümrük Koruma Profilleri',
+        'customs-intervention-tab': 'Sınır Müdahaleleri',
+        'customs-authority-submission-tab': 'Resmî Başvurular ve İhbarlar',
+        'customs-package-delivery-tab': 'Paket ve Resmî Teslim',
+        'customs-authority-response-tab': 'Kurum Cevapları ve Sonuçlar',
+      }.entries) {
+        final tab = tester.widget<Tab>(find.byKey(ValueKey(entry.key)));
+        expect(tab.text, entry.value);
+      }
 
       final action = find.byKey(
         const ValueKey('mobile-create-customs-profile'),
@@ -154,6 +161,18 @@ void main() {
         tester.getBottomLeft(band).dy <= tester.getTopLeft(action).dy,
         isTrue,
       );
+
+      final officialTab = find.byKey(
+        const ValueKey('customs-authority-submission-tab'),
+      );
+      await tester.ensureVisible(officialTab);
+      await tester.tap(officialTab);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('customs-mobile-create-action-region')),
+        findsNothing,
+      );
+      expect(find.byType(FloatingActionButton), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -174,6 +193,16 @@ void main() {
       find.byKey(const ValueKey('customs-security-tab-bar')),
     );
     expect(tabBar.isScrollable, isFalse);
+    for (final entry in {
+      'customs-profile-tab': 'Gümrük Koruma Profilleri',
+      'customs-intervention-tab': 'Sınır Müdahaleleri',
+      'customs-authority-submission-tab': 'Resmî Başvurular ve İhbarlar',
+      'customs-package-delivery-tab': 'Paket ve Resmî Teslim',
+      'customs-authority-response-tab': 'Kurum Cevapları ve Sonuçlar',
+    }.entries) {
+      final tab = tester.widget<Tab>(find.byKey(ValueKey(entry.key)));
+      expect(tab.text, entry.value);
+    }
 
     final action = find.byKey(const ValueKey('create-customs-profile'));
     expect(action, findsOneWidget);

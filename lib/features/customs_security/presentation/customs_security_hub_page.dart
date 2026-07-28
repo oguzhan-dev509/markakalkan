@@ -61,7 +61,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
         (widget.repository == null
             ? CallableCustomsAuthoritySubmissionRepository()
             : const EmptyCustomsAuthoritySubmissionRepository());
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _load();
   }
 
@@ -226,19 +226,21 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
           preferredSize: const Size.fromHeight(kTextTabBarHeight),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final compact = constraints.maxWidth < 600;
+              final scrollable = constraints.maxWidth < 1180;
               return TabBar(
                 key: const ValueKey('customs-security-tab-bar'),
                 controller: _tabController,
-                isScrollable: compact,
-                tabAlignment: compact ? TabAlignment.start : TabAlignment.fill,
-                labelPadding: compact
+                isScrollable: scrollable,
+                tabAlignment: scrollable
+                    ? TabAlignment.start
+                    : TabAlignment.fill,
+                labelPadding: scrollable
                     ? const EdgeInsets.symmetric(horizontal: 20)
                     : null,
                 tabs: const [
                   Tab(
                     key: ValueKey('customs-profile-tab'),
-                    text: 'Koruma Profilleri',
+                    text: 'Gümrük Koruma Profilleri',
                   ),
                   Tab(
                     key: ValueKey('customs-intervention-tab'),
@@ -246,7 +248,15 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                   ),
                   Tab(
                     key: ValueKey('customs-authority-submission-tab'),
-                    text: 'Resmî İletimler',
+                    text: 'Resmî Başvurular ve İhbarlar',
+                  ),
+                  Tab(
+                    key: ValueKey('customs-package-delivery-tab'),
+                    text: 'Paket ve Resmî Teslim',
+                  ),
+                  Tab(
+                    key: ValueKey('customs-authority-response-tab'),
+                    text: 'Kurum Cevapları ve Sonuçlar',
                   ),
                 ],
               );
@@ -267,7 +277,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
               animation: _tabController,
               builder: (context, _) {
                 final tabIndex = _tabController.index;
-                if (tabIndex == 2) return const SizedBox.shrink();
+                if (tabIndex > 1) return const SizedBox.shrink();
                 final profilesTab = tabIndex == 0;
                 return FloatingActionButton.extended(
                   key: ValueKey(
@@ -310,7 +320,7 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                     animation: _tabController,
                     builder: (context, _) {
                       final tabIndex = _tabController.index;
-                      if (tabIndex == 2) return const SizedBox.shrink();
+                      if (tabIndex > 1) return const SizedBox.shrink();
                       final profilesTab = tabIndex == 0;
                       return Padding(
                         key: const ValueKey(
@@ -376,6 +386,27 @@ class _CustomsSecurityHubPageState extends State<CustomsSecurityHubPage>
                               onOpen: _openIntervention,
                             ),
                             _AuthoritySubmissionWorkspace(
+                              kind: _AuthorityWorkspaceKind.applications,
+                              submissions: _submissions,
+                              selectedStatus: _submissionStatus,
+                              onStatusChanged: (value) {
+                                setState(() => _submissionStatus = value);
+                                _load();
+                              },
+                              onOpen: _openSubmission,
+                            ),
+                            _AuthoritySubmissionWorkspace(
+                              kind: _AuthorityWorkspaceKind.packageDelivery,
+                              submissions: _submissions,
+                              selectedStatus: _submissionStatus,
+                              onStatusChanged: (value) {
+                                setState(() => _submissionStatus = value);
+                                _load();
+                              },
+                              onOpen: _openSubmission,
+                            ),
+                            _AuthoritySubmissionWorkspace(
+                              kind: _AuthorityWorkspaceKind.responseOutcome,
                               submissions: _submissions,
                               selectedStatus: _submissionStatus,
                               onStatusChanged: (value) {
@@ -797,27 +828,127 @@ class _InterventionWorkspace extends StatelessWidget {
   }
 }
 
+enum _AuthorityWorkspaceKind { applications, packageDelivery, responseOutcome }
+
 class _AuthoritySubmissionWorkspace extends StatelessWidget {
   const _AuthoritySubmissionWorkspace({
+    required this.kind,
     required this.submissions,
     required this.selectedStatus,
     required this.onStatusChanged,
     required this.onOpen,
   });
 
+  final _AuthorityWorkspaceKind kind;
   final List<CustomsAuthoritySubmission> submissions;
   final String? selectedStatus;
   final ValueChanged<String?> onStatusChanged;
   final ValueChanged<CustomsAuthoritySubmission> onOpen;
 
+  String get _title => switch (kind) {
+    _AuthorityWorkspaceKind.applications => 'Resmî Başvurular ve İhbarlar',
+    _AuthorityWorkspaceKind.packageDelivery => 'Paket ve Resmî Teslim',
+    _AuthorityWorkspaceKind.responseOutcome => 'Kurum Cevapları ve Sonuçlar',
+  };
+
+  String get _description => switch (kind) {
+    _AuthorityWorkspaceKind.applications =>
+      'Başvuru veya ihbar içeriğini, hedef kurumu, insan incelemesini ve hak sahibi onayını kanonik resmî iletim dosyasında izleyin.',
+    _AuthorityWorkspaceKind.packageDelivery =>
+      'Değiştirilemez başvuru paketini, sürüm ve hash bilgisini, kuruma dış teslimi ve resmî alındı kaydını aynı dosyada izleyin.',
+    _AuthorityWorkspaceKind.responseOutcome =>
+      'Kurumun ara cevaplarını, teslim alındısını, son işlem zamanını ve insan tarafından kaydedilen nihai sonucu izleyin.',
+  };
+
+  String get _filterKey => switch (kind) {
+    _AuthorityWorkspaceKind.applications =>
+      'customs-authority-application-status-filter',
+    _AuthorityWorkspaceKind.packageDelivery =>
+      'customs-package-delivery-status-filter',
+    _AuthorityWorkspaceKind.responseOutcome =>
+      'customs-authority-response-status-filter',
+  };
+
+  String get _emptyKey => switch (kind) {
+    _AuthorityWorkspaceKind.applications =>
+      'customs-authority-applications-empty',
+    _AuthorityWorkspaceKind.packageDelivery =>
+      'customs-package-deliveries-empty',
+    _AuthorityWorkspaceKind.responseOutcome =>
+      'customs-authority-responses-empty',
+  };
+
+  String get _cardKeyPrefix => switch (kind) {
+    _AuthorityWorkspaceKind.applications => 'customs-authority-submission-',
+    _AuthorityWorkspaceKind.packageDelivery => 'customs-package-delivery-',
+    _AuthorityWorkspaceKind.responseOutcome => 'customs-authority-response-',
+  };
+
+  IconData get _icon => switch (kind) {
+    _AuthorityWorkspaceKind.applications => Icons.assignment_outlined,
+    _AuthorityWorkspaceKind.packageDelivery => Icons.inventory_2_outlined,
+    _AuthorityWorkspaceKind.responseOutcome => Icons.mark_email_read_outlined,
+  };
+
+  String get _emptyTitle => switch (kind) {
+    _AuthorityWorkspaceKind.applications =>
+      'Henüz resmî başvuru veya ihbar yok',
+    _AuthorityWorkspaceKind.packageDelivery =>
+      'Paket ve resmî teslim için hazır kayıt yok',
+    _AuthorityWorkspaceKind.responseOutcome =>
+      'Henüz kurum cevabı veya sonuç kaydı yok',
+  };
+
+  String get _emptyDescription => switch (kind) {
+    _AuthorityWorkspaceKind.applications =>
+      'Aktif koruma profili veya sınır müdahale dosyası detayından kontrollü bir resmî iletim taslağı hazırlayın.',
+    _AuthorityWorkspaceKind.packageDelivery =>
+      'Başvuru veya ihbar dosyası onaylandığında aynı kayıt üzerinde paket ve teslim süreci izlenir.',
+    _AuthorityWorkspaceKind.responseOutcome =>
+      'Kuruma teslim edilen aynı resmî iletim dosyasında ara cevaplar ve nihai sonuçlar görünür.',
+  };
+
+  List<String> _lines(CustomsAuthoritySubmission submission) => switch (kind) {
+    _AuthorityWorkspaceKind.applications => [
+      '${customsAuthoritySubmissionTypeLabel(submission.submissionType)} · ${customsAuthorityTargetLabel(submission.targetAuthority)}',
+      submission.humanReviewReference == null
+          ? 'İnsan incelemesi kaydı bekleniyor'
+          : 'İnsan incelemesi: ${submission.humanReviewReference}',
+      submission.rightsHolderApprovalReference == null
+          ? 'Hak sahibi onayı bekleniyor'
+          : 'Hak sahibi onayı: ${submission.rightsHolderApprovalReference}',
+    ],
+    _AuthorityWorkspaceKind.packageDelivery => [
+      submission.currentPackageHash == null
+          ? 'Başvuru paketi henüz oluşturulmadı'
+          : 'Paket v${submission.currentPackageVersion} · ${_shortHash(submission.currentPackageHash!)}',
+      submission.submittedAt == null
+          ? 'Kuruma teslim henüz kaydedilmedi'
+          : 'Kuruma teslim: ${_formatDateTime(submission.submittedAt!)}',
+      submission.officialReferenceNumber == null
+          ? 'Resmî referans veya alındı bekleniyor'
+          : 'Resmî referans: ${submission.officialReferenceNumber}',
+    ],
+    _AuthorityWorkspaceKind.responseOutcome => [
+      submission.responseCount == 0
+          ? 'Kurum cevabı henüz kaydedilmedi'
+          : 'Kurum cevabı: ${submission.responseCount} kayıt',
+      submission.lastEventAt == null
+          ? 'Son işlem zamanı bekleniyor'
+          : 'Son işlem: ${_formatDateTime(submission.lastEventAt!)}',
+      submission.status == 'concluded'
+          ? 'Nihai sonuç kaydedildi'
+          : 'Nihai sonuç bekleniyor',
+    ],
+  };
+
   @override
   Widget build(BuildContext context) {
     return _WorkspaceShell(
-      title: 'Resmî Başvuru ve Kurum İletimleri',
-      description:
-          'İnsan incelemesi, hak sahibi onayı, veri minimizasyonu, hukuken nötr anlatım, paket bütünlüğü ve resmî teslim kayıtlarını tek zaman çizelgesinde izleyin.',
+      title: _title,
+      description: _description,
       filter: DropdownButtonFormField<String?>(
-        key: const ValueKey('customs-authority-submission-status-filter'),
+        key: ValueKey(_filterKey),
         initialValue: selectedStatus,
         isExpanded: true,
         decoration: const InputDecoration(labelText: 'Durum filtresi'),
@@ -833,12 +964,11 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
         onChanged: onStatusChanged,
       ),
       child: submissions.isEmpty
-          ? const _EmptyPanel(
-              key: ValueKey('customs-authority-submissions-empty'),
-              icon: Icons.account_balance_outlined,
-              title: 'Henüz resmî iletim taslağı yok',
-              description:
-                  'Aktif koruma profili veya sınır müdahale dosyası detayından kontrollü bir resmî iletim taslağı hazırlayın.',
+          ? _EmptyPanel(
+              key: ValueKey(_emptyKey),
+              icon: _icon,
+              title: _emptyTitle,
+              description: _emptyDescription,
             )
           : ListView.separated(
               padding: EdgeInsets.zero,
@@ -846,17 +976,9 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final submission = submissions[index];
-                final packageLine = submission.currentPackageHash == null
-                    ? 'Paket henüz hazırlanmadı'
-                    : 'Paket v${submission.currentPackageVersion} · ${_shortHash(submission.currentPackageHash!)}';
-                final officialLine = submission.officialReferenceNumber == null
-                    ? 'Resmî referans henüz kaydedilmedi'
-                    : 'Resmî referans: ${submission.officialReferenceNumber}';
                 return _RecordCard(
-                  key: ValueKey(
-                    'customs-authority-submission-${submission.submissionId}',
-                  ),
-                  icon: Icons.account_balance_outlined,
+                  key: ValueKey('$_cardKeyPrefix${submission.submissionId}'),
+                  icon: _icon,
                   title: submission.title,
                   number: submission.submissionNumber,
                   status: customsAuthoritySubmissionStatusLabel(
@@ -864,11 +986,7 @@ class _AuthoritySubmissionWorkspace extends StatelessWidget {
                   ),
                   statusCode: submission.status,
                   statusColorResolver: customsAuthoritySubmissionStatusColor,
-                  lines: [
-                    '${customsAuthoritySubmissionTypeLabel(submission.submissionType)} · ${customsAuthorityTargetLabel(submission.targetAuthority)}',
-                    packageLine,
-                    officialLine,
-                  ],
+                  lines: _lines(submission),
                   onTap: () => onOpen(submission),
                 );
               },

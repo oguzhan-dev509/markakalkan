@@ -299,7 +299,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('hub renders and opens the official submissions workspace', (
+  testWidgets('hub exposes three canonical official-operation views', (
     tester,
   ) async {
     final repository = FakeCustomsSecurityRepository();
@@ -321,16 +321,47 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('customs-authority-submission-tab')),
+    final applicationTab = find.byKey(
+      const ValueKey('customs-authority-submission-tab'),
     );
+    await tester.ensureVisible(applicationTab);
+    await tester.tap(applicationTab);
     await tester.pumpAndSettle();
-
-    expect(find.text('Resmî Başvuru ve Kurum İletimleri'), findsOneWidget);
-    expect(find.text('KRI-2026-ABC12345'), findsOneWidget);
-
+    expect(find.text('Resmî Başvurular ve İhbarlar'), findsWidgets);
+    expect(find.text('İnsan incelemesi kaydı bekleniyor'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
     await tester.tap(
       find.byKey(const ValueKey('customs-authority-submission-submission-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(openedId, 'submission-1');
+
+    openedId = null;
+    final packageTab = find.byKey(
+      const ValueKey('customs-package-delivery-tab'),
+    );
+    await tester.ensureVisible(packageTab);
+    await tester.tap(packageTab);
+    await tester.pumpAndSettle();
+    expect(find.text('Paket ve Resmî Teslim'), findsWidgets);
+    expect(find.text('Başvuru paketi henüz oluşturulmadı'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('customs-package-delivery-submission-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(openedId, 'submission-1');
+
+    openedId = null;
+    final responseTab = find.byKey(
+      const ValueKey('customs-authority-response-tab'),
+    );
+    await tester.ensureVisible(responseTab);
+    await tester.tap(responseTab);
+    await tester.pumpAndSettle();
+    expect(find.text('Kurum Cevapları ve Sonuçlar'), findsWidgets);
+    expect(find.text('Kurum cevabı henüz kaydedilmedi'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('customs-authority-response-submission-1')),
     );
     await tester.pumpAndSettle();
     expect(openedId, 'submission-1');
