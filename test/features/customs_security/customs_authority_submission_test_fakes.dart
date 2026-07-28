@@ -10,6 +10,14 @@ Map<String, dynamic> _submissionMap({
   String? protectionProfileId = 'profile-1',
   String? interventionId,
   String title = 'Bosch FSMH koruma başvurusu',
+  String? humanReviewReference,
+  String? rightsHolderApprovalReference,
+  bool dataMinimizationConfirmed = false,
+  bool nonAccusatoryLanguageConfirmed = false,
+  String? currentPackageId,
+  int currentPackageVersion = 0,
+  String? currentPackageHash,
+  int packageCount = 0,
 }) => <String, dynamic>{
   'submissionId': submissionId,
   'submissionNumber': 'KRI-2026-ABC12345',
@@ -30,29 +38,82 @@ Map<String, dynamic> _submissionMap({
   'authoritySummary':
       'İnsan incelemesine sunulan, şüphe ile kesinleşmiş sonucu ayrı tutan hukuken nötr resmî iletim taslağıdır.',
   'status': status,
-  'humanReviewReference': null,
-  'rightsHolderApprovalReference': null,
-  'dataMinimizationConfirmed': false,
-  'nonAccusatoryLanguageConfirmed': false,
+  'humanReviewReference': humanReviewReference,
+  'rightsHolderApprovalReference': rightsHolderApprovalReference,
+  'dataMinimizationConfirmed': dataMinimizationConfirmed,
+  'nonAccusatoryLanguageConfirmed': nonAccusatoryLanguageConfirmed,
   'duplicateCheckKey': 'duplicate-key-1',
-  'currentPackageId': null,
-  'currentPackageVersion': 0,
-  'currentPackageHash': null,
+  'currentPackageId': currentPackageId,
+  'currentPackageVersion': currentPackageVersion,
+  'currentPackageHash': currentPackageHash,
   'preparedByUid': 'user-1',
-  'reviewedByUid': null,
-  'approvedByUid': null,
+  'reviewedByUid': humanReviewReference == null ? null : 'reviewer-1',
+  'approvedByUid': rightsHolderApprovalReference == null ? null : 'approver-1',
   'submittedByUid': null,
   'submittedAt': null,
   'externalSubmissionStatement': null,
   'officialReferenceNumber': null,
   'receiptRecordedAt': null,
-  'packageCount': 0,
+  'packageCount': packageCount,
   'responseCount': 0,
-  'eventCount': 1,
-  'lastEventType': 'authority_submission_created',
+  'eventCount': packageCount == 0 ? 1 : 2,
+  'lastEventType': packageCount == 0
+      ? 'authority_submission_created'
+      : 'customs_submission_package_generated',
   'lastEventAt': '2026-07-25T10:00:00.000Z',
   'createdAt': '2026-07-25T10:00:00.000Z',
   'updatedAt': '2026-07-25T10:00:00.000Z',
+};
+
+Map<String, dynamic> _packageMap({
+  String submissionId = 'submission-1',
+  String artifactStatus = 'legacy_not_materialized',
+  bool pdfReady = false,
+  bool manifestReady = false,
+}) => <String, dynamic>{
+  'packageId': 'package-1',
+  'submissionId': submissionId,
+  'version': 1,
+  'packageType': 'fsmh_application_package',
+  'sourceSnapshot': const <String, dynamic>{},
+  'documentManifest': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'referenceId': 'document-1',
+      'title': 'Marka tescil belgesi',
+      'sha256': List<String>.filled(64, 'e').join(),
+      'mimeType': 'application/pdf',
+      'sizeBytes': 2048,
+    },
+  ],
+  'evidenceManifest': const <Object>[],
+  'redactionManifest': const <Object>[],
+  'coverLetterText': 'Resmî üst yazı',
+  'authoritySummary': 'Resmî paket özeti',
+  'legalNeutralityStatement': 'Hukuken nötr ifade',
+  'aggregateHashAlgorithm': 'SHA-256',
+  'aggregateHash': List<String>.filled(64, 'a').join(),
+  'generatedAt': '2026-07-25T10:00:00.000Z',
+  'generatedByUid': 'user-1',
+  'immutable': true,
+  'artifactStatus': artifactStatus,
+  'artifactFormatVersion': 'customs-submission-package-artifact-v1',
+  'sourcePackageHash': List<String>.filled(64, 'b').join(),
+  if (pdfReady)
+    'pdfArtifact': <String, dynamic>{
+      'ready': true,
+      'contentType': 'application/pdf',
+      'sizeBytes': 2048,
+      'sha256': List<String>.filled(64, 'c').join(),
+      'safeFileName': 'resmi-paket.pdf',
+    },
+  if (manifestReady)
+    'jsonManifestArtifact': <String, dynamic>{
+      'ready': true,
+      'contentType': 'application/json',
+      'sizeBytes': 1024,
+      'sha256': List<String>.filled(64, 'd').join(),
+      'safeFileName': 'resmi-paket.json',
+    },
 };
 
 CustomsAuthoritySubmission sampleAuthoritySubmission({
@@ -63,6 +124,10 @@ CustomsAuthoritySubmission sampleAuthoritySubmission({
   String? protectionProfileId = 'profile-1',
   String? interventionId,
   String title = 'Bosch FSMH koruma başvurusu',
+  String? humanReviewReference,
+  String? rightsHolderApprovalReference,
+  bool dataMinimizationConfirmed = false,
+  bool nonAccusatoryLanguageConfirmed = false,
 }) => CustomsAuthoritySubmission.fromMap(
   _submissionMap(
     submissionId: submissionId,
@@ -72,58 +137,49 @@ CustomsAuthoritySubmission sampleAuthoritySubmission({
     protectionProfileId: protectionProfileId,
     interventionId: interventionId,
     title: title,
+    humanReviewReference: humanReviewReference,
+    rightsHolderApprovalReference: rightsHolderApprovalReference,
+    dataMinimizationConfirmed: dataMinimizationConfirmed,
+    nonAccusatoryLanguageConfirmed: nonAccusatoryLanguageConfirmed,
   ),
 );
 
 CustomsAuthoritySubmissionDetail sampleAuthoritySubmissionDetail({
   String submissionId = 'submission-1',
+  String status = 'draft',
   bool includePackage = false,
   bool includeScope = false,
   String artifactStatus = 'legacy_not_materialized',
   bool pdfReady = false,
   bool manifestReady = false,
+  String? humanReviewReference,
+  String? rightsHolderApprovalReference,
+  bool dataMinimizationConfirmed = false,
+  bool nonAccusatoryLanguageConfirmed = false,
 }) => CustomsAuthoritySubmissionDetail.fromMap(<String, dynamic>{
   'contractVersion': 'customs-authority-submission-detail-v1',
-  'submission': _submissionMap(submissionId: submissionId),
+  'submission': _submissionMap(
+    submissionId: submissionId,
+    status: status,
+    humanReviewReference: humanReviewReference,
+    rightsHolderApprovalReference: rightsHolderApprovalReference,
+    dataMinimizationConfirmed: dataMinimizationConfirmed,
+    nonAccusatoryLanguageConfirmed: nonAccusatoryLanguageConfirmed,
+    currentPackageId: includePackage ? 'package-1' : null,
+    currentPackageVersion: includePackage ? 1 : 0,
+    currentPackageHash: includePackage
+        ? List<String>.filled(64, 'a').join()
+        : null,
+    packageCount: includePackage ? 1 : 0,
+  ),
   'packages': includePackage
       ? <Map<String, dynamic>>[
-          <String, dynamic>{
-            'packageId': 'package-1',
-            'submissionId': submissionId,
-            'version': 1,
-            'packageType': 'fsmh_application_package',
-            'sourceSnapshot': const <String, dynamic>{},
-            'documentManifest': const <Object>[],
-            'evidenceManifest': const <Object>[],
-            'redactionManifest': const <Object>[],
-            'coverLetterText': 'Resmî üst yazı',
-            'authoritySummary': 'Resmî paket özeti',
-            'legalNeutralityStatement': 'Hukuken nötr ifade',
-            'aggregateHashAlgorithm': 'SHA-256',
-            'aggregateHash': List<String>.filled(64, 'a').join(),
-            'generatedAt': '2026-07-25T10:00:00.000Z',
-            'generatedByUid': 'user-1',
-            'immutable': true,
-            'artifactStatus': artifactStatus,
-            'artifactFormatVersion': 'customs-submission-package-artifact-v1',
-            'sourcePackageHash': List<String>.filled(64, 'b').join(),
-            if (pdfReady)
-              'pdfArtifact': <String, dynamic>{
-                'ready': true,
-                'contentType': 'application/pdf',
-                'sizeBytes': 2048,
-                'sha256': List<String>.filled(64, 'c').join(),
-                'safeFileName': 'resmi-paket.pdf',
-              },
-            if (manifestReady)
-              'jsonManifestArtifact': <String, dynamic>{
-                'ready': true,
-                'contentType': 'application/json',
-                'sizeBytes': 1024,
-                'sha256': List<String>.filled(64, 'd').join(),
-                'safeFileName': 'resmi-paket.json',
-              },
-          },
+          _packageMap(
+            submissionId: submissionId,
+            artifactStatus: artifactStatus,
+            pdfReady: pdfReady,
+            manifestReady: manifestReady,
+          ),
         ]
       : const <Map<String, dynamic>>[],
   'responses': const <Map<String, dynamic>>[],
@@ -139,6 +195,18 @@ CustomsAuthoritySubmissionDetail sampleAuthoritySubmissionDetail({
       'actorLabel': 'Yetkili kullanıcı',
       'recordedAt': '2026-07-25T10:00:00.000Z',
     },
+    if (includePackage)
+      <String, dynamic>{
+        'submissionId': submissionId,
+        'sequence': 2,
+        'eventType': 'customs_submission_package_generated',
+        'previousStatus': 'approved_for_package',
+        'nextStatus': 'package_generated',
+        'summary': 'Başvuru paketi üretildi.',
+        'reason': 'İnsan ve hak sahibi onaylarından sonra paket oluşturuldu.',
+        'actorLabel': 'Yetkili kullanıcı',
+        'recordedAt': '2026-07-25T10:01:00.000Z',
+      },
   ],
   'integrityStatus': 'verified',
   'readOnly': true,
@@ -158,16 +226,24 @@ class FakeCustomsAuthoritySubmissionRepository
 
   int createCalls = 0;
   int detailCalls = 0;
+  int generatePackageCalls = 0;
   int materializeCalls = 0;
   int pdfAuthorizationCalls = 0;
   int manifestAuthorizationCalls = 0;
   CustomsAuthoritySubmissionDraft? lastDraft;
+  CustomsSubmissionPackageDraft? lastPackageDraft;
+  String? lastPackageTenantId;
+  String? lastPackageCanonicalBrandId;
+  String? lastPackageSubmissionId;
   CustomsAuthoritySubmissionDetail? detail;
+  Object? packageGenerationError;
   Object? materializationError;
   Object? authorizationError;
+  Completer<void>? packageGenerationGate;
   Completer<void>? materializationGate;
   Completer<void>? pdfAuthorizationGate;
   Completer<void>? manifestAuthorizationGate;
+  final List<String> packageGenerationRequestIds = [];
   final List<String> materializationRequestIds = [];
   final List<String> authorizationRequestIds = [];
 
@@ -223,9 +299,78 @@ class FakeCustomsAuthoritySubmissionRepository
     required String submissionId,
     required CustomsSubmissionPackageDraft draft,
     required String requestId,
-  }) async => throw UnsupportedError(
-    'FakeCustomsAuthoritySubmissionRepository.generatePackage is not configured.',
-  );
+  }) async {
+    generatePackageCalls++;
+    lastPackageTenantId = tenantId;
+    lastPackageCanonicalBrandId = canonicalBrandId;
+    lastPackageSubmissionId = submissionId;
+    lastPackageDraft = draft;
+    packageGenerationRequestIds.add(requestId);
+    draft.toRequestMap();
+    await packageGenerationGate?.future;
+    final error = packageGenerationError;
+    if (error != null) throw error;
+
+    final current = detail?.submission;
+    final result = CustomsPackageGenerationResult.fromMap(<String, dynamic>{
+      'contractVersion': 'customs-submission-package-generate-result-v1',
+      'ok': true,
+      'duplicate': false,
+      'transactionCommitted': true,
+      'submission': _submissionMap(
+        submissionId: submissionId,
+        status: 'package_generated',
+        submissionType:
+            current?.submissionType ?? 'fsmh_protection_application',
+        targetAuthority: current?.targetAuthority ?? 'fsmh_program',
+        protectionProfileId: current?.protectionProfileId ?? 'profile-1',
+        interventionId: current?.interventionId,
+        title: current?.title ?? 'Bosch FSMH koruma başvurusu',
+        humanReviewReference:
+            current?.humanReviewReference ?? 'review-reference-1',
+        rightsHolderApprovalReference:
+            current?.rightsHolderApprovalReference ?? 'approval-reference-1',
+        dataMinimizationConfirmed: current?.dataMinimizationConfirmed ?? true,
+        nonAccusatoryLanguageConfirmed:
+            current?.nonAccusatoryLanguageConfirmed ?? true,
+        currentPackageId: 'package-1',
+        currentPackageVersion: 1,
+        currentPackageHash: List<String>.filled(64, 'a').join(),
+        packageCount: 1,
+      ),
+      'package': {
+        ..._packageMap(submissionId: submissionId),
+        'packageType': draft.packageType.wireValue,
+        'documentManifest': draft.documentManifest
+            .map((item) => item.toRequestMap())
+            .toList(growable: false),
+        'evidenceManifest': draft.evidenceManifest
+            .map((item) => item.toRequestMap())
+            .toList(growable: false),
+        'redactionManifest': draft.redactionManifest
+            .map((item) => item.toRequestMap())
+            .toList(growable: false),
+        'coverLetterText': draft.coverLetterText,
+        'authoritySummary': draft.authoritySummary,
+        'legalNeutralityStatement': draft.legalNeutralityStatement,
+      },
+    });
+
+    detail = sampleAuthoritySubmissionDetail(
+      submissionId: submissionId,
+      status: 'package_generated',
+      includePackage: true,
+      includeScope: true,
+      humanReviewReference:
+          current?.humanReviewReference ?? 'review-reference-1',
+      rightsHolderApprovalReference:
+          current?.rightsHolderApprovalReference ?? 'approval-reference-1',
+      dataMinimizationConfirmed: current?.dataMinimizationConfirmed ?? true,
+      nonAccusatoryLanguageConfirmed:
+          current?.nonAccusatoryLanguageConfirmed ?? true,
+    );
+    return result;
+  }
 
   @override
   Future<CustomsExternalSubmissionResult> recordExternalSubmission({

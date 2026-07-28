@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:markakalkan/features/customs_security/data/customs_authority_submission_repository.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_detail_page.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_authority_submission_labels.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_security_detail_page.dart';
@@ -30,6 +31,64 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
+  }
+
+  Future<void> addRequiredPackageManifestItem(WidgetTester tester) async {
+    final addButton = find.byKey(
+      const ValueKey('add-customs-package-manifest-item'),
+    );
+    await tester.ensureVisible(addButton);
+    await tester.tap(addButton);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('customs-package-manifest-reference-id')),
+      'document-1',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('customs-package-manifest-title')),
+      'Marka tescil belgesi',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('customs-package-manifest-sha256')),
+      List<String>.filled(64, 'a').join(),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('customs-package-manifest-mime')),
+      'application/pdf',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('customs-package-manifest-size')),
+      '2048',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-customs-package-manifest-item')),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> addPackageRedactionItem(WidgetTester tester) async {
+    final addButton = find.byKey(
+      const ValueKey('add-customs-package-redaction-item'),
+    );
+    await tester.ensureVisible(addButton);
+    await tester.tap(addButton);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('customs-package-redaction-field-path')),
+      'contact.phone',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('customs-package-redaction-reason')),
+      'Kişisel veri minimizasyonu.',
+    );
+    final confirm = find.byKey(
+      const ValueKey('confirm-customs-package-redaction-item'),
+    );
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
   }
 
   testWidgets('legacy artifact materializes once and reloads detail once', (
@@ -298,6 +357,140 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'approved submission generates one immutable package and reloads detail',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'approved_for_package',
+          includeScope: true,
+          humanReviewReference: 'review-reference-1',
+          rightsHolderApprovalReference: 'approval-reference-1',
+          dataMinimizationConfirmed: true,
+          nonAccusatoryLanguageConfirmed: true,
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpArtifactDetail(tester, repository);
+
+      final generate = find.byKey(
+        const ValueKey('generate-customs-submission-package'),
+      );
+      await tester.ensureVisible(generate);
+      expect(tester.widget<FilledButton>(generate).onPressed, isNotNull);
+      await tester.tap(generate);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Başvuru paketi hazırlama'), findsOneWidget);
+      await addRequiredPackageManifestItem(tester);
+      expect(
+        find.byKey(const ValueKey('customs-package-manifest-item-0')),
+        findsOneWidget,
+      );
+      await addPackageRedactionItem(tester);
+      expect(
+        find.byKey(const ValueKey('customs-package-redaction-item-0')),
+        findsOneWidget,
+      );
+
+      final review = find.byKey(const ValueKey('review-customs-package'));
+      await tester.ensureVisible(review);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('değiştirilemez bir başvuru paketine'),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-generate-customs-package')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.generatePackageCalls, 1);
+      expect(repository.packageGenerationRequestIds, ['stable-request-id']);
+      expect(repository.lastPackageTenantId, 'tenant-1');
+      expect(repository.lastPackageCanonicalBrandId, 'brand-1');
+      expect(repository.lastPackageSubmissionId, 'submission-1');
+      expect(
+        repository.lastPackageDraft?.packageType,
+        CustomsSubmissionPackageType.fsmhApplicationPackage,
+      );
+      expect(repository.lastPackageDraft?.documentManifest, hasLength(1));
+      expect(repository.lastPackageDraft?.evidenceManifest, isEmpty);
+      expect(repository.lastPackageDraft?.redactionManifest, hasLength(1));
+      expect(
+        repository.lastPackageDraft?.redactionManifest.single.action,
+        'mask',
+      );
+      expect(repository.detailCalls, 2);
+      expect(find.text('Başvuru paketi hazırlandı'), findsOneWidget);
+      expect(find.text('Resmî Paket ve Güvenli İndirme'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'package generation final confirmation cancellation writes nothing',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'approved_for_package',
+          includeScope: true,
+          humanReviewReference: 'review-reference-1',
+          rightsHolderApprovalReference: 'approval-reference-1',
+          dataMinimizationConfirmed: true,
+          nonAccusatoryLanguageConfirmed: true,
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpArtifactDetail(tester, repository);
+
+      final generate = find.byKey(
+        const ValueKey('generate-customs-submission-package'),
+      );
+      await tester.ensureVisible(generate);
+      await tester.tap(generate);
+      await tester.pumpAndSettle();
+      await addRequiredPackageManifestItem(tester);
+
+      final review = find.byKey(const ValueKey('review-customs-package'));
+      await tester.ensureVisible(review);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Vazgeç'));
+      await tester.pumpAndSettle();
+
+      expect(repository.generatePackageCalls, 0);
+      expect(repository.packageGenerationRequestIds, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'package generation stays fail closed until scope and gates pass',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'approved_for_package',
+        );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpArtifactDetail(tester, repository);
+
+      final generate = find.byKey(
+        const ValueKey('generate-customs-submission-package'),
+      );
+      await tester.ensureVisible(generate);
+      expect(tester.widget<FilledButton>(generate).onPressed, isNull);
+      expect(
+        find.text('Tenant ve marka kapsamı doğrulanamadı.'),
+        findsOneWidget,
+      );
+      expect(find.text('İnsan incelemesi referansı eksik.'), findsOneWidget);
+      expect(
+        find.text('Hak sahibi veya temsilci onayı eksik.'),
+        findsOneWidget,
+      );
+      expect(repository.generatePackageCalls, 0);
+    },
+  );
 
   testWidgets('hub exposes three canonical official-operation views', (
     tester,

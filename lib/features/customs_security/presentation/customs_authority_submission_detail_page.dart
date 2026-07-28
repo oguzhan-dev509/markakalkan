@@ -31,6 +31,7 @@ class _CustomsAuthoritySubmissionDetailPageState
   bool _loading = true;
   String? _error;
   CustomsAuthoritySubmissionDetail? _detail;
+  bool _generatingPackage = false;
   bool _materializing = false;
   bool _downloadingPdf = false;
   bool _downloadingManifest = false;
@@ -72,6 +73,78 @@ class _CustomsAuthoritySubmissionDetailPageState
   String _newRequestId() =>
       (widget.requestIdFactory ??
       generateCustomsAuthoritySubmissionRequestId)();
+
+  Future<void> _generatePackage() async {
+    if (_generatingPackage) return;
+    final currentDetail = _detail;
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        scope == null ||
+        !_packageGenerationAllowed(currentDetail.submission)) {
+      return;
+    }
+
+    try {
+      final draft = await showDialog<CustomsSubmissionPackageDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) =>
+            _GeneratePackageDialog(submission: currentDetail.submission),
+      );
+      if (!mounted || draft == null) return;
+
+      final itemCount =
+          draft.documentManifest.length + draft.evidenceManifest.length;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Başvuru paketini üret'),
+          content: Text(
+            'Bu işlem $itemCount belge/delil kaydını değiştirilemez bir '
+            'başvuru paketine dönüştürür. Paket üretildikten sonra içerik '
+            'bu sürüm üzerinde değiştirilemez. Devam edilsin mi?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('confirm-generate-customs-package'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Paketi üret'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+
+      setState(() => _generatingPackage = true);
+      final requestId = _newRequestId();
+      final result = await _repository.generatePackage(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: currentDetail.submission.submissionId,
+        draft: draft,
+        requestId: requestId,
+      );
+      if (!mounted) return;
+      _showMessage(
+        result.duplicate
+            ? 'Aynı paket isteği daha önce uygulanmıştı; güncel kayıt yüklendi.'
+            : 'Başvuru paketi hazırlandı',
+      );
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(customsAuthoritySubmissionErrorMessage(error));
+    } finally {
+      if (mounted && _generatingPackage) {
+        setState(() => _generatingPackage = false);
+      }
+    }
+  }
 
   Future<void> _materialize(CustomsSubmissionPackage package) async {
     if (_materializing) return;
@@ -216,9 +289,11 @@ class _CustomsAuthoritySubmissionDetailPageState
           ? _AuthorityDetailError(message: _error!, onRetry: _load)
           : _AuthoritySubmissionDetailView(
               detail: _detail!,
+              generatingPackage: _generatingPackage,
               materializing: _materializing,
               downloadingPdf: _downloadingPdf,
               downloadingManifest: _downloadingManifest,
+              onGeneratePackage: _generatePackage,
               onMaterialize: _materialize,
               onDownload: _download,
             ),
@@ -229,17 +304,21 @@ class _CustomsAuthoritySubmissionDetailPageState
 class _AuthoritySubmissionDetailView extends StatelessWidget {
   const _AuthoritySubmissionDetailView({
     required this.detail,
+    required this.generatingPackage,
     required this.materializing,
     required this.downloadingPdf,
     required this.downloadingManifest,
+    required this.onGeneratePackage,
     required this.onMaterialize,
     required this.onDownload,
   });
 
   final CustomsAuthoritySubmissionDetail detail;
+  final bool generatingPackage;
   final bool materializing;
   final bool downloadingPdf;
   final bool downloadingManifest;
+  final VoidCallback onGeneratePackage;
   final ValueChanged<CustomsSubmissionPackage> onMaterialize;
   final void Function(
     CustomsSubmissionPackage package,
@@ -261,6 +340,13 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
         const SizedBox(height: 16),
         const _LegalNotice(),
         const SizedBox(height: 16),
+        if (currentPackage == null)
+          _PackageGenerationSection(
+            submission: submission,
+            scopeAvailable: detail.artifactScope != null,
+            generating: generatingPackage,
+            onGenerate: onGeneratePackage,
+          ),
         _AuthoritySection(
           title: 'İletim kimliği ve yönlendirme',
           children: [
@@ -420,6 +506,693 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
     );
   }
 }
+
+bool _packageGenerationAllowed(CustomsAuthoritySubmission submission) =>
+    submission.status == 'approved_for_package' &&
+    submission.humanReviewReference != null &&
+    submission.rightsHolderApprovalReference != null &&
+    submission.dataMinimizationConfirmed &&
+    submission.nonAccusatoryLanguageConfirmed;
+
+class _PackageGenerationSection extends StatelessWidget {
+  const _PackageGenerationSection({
+    required this.submission,
+    required this.scopeAvailable,
+    required this.generating,
+    required this.onGenerate,
+  });
+
+  final CustomsAuthoritySubmission submission;
+  final bool scopeAvailable;
+  final bool generating;
+  final VoidCallback onGenerate;
+
+  @override
+  Widget build(BuildContext context) {
+    final blockers = <String>[
+      if (!scopeAvailable) 'Tenant ve marka kapsamı doğrulanamadı.',
+      if (submission.status != 'approved_for_package')
+        'Dosya “Paket hazırlamaya onaylandı” durumunda olmalıdır.',
+      if (submission.humanReviewReference == null)
+        'İnsan incelemesi referansı eksik.',
+      if (submission.rightsHolderApprovalReference == null)
+        'Hak sahibi veya temsilci onayı eksik.',
+      if (!submission.dataMinimizationConfirmed)
+        'Veri minimizasyonu teyidi eksik.',
+      if (!submission.nonAccusatoryLanguageConfirmed)
+        'Hukuken nötr dil teyidi eksik.',
+    ];
+    final allowed = blockers.isEmpty;
+
+    return _AuthoritySection(
+      title: 'Başvuru paketi üretimi',
+      children: [
+        const Text(
+          'Onaylanmış başvuru veya ihbar içeriğini; üst yazı, kurum özeti, '
+          'belge/delil manifesti ve hukuken nötr dil beyanıyla değiştirilemez '
+          'bir paket sürümüne dönüştürün. Bu işlem kuruma otomatik gönderim '
+          'yapmaz.',
+          style: TextStyle(height: 1.5),
+        ),
+        if (blockers.isNotEmpty)
+          Container(
+            key: const ValueKey('customs-package-generation-blockers'),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E8),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF0D9A2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Paket üretimi için tamamlanması gerekenler:',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                for (final blocker in blockers)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('• '),
+                        Expanded(child: Text(blocker)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        FilledButton.icon(
+          key: const ValueKey('generate-customs-submission-package'),
+          onPressed: allowed && !generating ? onGenerate : null,
+          icon: generating
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.inventory_2_outlined),
+          label: Text(
+            generating ? 'Paket üretiliyor…' : 'Başvuru Paketini Üret',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+enum _PackageManifestKind { document, evidence }
+
+class _PackageManifestDraft {
+  const _PackageManifestDraft({required this.kind, required this.item});
+
+  final _PackageManifestKind kind;
+  final CustomsSubmissionManifestItem item;
+}
+
+class _PackageRedactionDraft {
+  const _PackageRedactionDraft({required this.item});
+
+  final CustomsSubmissionRedactionItem item;
+}
+
+class _GeneratePackageDialog extends StatefulWidget {
+  const _GeneratePackageDialog({required this.submission});
+
+  final CustomsAuthoritySubmission submission;
+
+  @override
+  State<_GeneratePackageDialog> createState() => _GeneratePackageDialogState();
+}
+
+class _GeneratePackageDialogState extends State<_GeneratePackageDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _coverLetterController;
+  late final TextEditingController _summaryController;
+  late final TextEditingController _neutralityController;
+  late CustomsSubmissionPackageType _packageType;
+  final List<_PackageManifestDraft> _manifestItems = [];
+  final List<_PackageRedactionDraft> _redactionItems = [];
+  String? _manifestError;
+
+  @override
+  void initState() {
+    super.initState();
+    final submission = widget.submission;
+    _packageType = switch (submission.submissionType) {
+      'fsmh_protection_application' =>
+        CustomsSubmissionPackageType.fsmhApplicationPackage,
+      'additional_information_response' =>
+        CustomsSubmissionPackageType.additionalInformationPackage,
+      _ => CustomsSubmissionPackageType.authorityReferralPackage,
+    };
+    _coverLetterController = TextEditingController(
+      text:
+          'Sayın Yetkili,\n\n${submission.authoritySummary}\n\n'
+          'İlgili belge ve deliller değerlendirilmek üzere sunulmaktadır.',
+    );
+    _summaryController = TextEditingController(
+      text: submission.authoritySummary,
+    );
+    _neutralityController = TextEditingController(
+      text:
+          'Bu paket mevcut kayıtlar ve insan incelemesine dayanır; kesin suç '
+          'isnadı veya otomatik hüküm içermez.',
+    );
+  }
+
+  @override
+  void dispose() {
+    _coverLetterController.dispose();
+    _summaryController.dispose();
+    _neutralityController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addManifestItem() async {
+    final item = await showDialog<_PackageManifestDraft>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _PackageManifestItemDialog(),
+    );
+    if (item == null || !mounted) return;
+    setState(() {
+      _manifestItems.add(item);
+      _manifestError = null;
+    });
+  }
+
+  Future<void> _addRedactionItem() async {
+    final item = await showDialog<_PackageRedactionDraft>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _PackageRedactionItemDialog(),
+    );
+    if (item == null || !mounted) return;
+    setState(() => _redactionItems.add(item));
+  }
+
+  void _submit() {
+    final formValid = _formKey.currentState?.validate() == true;
+    if (_manifestItems.isEmpty) {
+      setState(() => _manifestError = 'En az bir belge veya delil ekleyin.');
+    }
+    if (!formValid || _manifestItems.isEmpty) return;
+
+    Navigator.pop(
+      context,
+      CustomsSubmissionPackageDraft(
+        packageType: _packageType,
+        coverLetterText: _coverLetterController.text,
+        authoritySummary: _summaryController.text,
+        legalNeutralityStatement: _neutralityController.text,
+        documentManifest: _manifestItems
+            .where((entry) => entry.kind == _PackageManifestKind.document)
+            .map((entry) => entry.item)
+            .toList(growable: false),
+        evidenceManifest: _manifestItems
+            .where((entry) => entry.kind == _PackageManifestKind.evidence)
+            .map((entry) => entry.item)
+            .toList(growable: false),
+        redactionManifest: _redactionItems
+            .map((entry) => entry.item)
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Başvuru paketi hazırlama'),
+      content: SizedBox(
+        width: 720,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Bu form paket sürümünün değiştirilemez içeriğini hazırlar. '
+                  'Üretilen paket ayrıca güvenli PDF ve JSON dosyalarına '
+                  'dönüştürülebilir.',
+                  style: TextStyle(height: 1.45),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<CustomsSubmissionPackageType>(
+                  key: const ValueKey('customs-package-type'),
+                  initialValue: _packageType,
+                  decoration: const InputDecoration(labelText: 'Paket türü'),
+                  items: CustomsSubmissionPackageType.values
+                      .map(
+                        (type) => DropdownMenuItem(
+                          value: type,
+                          child: Text(_packageTypeLabel(type)),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value != null) setState(() => _packageType = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-cover-letter'),
+                  controller: _coverLetterController,
+                  minLines: 4,
+                  maxLines: 8,
+                  decoration: const InputDecoration(labelText: 'Üst yazı'),
+                  validator: _requiredText,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-authority-summary'),
+                  controller: _summaryController,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: const InputDecoration(labelText: 'Kurum özeti'),
+                  validator: _requiredText,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-neutrality-statement'),
+                  controller: _neutralityController,
+                  minLines: 2,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: 'Hukuken nötr dil beyanı',
+                  ),
+                  validator: _requiredText,
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Belge ve delil manifesti',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('add-customs-package-manifest-item'),
+                      onPressed: _addManifestItem,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Belge / delil ekle'),
+                    ),
+                  ],
+                ),
+                if (_manifestError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _manifestError!,
+                    key: const ValueKey('customs-package-manifest-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+                if (_manifestItems.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 10),
+                    child: Text('Henüz belge veya delil eklenmedi.'),
+                  )
+                else ...[
+                  const SizedBox(height: 10),
+                  for (var index = 0; index < _manifestItems.length; index++)
+                    Card(
+                      key: ValueKey('customs-package-manifest-item-$index'),
+                      elevation: 0,
+                      child: ListTile(
+                        leading: Icon(
+                          _manifestItems[index].kind ==
+                                  _PackageManifestKind.document
+                              ? Icons.description_outlined
+                              : Icons.fact_check_outlined,
+                        ),
+                        title: Text(_manifestItems[index].item.title),
+                        subtitle: Text(
+                          '${_manifestItems[index].item.referenceId}\n'
+                          '${_shortHashValue(_manifestItems[index].item.sha256)}',
+                        ),
+                        isThreeLine: true,
+                        trailing: IconButton(
+                          tooltip: 'Kaldır',
+                          onPressed: () {
+                            setState(() => _manifestItems.removeAt(index));
+                          },
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Veri minimizasyonu ve redaksiyon manifesti',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('add-customs-package-redaction-item'),
+                      onPressed: _addRedactionItem,
+                      icon: const Icon(Icons.security_outlined),
+                      label: const Text('Redaksiyon ekle'),
+                    ),
+                  ],
+                ),
+                if (_redactionItems.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 10),
+                    child: Text(
+                      'Bu paket için ayrıca bir redaksiyon kaydı eklenmedi.',
+                    ),
+                  )
+                else ...[
+                  const SizedBox(height: 10),
+                  for (var index = 0; index < _redactionItems.length; index++)
+                    Card(
+                      key: ValueKey('customs-package-redaction-item-$index'),
+                      elevation: 0,
+                      child: ListTile(
+                        leading: const Icon(Icons.security_outlined),
+                        title: Text(_redactionItems[index].item.fieldPath),
+                        subtitle: Text(
+                          '${_redactionItems[index].item.action} · '
+                          '${_redactionItems[index].item.reason}',
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Kaldır',
+                          onPressed: () {
+                            setState(() => _redactionItems.removeAt(index));
+                          },
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-customs-package'),
+          onPressed: _submit,
+          child: const Text('İncele ve devam et'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PackageManifestItemDialog extends StatefulWidget {
+  const _PackageManifestItemDialog();
+
+  @override
+  State<_PackageManifestItemDialog> createState() =>
+      _PackageManifestItemDialogState();
+}
+
+class _PackageManifestItemDialogState
+    extends State<_PackageManifestItemDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _referenceController = TextEditingController();
+  final _titleController = TextEditingController();
+  final _hashController = TextEditingController();
+  final _mimeController = TextEditingController();
+  final _sizeController = TextEditingController();
+  _PackageManifestKind _kind = _PackageManifestKind.document;
+
+  @override
+  void dispose() {
+    _referenceController.dispose();
+    _titleController.dispose();
+    _hashController.dispose();
+    _mimeController.dispose();
+    _sizeController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() != true) return;
+    Navigator.pop(
+      context,
+      _PackageManifestDraft(
+        kind: _kind,
+        item: CustomsSubmissionManifestItem(
+          referenceId: _referenceController.text,
+          title: _titleController.text,
+          sha256: _hashController.text.toLowerCase(),
+          mimeType: _optionalTrimmed(_mimeController.text),
+          sizeBytes: _optionalPositiveInt(_sizeController.text),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Belge veya delil ekle'),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                DropdownButtonFormField<_PackageManifestKind>(
+                  key: const ValueKey('customs-package-manifest-kind'),
+                  initialValue: _kind,
+                  decoration: const InputDecoration(labelText: 'Kayıt türü'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: _PackageManifestKind.document,
+                      child: Text('Belge'),
+                    ),
+                    DropdownMenuItem(
+                      value: _PackageManifestKind.evidence,
+                      child: Text('Delil'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _kind = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-manifest-reference-id'),
+                  controller: _referenceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Kayıt / dosya referansı',
+                  ),
+                  validator: _requiredText,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-manifest-title'),
+                  controller: _titleController,
+                  decoration: const InputDecoration(labelText: 'Başlık'),
+                  validator: _requiredText,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-manifest-sha256'),
+                  controller: _hashController,
+                  decoration: const InputDecoration(labelText: 'SHA-256'),
+                  validator: (value) {
+                    final normalized = value?.trim() ?? '';
+                    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(normalized)) {
+                      return '64 karakterlik geçerli SHA-256 girin.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-manifest-mime'),
+                  controller: _mimeController,
+                  decoration: const InputDecoration(
+                    labelText: 'MIME türü (isteğe bağlı)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('customs-package-manifest-size'),
+                  controller: _sizeController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Boyut, bayt (isteğe bağlı)',
+                  ),
+                  validator: (value) {
+                    final trimmed = value?.trim() ?? '';
+                    if (trimmed.isEmpty) return null;
+                    final parsed = int.tryParse(trimmed);
+                    if (parsed == null || parsed <= 0) {
+                      return 'Pozitif bir bayt değeri girin.';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-customs-package-manifest-item'),
+          onPressed: _submit,
+          child: const Text('Ekle'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PackageRedactionItemDialog extends StatefulWidget {
+  const _PackageRedactionItemDialog();
+
+  @override
+  State<_PackageRedactionItemDialog> createState() =>
+      _PackageRedactionItemDialogState();
+}
+
+class _PackageRedactionItemDialogState
+    extends State<_PackageRedactionItemDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _fieldPathController = TextEditingController();
+  final _reasonController = TextEditingController();
+  CustomsRedactionAction _action = CustomsRedactionAction.mask;
+
+  @override
+  void dispose() {
+    _fieldPathController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() != true) return;
+    Navigator.pop(
+      context,
+      _PackageRedactionDraft(
+        item: CustomsSubmissionRedactionItem(
+          fieldPath: _fieldPathController.text,
+          action: _action.wireValue,
+          reason: _reasonController.text,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Redaksiyon kaydı ekle'),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                key: const ValueKey('customs-package-redaction-field-path'),
+                controller: _fieldPathController,
+                decoration: const InputDecoration(labelText: 'Alan yolu'),
+                validator: _requiredText,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<CustomsRedactionAction>(
+                key: const ValueKey('customs-package-redaction-action'),
+                initialValue: _action,
+                decoration: const InputDecoration(labelText: 'İşlem'),
+                items: CustomsRedactionAction.values
+                    .map(
+                      (action) => DropdownMenuItem(
+                        value: action,
+                        child: Text(_redactionActionLabel(action)),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => _action = value);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const ValueKey('customs-package-redaction-reason'),
+                controller: _reasonController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: 'Gerekçe'),
+                validator: _requiredText,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-customs-package-redaction-item'),
+          onPressed: _submit,
+          child: const Text('Ekle'),
+        ),
+      ],
+    );
+  }
+}
+
+String? _requiredText(String? value) =>
+    (value?.trim().isEmpty ?? true) ? 'Bu alan zorunludur.' : null;
+
+String? _optionalTrimmed(String value) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+int? _optionalPositiveInt(String value) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : int.parse(trimmed);
+}
+
+String _packageTypeLabel(CustomsSubmissionPackageType type) => switch (type) {
+  CustomsSubmissionPackageType.fsmhApplicationPackage =>
+    'FSMH koruma başvuru paketi',
+  CustomsSubmissionPackageType.authorityReferralPackage =>
+    'Yetkili kuruma sevk paketi',
+  CustomsSubmissionPackageType.additionalInformationPackage =>
+    'Ek bilgi paketi',
+};
+
+String _redactionActionLabel(CustomsRedactionAction action) => switch (action) {
+  CustomsRedactionAction.remove => 'Kaldır',
+  CustomsRedactionAction.mask => 'Maskele',
+  CustomsRedactionAction.generalize => 'Genelleştir',
+  CustomsRedactionAction.retain => 'Aynen koru',
+};
+
+String _shortHashValue(String value) =>
+    value.length <= 12 ? value : '${value.substring(0, 12)}…';
 
 class _ArtifactSection extends StatelessWidget {
   const _ArtifactSection({
