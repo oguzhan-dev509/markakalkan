@@ -5,12 +5,16 @@ part 'risk_scan_run_contract_v1.dart';
 part 'risk_scan_channel_contract_v1.dart';
 part 'risk_scan_observation_contract_v1.dart';
 part 'risk_scan_finding_contract_v1.dart';
+part 'risk_scan_report_contract_v1.dart';
+part 'risk_scan_claim_contract_v1.dart';
 
 const String riskScanTargetContractVersionV1 = 'risk-scan-target-v1';
 const String riskScanRunContractVersionV1 = 'risk-scan-run-v1';
 const String riskScanChannelContractVersionV1 = 'risk-scan-channel-v1';
 const String riskScanObservationContractVersionV1 = 'risk-scan-observation-v1';
 const String riskScanFindingContractVersionV1 = 'risk-scan-finding-v1';
+const String riskScanReportContractVersionV1 = 'risk-scan-report-v1';
+const String riskScanClaimContractVersionV1 = 'risk-scan-claim-v1';
 
 enum RiskScanMode { quick }
 
@@ -287,3 +291,35 @@ RiskScanPromotionStatus _promotionStatusFrom(Object? value) =>
       'not_requested': RiskScanPromotionStatus.notRequested,
       'promoted': RiskScanPromotionStatus.promoted,
     }, 'promotionStatus');
+
+enum RiskScanReportRecommendedAction {
+  reviewTopFindings,
+  claimScan,
+  startHumanReview,
+  noImmediateAction,
+}
+
+enum RiskScanClaimStatus { issued, claimed, expired, revoked }
+
+String _reportRecommendedActionValue(
+  RiskScanReportRecommendedAction value,
+) => switch (value) {
+  RiskScanReportRecommendedAction.reviewTopFindings => 'review_top_findings',
+  RiskScanReportRecommendedAction.claimScan => 'claim_scan',
+  RiskScanReportRecommendedAction.startHumanReview => 'start_human_review',
+  RiskScanReportRecommendedAction.noImmediateAction => 'no_immediate_action',
+};
+
+RiskScanReportRecommendedAction _reportRecommendedActionFrom(Object? value) =>
+    _enumValue(value, {
+      'review_top_findings': RiskScanReportRecommendedAction.reviewTopFindings,
+      'claim_scan': RiskScanReportRecommendedAction.claimScan,
+      'start_human_review': RiskScanReportRecommendedAction.startHumanReview,
+      'no_immediate_action': RiskScanReportRecommendedAction.noImmediateAction,
+    }, 'recommendedAction');
+
+String _claimStatusValue(RiskScanClaimStatus value) => value.name;
+
+RiskScanClaimStatus _claimStatusFrom(Object? value) => _enumValue(value, {
+  for (final item in RiskScanClaimStatus.values) item.name: item,
+}, 'status');
