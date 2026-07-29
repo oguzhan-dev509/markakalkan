@@ -70,6 +70,42 @@ void main() {
       isTrue,
     );
   });
+  test('valid Risk Orchestration exact source allows', () {
+    final sourceProvenance = provenance(
+      module: 'risk_orchestration',
+      sourceRecordId: 'risk-scan-finding-1',
+    );
+    final subject = signal(
+      module: 'risk_orchestration',
+      sourceProvenance: sourceProvenance,
+    );
+    final decision = evaluator.evaluate(
+      signalRequest(subject: subject, key: keyFor('risk_orchestration')),
+    );
+    expect(decision.allowed, isTrue);
+    expect(
+      decision.blockers.map((item) => item.code),
+      isNot(contains('provenance.source_record_missing')),
+    );
+  });
+  test('Risk Orchestration missing exact source provenance denies', () {
+    final sourceProvenance = provenance(
+      module: 'risk_orchestration',
+      sourceRecordId: null,
+    );
+    final subject = signal(
+      module: 'risk_orchestration',
+      sourceProvenance: sourceProvenance,
+    );
+    final decision = evaluator.evaluate(
+      signalRequest(subject: subject, key: keyFor('risk_orchestration')),
+    );
+    expect(decision.allowed, isFalse);
+    expect(
+      decision.blockers.map((item) => item.code),
+      contains('provenance.source_record_missing'),
+    );
+  });
   test('valid DDT exact occurrence allows', () {
     final ddtProvenance = provenance(
       module: 'digital_detective',

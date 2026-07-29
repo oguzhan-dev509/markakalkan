@@ -10,6 +10,52 @@ void main() {
   test('valid assessment with exact provenance allows', () {
     expect(evaluator.evaluate(riskRequest()).allowed, isTrue);
   });
+  test('valid Risk Orchestration exact source allows', () {
+    final sourceProvenance = provenance(
+      module: 'risk_orchestration',
+      sourceRecordId: 'risk-scan-finding-1',
+    );
+    final subject = risk(sourceProvenance: sourceProvenance);
+    final decision = evaluator.evaluate(
+      RiskAssessmentPersistenceReadinessRequestV1(
+        subject: subject,
+        sourceIngestionKey: keyFor('risk_orchestration'),
+        identityResolutionResult: resolution(),
+        evaluatedAt: evaluatedAt,
+        requestedByModule: 'test',
+        policyVersion: riskPersistenceReadinessPolicyVersionV1,
+        provenance: provenance(),
+      ),
+    );
+    expect(decision.allowed, isTrue);
+    expect(
+      decision.blockers.map((item) => item.code),
+      isNot(contains('provenance.source_record_missing')),
+    );
+  });
+  test('Risk Orchestration missing exact source provenance denies', () {
+    final sourceProvenance = provenance(
+      module: 'risk_orchestration',
+      sourceRecordId: null,
+    );
+    final subject = risk(sourceProvenance: sourceProvenance);
+    final decision = evaluator.evaluate(
+      RiskAssessmentPersistenceReadinessRequestV1(
+        subject: subject,
+        sourceIngestionKey: keyFor('risk_orchestration'),
+        identityResolutionResult: resolution(),
+        evaluatedAt: evaluatedAt,
+        requestedByModule: 'test',
+        policyVersion: riskPersistenceReadinessPolicyVersionV1,
+        provenance: provenance(),
+      ),
+    );
+    expect(decision.allowed, isFalse);
+    expect(
+      decision.blockers.map((item) => item.code),
+      contains('provenance.source_record_missing'),
+    );
+  });
   test('empty reasons deny', () {
     expect(
       evaluator.evaluate(riskRequest(subject: risk(reasons: const []))).allowed,

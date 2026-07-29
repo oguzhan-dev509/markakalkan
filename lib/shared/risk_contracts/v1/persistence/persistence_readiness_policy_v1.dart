@@ -4,6 +4,7 @@ final class PersistenceReadinessPolicyV1 {
   const PersistenceReadinessPolicyV1();
 
   static const allowedModules = {
+    'risk_orchestration',
     'traceability',
     'monitoring',
     'digital_market_monitoring',
@@ -148,7 +149,8 @@ final class PersistenceReadinessPolicyV1 {
         ),
       );
     }
-    if ((provenance.producerModule == 'traceability' ||
+    if ((provenance.producerModule == 'risk_orchestration' ||
+            provenance.producerModule == 'traceability' ||
             provenance.producerModule == 'monitoring' ||
             provenance.producerModule == 'digital_market_monitoring') &&
         provenance.sourceRecordId == null) {
