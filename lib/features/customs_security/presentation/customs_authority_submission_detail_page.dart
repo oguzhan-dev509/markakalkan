@@ -41,6 +41,18 @@ class _CustomsAuthoritySubmissionDetailPageState
   bool _loading = true;
   String? _error;
   CustomsAuthoritySubmissionDetail? _detail;
+  bool _submittingHumanReview = false;
+  String? _humanReviewSubmissionRequestId;
+  _HumanReviewSubmissionDraft? _humanReviewSubmissionRetryDraft;
+  bool _completingHumanReview = false;
+  String? _humanReviewUpdateRequestId;
+  String? _humanReviewTransitionRequestId;
+  _HumanReviewCompletionDraft? _humanReviewCompletionRetryDraft;
+  bool _approvingForPackage = false;
+  String? _packageApprovalUpdateRequestId;
+  String? _packageApprovalTransitionRequestId;
+  _RightsHolderApprovalDraft? _packageApprovalRetryDraft;
+  String? _reviewApprovalRetrySubmissionId;
   bool _generatingPackage = false;
   bool _materializing = false;
   bool _downloadingPdf = false;
@@ -78,6 +90,7 @@ class _CustomsAuthoritySubmissionDetailPageState
   Future<void> _load({bool newOperation = true}) async {
     if (newOperation) {
       _materializationRequestId = null;
+      _clearReviewApprovalRetries();
       _clearExternalSubmissionRetry();
       _clearAuthorityOperationRetries();
     }
@@ -124,6 +137,391 @@ class _CustomsAuthoritySubmissionDetailPageState
   String _newRequestId() =>
       (widget.requestIdFactory ??
       generateCustomsAuthoritySubmissionRequestId)();
+
+  void _clearReviewApprovalRetries() {
+    _humanReviewSubmissionRequestId = null;
+    _humanReviewSubmissionRetryDraft = null;
+    _humanReviewUpdateRequestId = null;
+    _humanReviewTransitionRequestId = null;
+    _humanReviewCompletionRetryDraft = null;
+    _packageApprovalUpdateRequestId = null;
+    _packageApprovalTransitionRequestId = null;
+    _packageApprovalRetryDraft = null;
+    _reviewApprovalRetrySubmissionId = null;
+  }
+
+  bool _reviewRetryMatches(CustomsAuthoritySubmission submission) =>
+      _reviewApprovalRetrySubmissionId == submission.submissionId;
+
+  Future<void> _submitForHumanReview({bool retry = false}) async {
+    if (_submittingHumanReview) {
+      return;
+    }
+    final currentDetail = _detail;
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        scope == null ||
+        currentDetail.submission.status != 'draft') {
+      return;
+    }
+    final submission = currentDetail.submission;
+
+    _HumanReviewSubmissionDraft? draft;
+    if (retry) {
+      if (!_reviewRetryMatches(submission) ||
+          _humanReviewSubmissionRequestId == null ||
+          _humanReviewSubmissionRetryDraft == null) {
+        _clearReviewApprovalRetries();
+        _showMessage(
+          'Yeniden deneme bilgileri bu dosyayla eşleşmiyor. Sayfayı yenileyip işlemi yeniden hazırlayın.',
+        );
+        return;
+      }
+      draft = _humanReviewSubmissionRetryDraft;
+    } else {
+      draft = await showDialog<_HumanReviewSubmissionDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const _SubmitHumanReviewDialog(),
+      );
+      if (!mounted || draft == null) {
+        return;
+      }
+    }
+
+    final operationDraft = draft;
+    if (operationDraft == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(retry ? retrySubmitForHumanReview : submitForHumanReview),
+        content: Text(
+          retry
+              ? 'Aynı gerekçe ve aynı güvenli işlem kimliğiyle insan incelemesi geçişi yeniden denenecek.'
+              : 'Bu dosya insan inceleme kuyruğuna taşınacak ve değiştirilemez durum olayı oluşturulacak. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: ValueKey(
+              retry
+                  ? 'confirm-retry-submit-human-review'
+                  : 'confirm-submit-human-review',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(retry ? 'Yeniden dene' : 'İncelemeye gönder'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    if (!retry) {
+      _humanReviewSubmissionRequestId = _newRequestId();
+      _humanReviewSubmissionRetryDraft = operationDraft;
+      _reviewApprovalRetrySubmissionId = submission.submissionId;
+    }
+
+    setState(() => _submittingHumanReview = true);
+    try {
+      await _repository.transitionSubmission(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: submission.submissionId,
+        nextStatus: 'awaiting_human_review',
+        reason: operationDraft.reason,
+        requestId: _humanReviewSubmissionRequestId,
+      );
+      if (!mounted) {
+        return;
+      }
+      _clearReviewApprovalRetries();
+      _showMessage('Başvuru insan incelemesine gönderildi');
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (!customsAuthoritySubmissionErrorIsRetryable(error)) {
+        _clearReviewApprovalRetries();
+      }
+      _showMessage(customsAuthoritySubmissionErrorMessage(error));
+    } finally {
+      if (mounted && _submittingHumanReview) {
+        setState(() => _submittingHumanReview = false);
+      }
+    }
+  }
+
+  Future<void> _completeHumanReview({bool retry = false}) async {
+    if (_completingHumanReview) {
+      return;
+    }
+    final currentDetail = _detail;
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        scope == null ||
+        currentDetail.submission.status != 'awaiting_human_review') {
+      return;
+    }
+    final submission = currentDetail.submission;
+
+    _HumanReviewCompletionDraft? draft;
+    if (retry) {
+      if (!_reviewRetryMatches(submission) ||
+          _humanReviewUpdateRequestId == null ||
+          _humanReviewTransitionRequestId == null ||
+          _humanReviewCompletionRetryDraft == null) {
+        _clearReviewApprovalRetries();
+        _showMessage(
+          'Yeniden deneme bilgileri bu dosyayla eşleşmiyor. Sayfayı yenileyip incelemeyi yeniden hazırlayın.',
+        );
+        return;
+      }
+      draft = _humanReviewCompletionRetryDraft;
+    } else {
+      draft = await showDialog<_HumanReviewCompletionDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const _CompleteHumanReviewDialog(),
+      );
+      if (!mounted || draft == null) {
+        return;
+      }
+    }
+
+    final operationDraft = draft;
+    if (operationDraft == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(retry ? retryCompleteHumanReview : completeHumanReview),
+        content: Text(
+          retry
+              ? 'Aynı inceleme referansı, gerekçe ve güvenli işlem kimlikleriyle iki adımlı işlem yeniden denenecek.'
+              : 'İnsan inceleme referansı kaydedilecek ve dosya hak sahibi veya temsilci onayına taşınacak. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: ValueKey(
+              retry
+                  ? 'confirm-retry-complete-human-review'
+                  : 'confirm-complete-human-review',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(retry ? 'Yeniden dene' : 'İncelemeyi tamamla'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    if (!retry) {
+      _humanReviewUpdateRequestId = _newRequestId();
+      _humanReviewTransitionRequestId = _newRequestId();
+      _humanReviewCompletionRetryDraft = operationDraft;
+      _reviewApprovalRetrySubmissionId = submission.submissionId;
+    }
+
+    setState(() => _completingHumanReview = true);
+    try {
+      await _repository.updateSubmission(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: submission.submissionId,
+        requestId: _humanReviewUpdateRequestId,
+        draft: CustomsAuthoritySubmissionUpdateDraft(
+          targetUnit: submission.targetUnit,
+          channelType: submission.channelType,
+          title: submission.title,
+          authoritySummary: submission.authoritySummary,
+          humanReviewReference: operationDraft.reference,
+          rightsHolderApprovalReference:
+              submission.rightsHolderApprovalReference,
+          dataMinimizationConfirmed: submission.dataMinimizationConfirmed,
+          nonAccusatoryLanguageConfirmed:
+              submission.nonAccusatoryLanguageConfirmed,
+        ),
+      );
+      await _repository.transitionSubmission(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: submission.submissionId,
+        nextStatus: 'awaiting_rights_holder_approval',
+        reason: operationDraft.reason,
+        requestId: _humanReviewTransitionRequestId,
+      );
+      if (!mounted) {
+        return;
+      }
+      _clearReviewApprovalRetries();
+      _showMessage(
+        'İnsan incelemesi tamamlandı; dosya hak sahibi onayına taşındı',
+      );
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (!customsAuthoritySubmissionErrorIsRetryable(error)) {
+        _clearReviewApprovalRetries();
+        await _load(newOperation: false);
+      }
+      if (mounted) {
+        _showMessage(customsAuthoritySubmissionErrorMessage(error));
+      }
+    } finally {
+      if (mounted && _completingHumanReview) {
+        setState(() => _completingHumanReview = false);
+      }
+    }
+  }
+
+  Future<void> _approveForPackage({bool retry = false}) async {
+    if (_approvingForPackage) {
+      return;
+    }
+    final currentDetail = _detail;
+    final scope = currentDetail?.artifactScope;
+    if (currentDetail == null ||
+        scope == null ||
+        currentDetail.submission.status != 'awaiting_rights_holder_approval') {
+      return;
+    }
+    final submission = currentDetail.submission;
+
+    _RightsHolderApprovalDraft? draft;
+    if (retry) {
+      if (!_reviewRetryMatches(submission) ||
+          _packageApprovalUpdateRequestId == null ||
+          _packageApprovalTransitionRequestId == null ||
+          _packageApprovalRetryDraft == null) {
+        _clearReviewApprovalRetries();
+        _showMessage(
+          'Yeniden deneme bilgileri bu dosyayla eşleşmiyor. Sayfayı yenileyip onayı yeniden hazırlayın.',
+        );
+        return;
+      }
+      draft = _packageApprovalRetryDraft;
+    } else {
+      draft = await showDialog<_RightsHolderApprovalDraft>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const _RightsHolderApprovalDialog(),
+      );
+      if (!mounted || draft == null) {
+        return;
+      }
+    }
+
+    final operationDraft = draft;
+    if (operationDraft == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(retry ? retryApproveForPackage : approveForPackage),
+        content: Text(
+          retry
+              ? 'Aynı onay referansı, teyitler, gerekçe ve güvenli işlem kimlikleriyle işlem yeniden denenecek.'
+              : 'Hak sahibi veya temsilci onayı ile veri minimizasyonu ve hukuken nötr dil teyitleri kaydedilecek. Dosya paket hazırlama onayına taşınacak; kuruma gönderim yapılmayacak. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: ValueKey(
+              retry
+                  ? 'confirm-retry-approve-for-package'
+                  : 'confirm-approve-for-package',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(retry ? 'Yeniden dene' : 'Onayla'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    if (!retry) {
+      _packageApprovalUpdateRequestId = _newRequestId();
+      _packageApprovalTransitionRequestId = _newRequestId();
+      _packageApprovalRetryDraft = operationDraft;
+      _reviewApprovalRetrySubmissionId = submission.submissionId;
+    }
+
+    setState(() => _approvingForPackage = true);
+    try {
+      await _repository.updateSubmission(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: submission.submissionId,
+        requestId: _packageApprovalUpdateRequestId,
+        draft: CustomsAuthoritySubmissionUpdateDraft(
+          targetUnit: submission.targetUnit,
+          channelType: submission.channelType,
+          title: submission.title,
+          authoritySummary: submission.authoritySummary,
+          humanReviewReference: submission.humanReviewReference,
+          rightsHolderApprovalReference: operationDraft.reference,
+          dataMinimizationConfirmed: true,
+          nonAccusatoryLanguageConfirmed: true,
+        ),
+      );
+      await _repository.transitionSubmission(
+        tenantId: scope.tenantId,
+        canonicalBrandId: scope.canonicalBrandId,
+        submissionId: submission.submissionId,
+        nextStatus: 'approved_for_package',
+        reason: operationDraft.reason,
+        requestId: _packageApprovalTransitionRequestId,
+      );
+      if (!mounted) {
+        return;
+      }
+      _clearReviewApprovalRetries();
+      _showMessage('Dosya paket hazırlamaya onaylandı');
+      await _load(newOperation: false);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (!customsAuthoritySubmissionErrorIsRetryable(error)) {
+        _clearReviewApprovalRetries();
+        await _load(newOperation: false);
+      }
+      if (mounted) {
+        _showMessage(customsAuthoritySubmissionErrorMessage(error));
+      }
+    } finally {
+      if (mounted && _approvingForPackage) {
+        setState(() => _approvingForPackage = false);
+      }
+    }
+  }
 
   Future<void> _generatePackage() async {
     if (_generatingPackage) return;
@@ -780,6 +1178,20 @@ class _CustomsAuthoritySubmissionDetailPageState
           ? _AuthorityDetailError(message: _error!, onRetry: _load)
           : _AuthoritySubmissionDetailView(
               detail: _detail!,
+              submittingHumanReview: _submittingHumanReview,
+              submitHumanReviewRetryAvailable:
+                  _humanReviewSubmissionRetryDraft != null &&
+                  _humanReviewSubmissionRequestId != null,
+              completingHumanReview: _completingHumanReview,
+              completeHumanReviewRetryAvailable:
+                  _humanReviewCompletionRetryDraft != null &&
+                  _humanReviewUpdateRequestId != null &&
+                  _humanReviewTransitionRequestId != null,
+              approvingForPackage: _approvingForPackage,
+              approveForPackageRetryAvailable:
+                  _packageApprovalRetryDraft != null &&
+                  _packageApprovalUpdateRequestId != null &&
+                  _packageApprovalTransitionRequestId != null,
               generatingPackage: _generatingPackage,
               recordingExternalSubmission: _recordingExternalSubmission,
               externalSubmissionRetryAvailable:
@@ -799,6 +1211,14 @@ class _CustomsAuthoritySubmissionDetailPageState
               materializing: _materializing,
               downloadingPdf: _downloadingPdf,
               downloadingManifest: _downloadingManifest,
+              onSubmitHumanReview: () => _submitForHumanReview(),
+              onRetrySubmitHumanReview: () =>
+                  _submitForHumanReview(retry: true),
+              onCompleteHumanReview: () => _completeHumanReview(),
+              onRetryCompleteHumanReview: () =>
+                  _completeHumanReview(retry: true),
+              onApproveForPackage: () => _approveForPackage(),
+              onRetryApproveForPackage: () => _approveForPackage(retry: true),
               onGeneratePackage: _generatePackage,
               onRecordExternalSubmission: () => _recordExternalSubmission(),
               onRetryExternalSubmission: () =>
@@ -822,6 +1242,12 @@ class _CustomsAuthoritySubmissionDetailPageState
 class _AuthoritySubmissionDetailView extends StatelessWidget {
   const _AuthoritySubmissionDetailView({
     required this.detail,
+    required this.submittingHumanReview,
+    required this.submitHumanReviewRetryAvailable,
+    required this.completingHumanReview,
+    required this.completeHumanReviewRetryAvailable,
+    required this.approvingForPackage,
+    required this.approveForPackageRetryAvailable,
     required this.generatingPackage,
     required this.recordingExternalSubmission,
     required this.externalSubmissionRetryAvailable,
@@ -834,6 +1260,12 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
     required this.materializing,
     required this.downloadingPdf,
     required this.downloadingManifest,
+    required this.onSubmitHumanReview,
+    required this.onRetrySubmitHumanReview,
+    required this.onCompleteHumanReview,
+    required this.onRetryCompleteHumanReview,
+    required this.onApproveForPackage,
+    required this.onRetryApproveForPackage,
     required this.onGeneratePackage,
     required this.onRecordExternalSubmission,
     required this.onRetryExternalSubmission,
@@ -849,6 +1281,12 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
   });
 
   final CustomsAuthoritySubmissionDetail detail;
+  final bool submittingHumanReview;
+  final bool submitHumanReviewRetryAvailable;
+  final bool completingHumanReview;
+  final bool completeHumanReviewRetryAvailable;
+  final bool approvingForPackage;
+  final bool approveForPackageRetryAvailable;
   final bool generatingPackage;
   final bool recordingExternalSubmission;
   final bool externalSubmissionRetryAvailable;
@@ -861,6 +1299,12 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
   final bool materializing;
   final bool downloadingPdf;
   final bool downloadingManifest;
+  final VoidCallback onSubmitHumanReview;
+  final VoidCallback onRetrySubmitHumanReview;
+  final VoidCallback onCompleteHumanReview;
+  final VoidCallback onRetryCompleteHumanReview;
+  final VoidCallback onApproveForPackage;
+  final VoidCallback onRetryApproveForPackage;
   final VoidCallback onGeneratePackage;
   final VoidCallback onRecordExternalSubmission;
   final VoidCallback onRetryExternalSubmission;
@@ -900,18 +1344,22 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
           const SizedBox(height: 16),
           const _LegalNotice(),
           const SizedBox(height: 16),
-          if (currentPackage == null) ...[
-            _AuthorityStageAnchor(
-              key: stageKeys[CustomsAuthoritySubmissionStage.submissionPackage],
-              stage: CustomsAuthoritySubmissionStage.submissionPackage,
-            ),
-            _PackageGenerationSection(
-              submission: submission,
-              scopeAvailable: detail.artifactScope != null,
-              generating: generatingPackage,
-              onGenerate: onGeneratePackage,
-            ),
-          ],
+          _ReviewApprovalWorkspace(
+            detail: detail,
+            submittingHumanReview: submittingHumanReview,
+            submitHumanReviewRetryAvailable: submitHumanReviewRetryAvailable,
+            completingHumanReview: completingHumanReview,
+            completeHumanReviewRetryAvailable:
+                completeHumanReviewRetryAvailable,
+            approvingForPackage: approvingForPackage,
+            approveForPackageRetryAvailable: approveForPackageRetryAvailable,
+            onSubmitHumanReview: onSubmitHumanReview,
+            onRetrySubmitHumanReview: onRetrySubmitHumanReview,
+            onCompleteHumanReview: onCompleteHumanReview,
+            onRetryCompleteHumanReview: onRetryCompleteHumanReview,
+            onApproveForPackage: onApproveForPackage,
+            onRetryApproveForPackage: onRetryApproveForPackage,
+          ),
           _AuthoritySection(
             title: 'İletim kimliği ve yönlendirme',
             children: [
@@ -989,6 +1437,18 @@ class _AuthoritySubmissionDetailView extends StatelessWidget {
               ),
             ],
           ),
+          if (currentPackage == null) ...[
+            _AuthorityStageAnchor(
+              key: stageKeys[CustomsAuthoritySubmissionStage.submissionPackage],
+              stage: CustomsAuthoritySubmissionStage.submissionPackage,
+            ),
+            _PackageGenerationSection(
+              submission: submission,
+              scopeAvailable: detail.artifactScope != null,
+              generating: generatingPackage,
+              onGenerate: onGeneratePackage,
+            ),
+          ],
           if (currentPackage != null)
             _AuthorityStageAnchor(
               key: stageKeys[CustomsAuthoritySubmissionStage.submissionPackage],
@@ -1235,32 +1695,44 @@ _NextStepGuidanceData _nextStepGuidance(
     );
   }
 
-  final missingControls = <String>[
-    if (submission.humanReviewReference == null) 'insan incelemesi',
-    if (submission.rightsHolderApprovalReference == null)
-      'hak sahibi veya temsilci onayı',
-    if (!submission.dataMinimizationConfirmed) 'veri minimizasyonu',
-    if (!submission.nonAccusatoryLanguageConfirmed) 'hukuken nötr dil',
-  ];
-  if (missingControls.isNotEmpty) {
-    return _NextStepGuidanceData(
-      title: 'Başvuru ve insan kontrol kapılarını tamamlayın',
+  if (submission.status == 'draft') {
+    return const _NextStepGuidanceData(
+      title: 'Başvuruyu insan incelemesine gönderin',
       message:
-          'Eksik kontroller: ${missingControls.join(', ')}. Bu kontroller tamamlanmadan değiştirilemez başvuru paketi oluşturulamaz.',
-      result:
-          'Paket hazırlama onayına taşınabilecek doğrulanmış başvuru içeriği.',
+          'Dosya taslak durumda. Kuruma sunulacak içeriğin bir insan tarafından incelenmesi için gerekçeli geçişi başlatın.',
+      result: 'İnsan inceleme kuyruğuna alınmış kanonik başvuru dosyası.',
       icon: Icons.fact_check_outlined,
+    );
+  }
+
+  if (submission.status == 'awaiting_human_review') {
+    return const _NextStepGuidanceData(
+      title: 'İnsan incelemesini tamamlayın',
+      message:
+          'İçeriği insan olarak inceleyin, inceleme referansını kaydedin ve dosyayı hak sahibi veya temsilci onayına taşıyın.',
+      result: 'İnsan incelemesi doğrulanmış ve hak sahibi onayına hazır dosya.',
+      icon: Icons.person_search_outlined,
+    );
+  }
+
+  if (submission.status == 'awaiting_rights_holder_approval') {
+    return const _NextStepGuidanceData(
+      title: 'Hak sahibi onayını ve güvenlik teyitlerini kaydedin',
+      message:
+          'Fiilî hak sahibi veya temsilci onayını, veri minimizasyonunu ve hukuken nötr dil teyidini tamamlayın.',
+      result:
+          'Paket üretimine onaylanmış, insan kontrollü resmî iletim dosyası.',
+      icon: Icons.approval_outlined,
     );
   }
 
   if (submission.status != 'approved_for_package') {
     return const _NextStepGuidanceData(
-      title: 'Başvuruyu paket hazırlama onayına taşıyın',
+      title: 'İnceleme ve onay durumunu kontrol edin',
       message:
-          'İnsan ve hak sahibi kontrolleri tamamlanmış görünüyor. Dosyanın yetkili insan incelemesiyle paket hazırlama onayına geçirilmesi gerekir.',
-      result:
-          'Değiştirilemez paket üretimine hazır ve onaylanmış resmî iletim dosyası.',
-      icon: Icons.approval_outlined,
+          'Bu eski veya tutarsız kayıtta paket hazırlama kapıları tamamlanmamış görünüyor. Dosyayı değiştirmeden önce olay zaman çizelgesini inceleyin.',
+      result: 'Durumu doğrulanmış ve güvenli sonraki adıma hazır dosya.',
+      icon: Icons.policy_outlined,
     );
   }
 
@@ -1552,6 +2024,669 @@ List<String> _authorityOutcomeBlockers(
         submission.currentPackageVersion < 1)
       'Dış teslimle ilişkili değiştirilemez paket doğrulanamadı.',
   ];
+}
+
+class _HumanReviewSubmissionDraft {
+  const _HumanReviewSubmissionDraft({required this.reason});
+
+  final String reason;
+}
+
+class _HumanReviewCompletionDraft {
+  const _HumanReviewCompletionDraft({
+    required this.reference,
+    required this.reason,
+  });
+
+  final String reference;
+  final String reason;
+}
+
+class _RightsHolderApprovalDraft {
+  const _RightsHolderApprovalDraft({
+    required this.reference,
+    required this.reason,
+  });
+
+  final String reference;
+  final String reason;
+}
+
+enum _ReviewApprovalAction {
+  submitHumanReview,
+  completeHumanReview,
+  approveForPackage,
+  completed,
+  locked,
+}
+
+_ReviewApprovalAction _reviewApprovalAction(String status) => switch (status) {
+  'draft' => _ReviewApprovalAction.submitHumanReview,
+  'awaiting_human_review' => _ReviewApprovalAction.completeHumanReview,
+  'awaiting_rights_holder_approval' => _ReviewApprovalAction.approveForPackage,
+  'approved_for_package' => _ReviewApprovalAction.completed,
+  _ => _ReviewApprovalAction.locked,
+};
+
+class _ReviewApprovalWorkspace extends StatelessWidget {
+  const _ReviewApprovalWorkspace({
+    required this.detail,
+    required this.submittingHumanReview,
+    required this.submitHumanReviewRetryAvailable,
+    required this.completingHumanReview,
+    required this.completeHumanReviewRetryAvailable,
+    required this.approvingForPackage,
+    required this.approveForPackageRetryAvailable,
+    required this.onSubmitHumanReview,
+    required this.onRetrySubmitHumanReview,
+    required this.onCompleteHumanReview,
+    required this.onRetryCompleteHumanReview,
+    required this.onApproveForPackage,
+    required this.onRetryApproveForPackage,
+  });
+
+  final CustomsAuthoritySubmissionDetail detail;
+  final bool submittingHumanReview;
+  final bool submitHumanReviewRetryAvailable;
+  final bool completingHumanReview;
+  final bool completeHumanReviewRetryAvailable;
+  final bool approvingForPackage;
+  final bool approveForPackageRetryAvailable;
+  final VoidCallback onSubmitHumanReview;
+  final VoidCallback onRetrySubmitHumanReview;
+  final VoidCallback onCompleteHumanReview;
+  final VoidCallback onRetryCompleteHumanReview;
+  final VoidCallback onApproveForPackage;
+  final VoidCallback onRetryApproveForPackage;
+
+  @override
+  Widget build(BuildContext context) {
+    final submission = detail.submission;
+    final action = _reviewApprovalAction(submission.status);
+    final scopeAvailable = detail.artifactScope != null;
+    final blockers = <String>[
+      if (!scopeAvailable) 'Tenant ve marka kapsamı doğrulanamadı.',
+      if (action == _ReviewApprovalAction.completeHumanReview &&
+          submission.status != 'awaiting_human_review')
+        'Dosya insan incelemesi durumunda olmalıdır.',
+      if (action == _ReviewApprovalAction.approveForPackage &&
+          submission.humanReviewReference == null)
+        'İnsan incelemesi referansı eksik.',
+    ];
+    final allowed = blockers.isEmpty;
+
+    return _AuthoritySection(
+      title: reviewApprovalSectionTitle,
+      children: [
+        const Text(reviewApprovalDescription, style: TextStyle(height: 1.5)),
+        _AuthorityRow(
+          label: 'Mevcut aşama',
+          value: customsAuthoritySubmissionStatusLabel(submission.status),
+        ),
+        if (blockers.isNotEmpty)
+          Container(
+            key: const ValueKey('review-approval-blockers'),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E8),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF0D9A2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Bu işlem için tamamlanması gerekenler:',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                for (final blocker in blockers)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('• '),
+                        Expanded(child: Text(blocker)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        switch (action) {
+          _ReviewApprovalAction.submitHumanReview =>
+            submitHumanReviewRetryAvailable
+                ? OutlinedButton.icon(
+                    key: const ValueKey('retry-submit-human-review'),
+                    onPressed: allowed && !submittingHumanReview
+                        ? onRetrySubmitHumanReview
+                        : null,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text(retrySubmitForHumanReview),
+                  )
+                : FilledButton.icon(
+                    key: const ValueKey('submit-human-review'),
+                    onPressed: allowed && !submittingHumanReview
+                        ? onSubmitHumanReview
+                        : null,
+                    icon: submittingHumanReview
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.fact_check_outlined),
+                    label: Text(
+                      submittingHumanReview
+                          ? 'İncelemeye gönderiliyor…'
+                          : submitForHumanReview,
+                    ),
+                  ),
+          _ReviewApprovalAction.completeHumanReview =>
+            completeHumanReviewRetryAvailable
+                ? OutlinedButton.icon(
+                    key: const ValueKey('retry-complete-human-review'),
+                    onPressed: allowed && !completingHumanReview
+                        ? onRetryCompleteHumanReview
+                        : null,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text(retryCompleteHumanReview),
+                  )
+                : FilledButton.icon(
+                    key: const ValueKey('complete-human-review'),
+                    onPressed: allowed && !completingHumanReview
+                        ? onCompleteHumanReview
+                        : null,
+                    icon: completingHumanReview
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.person_search_outlined),
+                    label: Text(
+                      completingHumanReview
+                          ? 'İnceleme kaydediliyor…'
+                          : completeHumanReview,
+                    ),
+                  ),
+          _ReviewApprovalAction.approveForPackage =>
+            approveForPackageRetryAvailable
+                ? OutlinedButton.icon(
+                    key: const ValueKey('retry-approve-for-package'),
+                    onPressed: allowed && !approvingForPackage
+                        ? onRetryApproveForPackage
+                        : null,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text(retryApproveForPackage),
+                  )
+                : FilledButton.icon(
+                    key: const ValueKey('approve-for-package'),
+                    onPressed: allowed && !approvingForPackage
+                        ? onApproveForPackage
+                        : null,
+                    icon: approvingForPackage
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.approval_outlined),
+                    label: Text(
+                      approvingForPackage
+                          ? 'Onay kaydediliyor…'
+                          : approveForPackage,
+                    ),
+                  ),
+          _ReviewApprovalAction.completed => const _ImmutableRecordNotice(
+            text:
+                'İnsan incelemesi, hak sahibi onayı, veri minimizasyonu ve hukuken nötr dil kapıları tamamlandı. Dosya paket üretimine hazırdır.',
+          ),
+          _ReviewApprovalAction.locked => _ImmutableRecordNotice(
+            text:
+                'Bu dosya ${customsAuthoritySubmissionStatusLabel(submission.status)} aşamasındadır. İnceleme ve onay yazma işlemleri kilitlidir; mevcut kayıtlar salt okunur gösterilir.',
+          ),
+        },
+      ],
+    );
+  }
+}
+
+class _SubmitHumanReviewDialog extends StatefulWidget {
+  const _SubmitHumanReviewDialog();
+
+  @override
+  State<_SubmitHumanReviewDialog> createState() =>
+      _SubmitHumanReviewDialogState();
+}
+
+class _SubmitHumanReviewDialogState extends State<_SubmitHumanReviewDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _reasonController = TextEditingController();
+  bool _confirmed = false;
+  String? _confirmationError;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final valid = _formKey.currentState?.validate() ?? false;
+    setState(() {
+      _confirmationError = _confirmed
+          ? null
+          : 'İnsan incelemesine gönderme teyidi zorunludur.';
+    });
+    if (!valid || !_confirmed) {
+      return;
+    }
+    Navigator.pop(
+      context,
+      _HumanReviewSubmissionDraft(reason: _reasonController.text.trim()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(submitForHumanReview),
+      content: SizedBox(
+        width: 620,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Dosyayı insan inceleme kuyruğuna taşımak için gerekçeyi ve fiilî kullanıcı teyidini kaydedin.',
+                  style: TextStyle(height: 1.45),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  key: const ValueKey('human-review-submission-reason'),
+                  controller: _reasonController,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: 3000,
+                  decoration: const InputDecoration(
+                    labelText: 'İncelemeye gönderme gerekçesi',
+                  ),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'İncelemeye gönderme gerekçesi',
+                    minimum: 10,
+                    maximum: 3000,
+                  ),
+                ),
+                CheckboxListTile(
+                  key: const ValueKey('human-review-submission-confirmation'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _confirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _confirmed = value == true;
+                      if (_confirmed) {
+                        _confirmationError = null;
+                      }
+                    });
+                  },
+                  title: const Text(
+                    'Bu dosyanın insan incelemesine hazır olduğunu ve geçişin yetkili kullanıcı tarafından başlatıldığını onaylıyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (_confirmationError != null)
+                  Text(
+                    _confirmationError!,
+                    key: const ValueKey(
+                      'human-review-submission-confirmation-error',
+                    ),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-submit-human-review'),
+          onPressed: _submit,
+          child: const Text('Geçişi gözden geçir'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompleteHumanReviewDialog extends StatefulWidget {
+  const _CompleteHumanReviewDialog();
+
+  @override
+  State<_CompleteHumanReviewDialog> createState() =>
+      _CompleteHumanReviewDialogState();
+}
+
+class _CompleteHumanReviewDialogState
+    extends State<_CompleteHumanReviewDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _referenceController = TextEditingController();
+  final _reasonController = TextEditingController();
+  bool _confirmed = false;
+  String? _confirmationError;
+
+  @override
+  void dispose() {
+    _referenceController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final valid = _formKey.currentState?.validate() ?? false;
+    setState(() {
+      _confirmationError = _confirmed
+          ? null
+          : 'İnsan incelemesi teyidi zorunludur.';
+    });
+    if (!valid || !_confirmed) {
+      return;
+    }
+    Navigator.pop(
+      context,
+      _HumanReviewCompletionDraft(
+        reference: _referenceController.text.trim(),
+        reason: _reasonController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(completeHumanReview),
+      content: SizedBox(
+        width: 620,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'İnsan inceleme dayanağını kaydedin ve dosyayı hak sahibi veya temsilci onayına taşıyın.',
+                  style: TextStyle(height: 1.45),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  key: const ValueKey('human-review-reference'),
+                  controller: _referenceController,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'İnsan incelemesi referansı',
+                  ),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'İnsan incelemesi referansı',
+                    minimum: 1,
+                    maximum: 500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  key: const ValueKey('human-review-completion-reason'),
+                  controller: _reasonController,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: 3000,
+                  decoration: const InputDecoration(
+                    labelText: 'İnceleme tamamlama gerekçesi',
+                  ),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'İnceleme tamamlama gerekçesi',
+                    minimum: 10,
+                    maximum: 3000,
+                  ),
+                ),
+                CheckboxListTile(
+                  key: const ValueKey('human-review-completion-confirmation'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _confirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _confirmed = value == true;
+                      if (_confirmed) {
+                        _confirmationError = null;
+                      }
+                    });
+                  },
+                  title: const Text(
+                    'Kuruma sunulacak içeriği bir insan olarak inceledim ve referansın fiilî incelemeye dayandığını onaylıyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (_confirmationError != null)
+                  Text(
+                    _confirmationError!,
+                    key: const ValueKey(
+                      'human-review-completion-confirmation-error',
+                    ),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-complete-human-review'),
+          onPressed: _submit,
+          child: const Text('İncelemeyi gözden geçir'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RightsHolderApprovalDialog extends StatefulWidget {
+  const _RightsHolderApprovalDialog();
+
+  @override
+  State<_RightsHolderApprovalDialog> createState() =>
+      _RightsHolderApprovalDialogState();
+}
+
+class _RightsHolderApprovalDialogState
+    extends State<_RightsHolderApprovalDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _referenceController = TextEditingController();
+  final _reasonController = TextEditingController();
+  bool _dataMinimizationConfirmed = false;
+  bool _neutralLanguageConfirmed = false;
+  bool _rightsHolderConfirmed = false;
+  String? _confirmationError;
+
+  @override
+  void dispose() {
+    _referenceController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final valid = _formKey.currentState?.validate() ?? false;
+    final confirmationsValid =
+        _dataMinimizationConfirmed &&
+        _neutralLanguageConfirmed &&
+        _rightsHolderConfirmed;
+    setState(() {
+      _confirmationError = confirmationsValid
+          ? null
+          : 'Hak sahibi onayı, veri minimizasyonu ve hukuken nötr dil teyitlerinin üçü de zorunludur.';
+    });
+    if (!valid || !confirmationsValid) {
+      return;
+    }
+    Navigator.pop(
+      context,
+      _RightsHolderApprovalDraft(
+        reference: _referenceController.text.trim(),
+        reason: _reasonController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(approveForPackage),
+      content: SizedBox(
+        width: 660,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Fiilî hak sahibi veya temsilci onayını ve paket üretimi öncesindeki iki güvenlik kontrolünü kaydedin.',
+                  style: TextStyle(height: 1.45),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  key: const ValueKey('rights-holder-approval-reference'),
+                  controller: _referenceController,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Hak sahibi / temsilci onay referansı',
+                  ),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Hak sahibi / temsilci onay referansı',
+                    minimum: 1,
+                    maximum: 500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  key: const ValueKey('rights-holder-approval-reason'),
+                  controller: _reasonController,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: 3000,
+                  decoration: const InputDecoration(
+                    labelText: 'Paket hazırlama onayı gerekçesi',
+                  ),
+                  validator: (value) => _requiredTextValidator(
+                    value,
+                    'Paket hazırlama onayı gerekçesi',
+                    minimum: 10,
+                    maximum: 3000,
+                  ),
+                ),
+                CheckboxListTile(
+                  key: const ValueKey(
+                    'rights-holder-data-minimization-confirmation',
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  value: _dataMinimizationConfirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _dataMinimizationConfirmed = value == true;
+                      _clearConfirmationErrorWhenComplete();
+                    });
+                  },
+                  title: const Text(
+                    'Kuruma sunulması gerekmeyen kişisel ve hassas verilerin çıkarıldığını onaylıyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                CheckboxListTile(
+                  key: const ValueKey(
+                    'rights-holder-neutral-language-confirmation',
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  value: _neutralLanguageConfirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _neutralLanguageConfirmed = value == true;
+                      _clearConfirmationErrorWhenComplete();
+                    });
+                  },
+                  title: const Text(
+                    'Metnin şüphe ile kesinleşmiş sonucu ayırdığını ve suç isnadı üretmeyen hukuken nötr dil kullandığını onaylıyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                CheckboxListTile(
+                  key: const ValueKey('rights-holder-approval-confirmation'),
+                  contentPadding: EdgeInsets.zero,
+                  value: _rightsHolderConfirmed,
+                  onChanged: (value) {
+                    setState(() {
+                      _rightsHolderConfirmed = value == true;
+                      _clearConfirmationErrorWhenComplete();
+                    });
+                  },
+                  title: const Text(
+                    'Fiilî hak sahibi veya yetkili temsilci onayının alındığını ve bu referansın gerçek onay kaydına dayandığını doğruluyorum.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (_confirmationError != null)
+                  Text(
+                    _confirmationError!,
+                    key: const ValueKey(
+                      'rights-holder-approval-confirmation-error',
+                    ),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('review-approve-for-package'),
+          onPressed: _submit,
+          child: const Text('Onayı gözden geçir'),
+        ),
+      ],
+    );
+  }
+
+  void _clearConfirmationErrorWhenComplete() {
+    if (_dataMinimizationConfirmed &&
+        _neutralLanguageConfirmed &&
+        _rightsHolderConfirmed) {
+      _confirmationError = null;
+    }
+  }
 }
 
 class _AuthorityOperationsWorkspace extends StatelessWidget {

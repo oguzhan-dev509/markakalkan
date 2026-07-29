@@ -332,6 +332,13 @@ Map<String, dynamic> _eventToMap(CustomsAuthoritySubmissionEvent event) =>
 Map<String, dynamic> _submissionToMap(
   CustomsAuthoritySubmission submission, {
   String? status,
+  String? targetUnit,
+  String? channelType,
+  String? title,
+  String? humanReviewReference,
+  String? rightsHolderApprovalReference,
+  bool? dataMinimizationConfirmed,
+  bool? nonAccusatoryLanguageConfirmed,
   int? responseCount,
   int? eventCount,
   String? lastEventType,
@@ -353,21 +360,25 @@ Map<String, dynamic> _submissionToMap(
   status: status ?? submission.status,
   submissionType: submission.submissionType,
   targetAuthority: submission.targetAuthority,
-  targetUnit: submission.targetUnit,
+  targetUnit: targetUnit ?? submission.targetUnit,
   protectionProfileId: submission.protectionProfileId,
   interventionId: submission.interventionId,
-  title: submission.title,
-  humanReviewReference: submission.humanReviewReference,
-  rightsHolderApprovalReference: submission.rightsHolderApprovalReference,
-  dataMinimizationConfirmed: submission.dataMinimizationConfirmed,
-  nonAccusatoryLanguageConfirmed: submission.nonAccusatoryLanguageConfirmed,
+  title: title ?? submission.title,
+  humanReviewReference: humanReviewReference ?? submission.humanReviewReference,
+  rightsHolderApprovalReference:
+      rightsHolderApprovalReference ?? submission.rightsHolderApprovalReference,
+  dataMinimizationConfirmed:
+      dataMinimizationConfirmed ?? submission.dataMinimizationConfirmed,
+  nonAccusatoryLanguageConfirmed:
+      nonAccusatoryLanguageConfirmed ??
+      submission.nonAccusatoryLanguageConfirmed,
   currentPackageId: submission.currentPackageId,
   currentPackageVersion: submission.currentPackageVersion,
   currentPackageHash: submission.currentPackageHash,
   packageCount: submission.packageCount,
   responseCount: responseCount ?? submission.responseCount,
   eventCount: eventCount ?? submission.eventCount,
-  channelType: submission.channelType,
+  channelType: channelType ?? submission.channelType,
   submittedAt: submission.submittedAt,
   externalSubmissionStatement: submission.externalSubmissionStatement,
   externalReferenceType: submission.externalReferenceType,
@@ -581,6 +592,8 @@ class FakeCustomsAuthoritySubmissionRepository
   List<CustomsAuthoritySubmission> submissions = [sampleAuthoritySubmission()];
 
   int createCalls = 0;
+  int updateCalls = 0;
+  int transitionCalls = 0;
   int detailCalls = 0;
   int generatePackageCalls = 0;
   int externalSubmissionCalls = 0;
@@ -591,6 +604,12 @@ class FakeCustomsAuthoritySubmissionRepository
   int pdfAuthorizationCalls = 0;
   int manifestAuthorizationCalls = 0;
   CustomsAuthoritySubmissionDraft? lastDraft;
+  CustomsAuthoritySubmissionUpdateDraft? lastUpdateDraft;
+  String? lastTransitionStatus;
+  String? lastTransitionReason;
+  String? lastReviewApprovalTenantId;
+  String? lastReviewApprovalCanonicalBrandId;
+  String? lastReviewApprovalSubmissionId;
   CustomsSubmissionPackageDraft? lastPackageDraft;
   CustomsExternalSubmissionDraft? lastExternalSubmissionDraft;
   CustomsSubmissionReceiptDraft? lastReceiptDraft;
@@ -609,6 +628,8 @@ class FakeCustomsAuthoritySubmissionRepository
   String? lastAuthorityOperationCanonicalBrandId;
   String? lastAuthorityOperationSubmissionId;
   CustomsAuthoritySubmissionDetail? detail;
+  Object? updateSubmissionError;
+  Object? transitionSubmissionError;
   Object? packageGenerationError;
   Object? externalSubmissionError;
   Object? receiptError;
@@ -616,6 +637,8 @@ class FakeCustomsAuthoritySubmissionRepository
   Object? authorityOutcomeError;
   Object? materializationError;
   Object? authorizationError;
+  Completer<void>? updateSubmissionGate;
+  Completer<void>? transitionSubmissionGate;
   Completer<void>? packageGenerationGate;
   Completer<void>? externalSubmissionGate;
   Completer<void>? receiptGate;
@@ -624,6 +647,8 @@ class FakeCustomsAuthoritySubmissionRepository
   Completer<void>? materializationGate;
   Completer<void>? pdfAuthorizationGate;
   Completer<void>? manifestAuthorizationGate;
+  final List<String> updateSubmissionRequestIds = [];
+  final List<String> transitionSubmissionRequestIds = [];
   final List<String> packageGenerationRequestIds = [];
   final List<String> externalSubmissionRequestIds = [];
   final List<String> receiptRequestIds = [];
@@ -1217,25 +1242,63 @@ class FakeCustomsAuthoritySubmissionRepository
     required String reason,
     String? submittedAt,
     String? externalSubmissionStatement,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   }) async {
-    final current = submissions.firstWhere(
-      (item) => item.submissionId == submissionId,
+    transitionCalls++;
+    lastReviewApprovalTenantId = tenantId;
+    lastReviewApprovalCanonicalBrandId = canonicalBrandId;
+    lastReviewApprovalSubmissionId = submissionId;
+    lastTransitionStatus = nextStatus;
+    lastTransitionReason = reason;
+    if (requestId != null) {
+      transitionSubmissionRequestIds.add(requestId);
+    }
+    await transitionSubmissionGate?.future;
+    final error = transitionSubmissionError;
+    if (error != null) {
+      throw error;
+    }
+
+    final currentDetail =
+        detail ?? sampleAuthoritySubmissionDetail(submissionId: submissionId);
+    final current = currentDetail.submission;
+    final event = _eventMap(
+      submissionId: submissionId,
+      sequence: currentDetail.events.length + 1,
+      eventType: 'authority_submission_status_transitioned',
+      previousStatus: current.status,
+      nextStatus: nextStatus,
+      summary: 'Resmî iletim durumu $nextStatus olarak değiştirildi.',
+      reason: reason,
+      recordedAt: '2026-07-25T10:03:00.000Z',
     );
-    final updated = CustomsAuthoritySubmission.fromMap(<String, dynamic>{
-      ..._submissionMap(
-        submissionId: current.submissionId,
-        status: nextStatus,
-        submissionType: current.submissionType,
-        targetAuthority: current.targetAuthority,
-        protectionProfileId: current.protectionProfileId,
-        interventionId: current.interventionId,
-        title: current.title,
-      ),
-    });
+    final events = <Map<String, dynamic>>[
+      ...currentDetail.events.map(_eventToMap),
+      event,
+    ];
+    final submissionMap = _submissionToMap(
+      current,
+      status: nextStatus,
+      eventCount: events.length,
+      lastEventType: 'authority_submission_status_transitioned',
+      lastEventAt: '2026-07-25T10:03:00.000Z',
+    );
+    final updated = CustomsAuthoritySubmission.fromMap(submissionMap);
+    detail = _detailFromCurrent(
+      current: currentDetail,
+      submission: submissionMap,
+      responses: currentDetail.responses.map(_responseToMap).toList(),
+      events: events,
+    );
     submissions = [
       for (final item in submissions)
         if (item.submissionId == submissionId) updated else item,
     ];
+    if (!submissions.any((item) => item.submissionId == submissionId)) {
+      submissions = [...submissions, updated];
+    }
     return updated;
   }
 
@@ -1243,7 +1306,69 @@ class FakeCustomsAuthoritySubmissionRepository
   Future<CustomsAuthoritySubmission> updateSubmission({
     required String submissionId,
     required CustomsAuthoritySubmissionUpdateDraft draft,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   }) async {
-    return submissions.firstWhere((item) => item.submissionId == submissionId);
+    updateCalls++;
+    lastReviewApprovalTenantId = tenantId;
+    lastReviewApprovalCanonicalBrandId = canonicalBrandId;
+    lastReviewApprovalSubmissionId = submissionId;
+    lastUpdateDraft = draft;
+    if (requestId != null) {
+      updateSubmissionRequestIds.add(requestId);
+    }
+    draft.toRequestMap();
+    await updateSubmissionGate?.future;
+    final error = updateSubmissionError;
+    if (error != null) {
+      throw error;
+    }
+
+    final currentDetail =
+        detail ?? sampleAuthoritySubmissionDetail(submissionId: submissionId);
+    final current = currentDetail.submission;
+    final event = _eventMap(
+      submissionId: submissionId,
+      sequence: currentDetail.events.length + 1,
+      eventType: 'authority_submission_updated',
+      previousStatus: current.status,
+      nextStatus: current.status,
+      summary: 'Resmî iletim taslağı güncellendi.',
+      reason: 'Yetkili kullanıcı güncellemesi.',
+      recordedAt: '2026-07-25T10:02:30.000Z',
+    );
+    final events = <Map<String, dynamic>>[
+      ...currentDetail.events.map(_eventToMap),
+      event,
+    ];
+    final submissionMap = _submissionToMap(
+      current,
+      targetUnit: draft.targetUnit,
+      channelType: draft.channelType,
+      title: draft.title,
+      humanReviewReference: draft.humanReviewReference,
+      rightsHolderApprovalReference: draft.rightsHolderApprovalReference,
+      dataMinimizationConfirmed: draft.dataMinimizationConfirmed,
+      nonAccusatoryLanguageConfirmed: draft.nonAccusatoryLanguageConfirmed,
+      eventCount: events.length,
+      lastEventType: 'authority_submission_updated',
+      lastEventAt: '2026-07-25T10:02:30.000Z',
+    );
+    final updated = CustomsAuthoritySubmission.fromMap(submissionMap);
+    detail = _detailFromCurrent(
+      current: currentDetail,
+      submission: submissionMap,
+      responses: currentDetail.responses.map(_responseToMap).toList(),
+      events: events,
+    );
+    submissions = [
+      for (final item in submissions)
+        if (item.submissionId == submissionId) updated else item,
+    ];
+    if (!submissions.any((item) => item.submissionId == submissionId)) {
+      submissions = [...submissions, updated];
+    }
+    return updated;
   }
 }

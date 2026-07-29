@@ -24,6 +24,9 @@ abstract interface class CustomsAuthoritySubmissionRepository {
   Future<CustomsAuthoritySubmission> updateSubmission({
     required String submissionId,
     required CustomsAuthoritySubmissionUpdateDraft draft,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   });
 
   Future<CustomsAuthoritySubmission> transitionSubmission({
@@ -32,6 +35,9 @@ abstract interface class CustomsAuthoritySubmissionRepository {
     required String reason,
     String? submittedAt,
     String? externalSubmissionStatement,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   });
 
   Future<CustomsAuthoritySubmissionDetail> getSubmissionDetail(
@@ -182,13 +188,22 @@ class CallableCustomsAuthoritySubmissionRepository
   Future<CustomsAuthoritySubmission> updateSubmission({
     required String submissionId,
     required CustomsAuthoritySubmissionUpdateDraft draft,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   }) async {
-    final response = await _callProtected('updateCustomsAuthoritySubmission', {
+    final request = <String, dynamic>{
       'contractVersion': 'customs-authority-submission-update-request-v1',
       'submissionId': submissionId,
       ...draft.toRequestMap(),
-      'requestId': _requestIdFactory(),
-    });
+      'requestId': requestId ?? _requestIdFactory(),
+    };
+    _optionalText(request, 'tenantId', tenantId);
+    _optionalText(request, 'canonicalBrandId', canonicalBrandId);
+    final response = await _callProtected(
+      'updateCustomsAuthoritySubmission',
+      request,
+    );
     _requireWriteResult(
       response,
       'customs-authority-submission-update-result-v1',
@@ -203,14 +218,19 @@ class CallableCustomsAuthoritySubmissionRepository
     required String reason,
     String? submittedAt,
     String? externalSubmissionStatement,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   }) async {
     final request = <String, dynamic>{
       'contractVersion': 'customs-authority-submission-transition-request-v1',
       'submissionId': submissionId,
       'nextStatus': nextStatus,
       'reason': reason,
-      'requestId': _requestIdFactory(),
+      'requestId': requestId ?? _requestIdFactory(),
     };
+    _optionalText(request, 'tenantId', tenantId);
+    _optionalText(request, 'canonicalBrandId', canonicalBrandId);
     _optionalText(request, 'submittedAt', submittedAt);
     _optionalText(
       request,
@@ -491,12 +511,18 @@ class EmptyCustomsAuthoritySubmissionRepository
     required String reason,
     String? submittedAt,
     String? externalSubmissionStatement,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   }) async => _unsupported();
 
   @override
   Future<CustomsAuthoritySubmission> updateSubmission({
     required String submissionId,
     required CustomsAuthoritySubmissionUpdateDraft draft,
+    String? tenantId,
+    String? canonicalBrandId,
+    String? requestId,
   }) async => _unsupported();
 }
 

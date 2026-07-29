@@ -160,6 +160,96 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> pumpReviewApprovalDetail(
+    WidgetTester tester,
+    FakeCustomsAuthoritySubmissionRepository repository, {
+    List<String> requestIds = const ['review-operation-id'],
+    Size size = const Size(1100, 2400),
+  }) async {
+    var requestIndex = 0;
+    await tester.binding.setSurfaceSize(size);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomsAuthoritySubmissionDetailPage(
+          submissionId: 'submission-1',
+          repository: repository,
+          requestIdFactory: () {
+            final index = requestIndex < requestIds.length
+                ? requestIndex
+                : requestIds.length - 1;
+            requestIndex++;
+            return requestIds[index];
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> completeSubmitHumanReviewForm(WidgetTester tester) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('human-review-submission-reason')),
+      'Kuruma sunulacak taslak insan incelemesine hazırlandı.',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('human-review-submission-confirmation')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('review-submit-human-review')));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> completeHumanReviewForm(WidgetTester tester) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('human-review-reference')),
+      'HUMAN-REVIEW-2026-0001',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('human-review-completion-reason')),
+      'İçerik insan tarafından incelendi ve hak sahibi onayına hazırlandı.',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('human-review-completion-confirmation')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('review-complete-human-review')),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> completeRightsHolderApprovalForm(
+    WidgetTester tester, {
+    bool confirmations = true,
+  }) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('rights-holder-approval-reference')),
+      'RIGHTS-APPROVAL-2026-0001',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('rights-holder-approval-reason')),
+      'Fiilî hak sahibi onayı alındı ve dosya paket üretimine hazırlandı.',
+    );
+    if (confirmations) {
+      await tester.tap(
+        find.byKey(
+          const ValueKey('rights-holder-data-minimization-confirmation'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey('rights-holder-neutral-language-confirmation'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('rights-holder-approval-confirmation')),
+      );
+      await tester.pump();
+    }
+    await tester.tap(find.byKey(const ValueKey('review-approve-for-package')));
+    await tester.pumpAndSettle();
+  }
+
   Future<void> completeAuthorityReceiptForm(
     WidgetTester tester, {
     bool includeDocumentPair = true,
@@ -741,7 +831,7 @@ void main() {
       );
       expect(repository.detailCalls, 2);
       expect(find.text('Kuruma dış teslim kaydedildi'), findsOneWidget);
-      expect(find.text('Resmî kanaldan iletildi'), findsOneWidget);
+      expect(find.text('Resmî kanaldan iletildi'), findsWidgets);
       expect(
         find.textContaining(
           'customs_submission_recorded_as_submitted_externally',
@@ -854,7 +944,7 @@ void main() {
         'PORTAL-2026-0001',
       );
       expect(repository.detailCalls, 2);
-      expect(find.text('Resmî kanaldan iletildi'), findsOneWidget);
+      expect(find.text('Resmî kanaldan iletildi'), findsWidgets);
     },
   );
 
@@ -907,7 +997,7 @@ void main() {
       );
       expect(repository.detailCalls, 2);
       expect(find.text('Resmî alındı kaydedildi'), findsOneWidget);
-      expect(find.text('Teslim kaydı alındı'), findsOneWidget);
+      expect(find.text('Teslim kaydı alındı'), findsWidgets);
       expect(find.text('Resmî alındı'), findsWidgets);
       expect(find.text('Resmî alındı kaydı değiştirilemez.'), findsOneWidget);
     },
@@ -1092,7 +1182,7 @@ void main() {
         repository.lastReceiptDraft?.officialReferenceNumber,
         'FSMH-2026-ALINDI-1',
       );
-      expect(find.text('Teslim kaydı alındı'), findsOneWidget);
+      expect(find.text('Teslim kaydı alındı'), findsWidgets);
     },
   );
 
@@ -1663,14 +1753,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Şimdi ne yapmalısınız?'), findsOneWidget);
-    expect(
-      find.text('Başvuru ve insan kontrol kapılarını tamamlayın'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('insan incelemesi, hak sahibi veya temsilci onayı'),
-      findsOneWidget,
-    );
+    expect(find.text('Başvuruyu insan incelemesine gönderin'), findsOneWidget);
+    expect(find.textContaining('Dosya taslak durumda'), findsOneWidget);
     expect(find.textContaining('Bu adımın çıktısı:'), findsOneWidget);
   });
 
@@ -1823,4 +1907,291 @@ void main() {
     expect(find.textContaining('Hak sahibi / temsilci onayı'), findsOneWidget);
     expect(find.text('verified'), findsOneWidget);
   });
+
+  testWidgets('draft submits the same canonical file for human review', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository()
+      ..detail = sampleAuthoritySubmissionDetail(
+        status: 'draft',
+        includeScope: true,
+      );
+    await pumpReviewApprovalDetail(
+      tester,
+      repository,
+      requestIds: const ['submit-review-request-id'],
+    );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tapVisible(tester, find.byKey(const ValueKey('submit-human-review')));
+    await completeSubmitHumanReviewForm(tester);
+    await tester.tap(find.byKey(const ValueKey('confirm-submit-human-review')));
+    await tester.pumpAndSettle();
+
+    expect(repository.transitionCalls, 1);
+    expect(repository.updateCalls, 0);
+    expect(repository.lastReviewApprovalTenantId, 'tenant-1');
+    expect(repository.lastReviewApprovalCanonicalBrandId, 'brand-1');
+    expect(repository.lastReviewApprovalSubmissionId, 'submission-1');
+    expect(repository.lastTransitionStatus, 'awaiting_human_review');
+    expect(repository.transitionSubmissionRequestIds, [
+      'submit-review-request-id',
+    ]);
+    expect(repository.detail?.submission.status, 'awaiting_human_review');
+    expect(find.byKey(const ValueKey('complete-human-review')), findsOneWidget);
+  });
+
+  testWidgets(
+    'human review records reference before rights holder approval transition',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'awaiting_human_review',
+          includeScope: true,
+        );
+      await pumpReviewApprovalDetail(
+        tester,
+        repository,
+        requestIds: const [
+          'human-review-update-id',
+          'human-review-transition-id',
+        ],
+      );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('complete-human-review')),
+      );
+      await completeHumanReviewForm(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-complete-human-review')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.updateCalls, 1);
+      expect(repository.transitionCalls, 1);
+      expect(
+        repository.lastUpdateDraft?.humanReviewReference,
+        'HUMAN-REVIEW-2026-0001',
+      );
+      expect(
+        repository.lastTransitionStatus,
+        'awaiting_rights_holder_approval',
+      );
+      expect(repository.updateSubmissionRequestIds, ['human-review-update-id']);
+      expect(repository.transitionSubmissionRequestIds, [
+        'human-review-transition-id',
+      ]);
+      expect(
+        repository.detail?.submission.humanReviewReference,
+        'HUMAN-REVIEW-2026-0001',
+      );
+      expect(
+        repository.detail?.submission.status,
+        'awaiting_rights_holder_approval',
+      );
+      expect(find.byKey(const ValueKey('approve-for-package')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'rights holder approval enables package generation on the same file',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'awaiting_rights_holder_approval',
+          includeScope: true,
+          humanReviewReference: 'HUMAN-REVIEW-2026-0001',
+        );
+      await pumpReviewApprovalDetail(
+        tester,
+        repository,
+        requestIds: const [
+          'package-approval-update-id',
+          'package-approval-transition-id',
+        ],
+      );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('approve-for-package')),
+      );
+      await completeRightsHolderApprovalForm(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-approve-for-package')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.updateCalls, 1);
+      expect(repository.transitionCalls, 1);
+      expect(
+        repository.lastUpdateDraft?.rightsHolderApprovalReference,
+        'RIGHTS-APPROVAL-2026-0001',
+      );
+      expect(repository.lastUpdateDraft?.dataMinimizationConfirmed, isTrue);
+      expect(
+        repository.lastUpdateDraft?.nonAccusatoryLanguageConfirmed,
+        isTrue,
+      );
+      expect(repository.lastTransitionStatus, 'approved_for_package');
+      expect(repository.updateSubmissionRequestIds, [
+        'package-approval-update-id',
+      ]);
+      expect(repository.transitionSubmissionRequestIds, [
+        'package-approval-transition-id',
+      ]);
+      expect(repository.detail?.submission.status, 'approved_for_package');
+      expect(
+        repository.detail?.submission.rightsHolderApprovalReference,
+        'RIGHTS-APPROVAL-2026-0001',
+      );
+      final generateButton = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('generate-customs-submission-package')),
+      );
+      expect(generateButton.onPressed, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'rights holder approval fails closed without three confirmations',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'awaiting_rights_holder_approval',
+          includeScope: true,
+          humanReviewReference: 'HUMAN-REVIEW-2026-0001',
+        );
+      await pumpReviewApprovalDetail(tester, repository);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('approve-for-package')),
+      );
+      await completeRightsHolderApprovalForm(tester, confirmations: false);
+
+      expect(
+        find.byKey(const ValueKey('rights-holder-approval-confirmation-error')),
+        findsOneWidget,
+      );
+      expect(repository.updateCalls, 0);
+      expect(repository.transitionCalls, 0);
+    },
+  );
+
+  testWidgets('partial human review retry preserves both secure request ids', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository()
+      ..detail = sampleAuthoritySubmissionDetail(
+        status: 'awaiting_human_review',
+        includeScope: true,
+      )
+      ..transitionSubmissionError = FirebaseFunctionsException(
+        code: 'unavailable',
+        message: 'temporary',
+      );
+    await pumpReviewApprovalDetail(
+      tester,
+      repository,
+      requestIds: const [
+        'stable-review-update-id',
+        'stable-review-transition-id',
+      ],
+    );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('complete-human-review')),
+    );
+    await completeHumanReviewForm(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-complete-human-review')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('retry-complete-human-review')),
+      findsOneWidget,
+    );
+    repository.transitionSubmissionError = null;
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('retry-complete-human-review')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-retry-complete-human-review')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.updateSubmissionRequestIds, [
+      'stable-review-update-id',
+      'stable-review-update-id',
+    ]);
+    expect(repository.transitionSubmissionRequestIds, [
+      'stable-review-transition-id',
+      'stable-review-transition-id',
+    ]);
+    expect(
+      repository.detail?.submission.status,
+      'awaiting_rights_holder_approval',
+    );
+  });
+
+  testWidgets('downstream files lock review and approval writes', (
+    tester,
+  ) async {
+    final repository = FakeCustomsAuthoritySubmissionRepository()
+      ..detail = sampleAuthoritySubmissionDetail(
+        status: 'package_generated',
+        includePackage: true,
+        includeScope: true,
+        humanReviewReference: 'review-1',
+        rightsHolderApprovalReference: 'approval-1',
+        dataMinimizationConfirmed: true,
+        nonAccusatoryLanguageConfirmed: true,
+      );
+    await pumpReviewApprovalDetail(tester, repository);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    expect(find.byKey(const ValueKey('submit-human-review')), findsNothing);
+    expect(find.byKey(const ValueKey('complete-human-review')), findsNothing);
+    expect(find.byKey(const ValueKey('approve-for-package')), findsNothing);
+    expect(find.textContaining('yazma işlemleri kilitlidir'), findsOneWidget);
+  });
+
+  testWidgets(
+    'review approval workspace remains scrollable on mobile viewport',
+    (tester) async {
+      final repository = FakeCustomsAuthoritySubmissionRepository()
+        ..detail = sampleAuthoritySubmissionDetail(
+          status: 'draft',
+          includeScope: true,
+        );
+      await pumpReviewApprovalDetail(
+        tester,
+        repository,
+        size: const Size(390, 700),
+      );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final button = find.byKey(const ValueKey('submit-human-review'));
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      expect(button, findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('human-review-submission-reason')),
+        findsOneWidget,
+      );
+      expect(find.byType(SingleChildScrollView), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

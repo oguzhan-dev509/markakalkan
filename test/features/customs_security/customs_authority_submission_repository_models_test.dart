@@ -270,6 +270,72 @@ void main() {
     );
   });
 
+  test(
+    'review and approval writes preserve explicit scope and request ids',
+    () async {
+      final calls = <MapEntry<String, Map<String, dynamic>>>[];
+      final repository = CallableCustomsAuthoritySubmissionRepository(
+        ensureAppCheckReady: () async {},
+        requestIdFactory: () => 'generated-request-id',
+        callable: (name, request) async {
+          calls.add(MapEntry(name, request));
+          return <String, dynamic>{
+            'contractVersion': name == 'updateCustomsAuthoritySubmission'
+                ? 'customs-authority-submission-update-result-v1'
+                : 'customs-authority-submission-transition-result-v1',
+            'ok': true,
+            'duplicate': false,
+            'transactionCommitted': true,
+            'submission': <String, dynamic>{
+              ..._submissionMap(),
+              'status': request['nextStatus'] ?? 'awaiting_human_review',
+              'humanReviewReference': request['humanReviewReference'],
+              'dataMinimizationConfirmed':
+                  request['dataMinimizationConfirmed'] ?? false,
+              'nonAccusatoryLanguageConfirmed':
+                  request['nonAccusatoryLanguageConfirmed'] ?? false,
+            },
+          };
+        },
+      );
+
+      await repository.updateSubmission(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        requestId: 'stable-update-id',
+        draft: const CustomsAuthoritySubmissionUpdateDraft(
+          title: 'Bosch FSMH koruma başvurusu',
+          authoritySummary:
+              'Aktif gümrük koruma profili temelinde resmî başvuru taslağıdır.',
+          humanReviewReference: 'review-reference-1',
+          dataMinimizationConfirmed: false,
+          nonAccusatoryLanguageConfirmed: false,
+        ),
+      );
+      await repository.transitionSubmission(
+        tenantId: 'tenant-1',
+        canonicalBrandId: 'brand-1',
+        submissionId: 'submission-1',
+        nextStatus: 'awaiting_rights_holder_approval',
+        reason: 'İnsan incelemesi tamamlandı ve onay aşamasına geçildi.',
+        requestId: 'stable-transition-id',
+      );
+
+      expect(calls, hasLength(2));
+      expect(calls[0].key, 'updateCustomsAuthoritySubmission');
+      expect(calls[0].value['tenantId'], 'tenant-1');
+      expect(calls[0].value['canonicalBrandId'], 'brand-1');
+      expect(calls[0].value['requestId'], 'stable-update-id');
+      expect(calls[0].value['humanReviewReference'], 'review-reference-1');
+      expect(calls[1].key, 'transitionCustomsAuthoritySubmission');
+      expect(calls[1].value['tenantId'], 'tenant-1');
+      expect(calls[1].value['canonicalBrandId'], 'brand-1');
+      expect(calls[1].value['requestId'], 'stable-transition-id');
+      expect(calls[1].value['nextStatus'], 'awaiting_rights_holder_approval');
+    },
+  );
+
   test('download authorization rejects unsafe or mismatched responses', () {
     Map<String, dynamic> response(String url) => {
       'contractVersion':

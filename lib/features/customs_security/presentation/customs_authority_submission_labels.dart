@@ -59,6 +59,19 @@ const customsExternalReferenceTypes = <String>[
   'other_reference',
 ];
 
+const reviewApprovalSectionTitle = 'Başvuru İnceleme ve Onay İşlemleri';
+const reviewApprovalDescription =
+    'Başvuruyu aynı kanonik dosyada insan incelemesine, hak sahibi veya temsilci '
+    'onayına ve paket hazırlama onayına taşıyın. Bu işlemler kuruma otomatik '
+    'gönderim yapmaz.';
+const submitForHumanReview = 'İnsan İncelemesine Gönder';
+const retrySubmitForHumanReview = 'Aynı Geçişle Yeniden Dene';
+const completeHumanReview = 'İnsan İncelemesini Tamamla';
+const retryCompleteHumanReview = 'Aynı İncelemeyle Yeniden Dene';
+const approveForPackage =
+    'Hak Sahibi Onayını Kaydet ve Paket Hazırlamaya Onayla';
+const retryApproveForPackage = 'Aynı Onayla Yeniden Dene';
+
 const externalSubmissionSectionTitle = 'Kuruma Dış Teslim Kaydı';
 const recordExternalSubmission = 'Dış Teslimi Kaydet';
 const retryExternalSubmission = 'Aynı Kayıtla Yeniden Dene';
