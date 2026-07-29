@@ -20,6 +20,10 @@ const {
   withStorageFingerprint,
 } = require("./storage_documents");
 
+const {
+  assertRunRetentionStorage,
+  withRunRetentionStorage,
+} = require("./retention_firestore_adapter");
 const COLLECTIONS = Object.freeze({
   runs: "risk_scan_runs",
   reports: "risk_scan_reports",
@@ -92,6 +96,7 @@ function snapshotData(snapshot, label) {
 }
 
 function assertRunScope(run, scanRunId) {
+  assertRunRetentionStorage(run);
   if (run.scanRunId !== scanRunId) {
     fail("conflict", "stored run identity does not match its path");
   }
@@ -112,7 +117,8 @@ function updatedDocument(existing, patch) {
 
 async function createRunBundle(db, input) {
   assertDb(db);
-  const run = buildRunDocument(input.run);
+  const run = withRunRetentionStorage(
+      buildRunDocument(input.run));
   const channels = assertExactChannelSet(input.channels)
       .map(buildChannelDocument);
   for (const channel of channels) {
@@ -137,7 +143,9 @@ async function createRunBundle(db, input) {
       ...channelSnapshots.map((snapshot) => snapshot.exists),
     ];
     if (existence.every(Boolean)) {
-      assertReplayMatch(runSnapshot.data(), run, "run");
+      const storedRun = assertRunScope(
+          runSnapshot.data(), run.scanRunId);
+      assertReplayMatch(storedRun, run, "run");
       channelSnapshots.forEach((snapshot, index) =>
         assertReplayMatch(
             snapshot.data(), channels[index], `channel[${index}]`));

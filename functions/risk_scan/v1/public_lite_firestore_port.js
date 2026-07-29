@@ -26,6 +26,12 @@ const {
   RiskScanPublicLiteError,
 } = require("./public_lite_contract");
 
+const {
+  assertRateLimitRetentionStorage,
+  assertRunRetentionStorage,
+  withRateLimitRetentionStorage,
+  withRunRetentionStorage,
+} = require("./retention_firestore_adapter");
 const PUBLIC_COLLECTIONS = Object.freeze({
   runs: "risk_scan_runs",
   reports: "risk_scan_reports",
@@ -72,6 +78,14 @@ function snapshotData(snapshot, label) {
 
 function assertStoredRunReplay(existing, expected) {
   assertPlainObject(existing, "existingRun");
+  const existingHasRetention =
+    existing.retentionContractVersion !== undefined;
+  const expectedHasRetention =
+    expected.retentionContractVersion !== undefined;
+  if (existingHasRetention || expectedHasRetention) {
+    assertRunRetentionStorage(existing);
+    assertRunRetentionStorage(expected);
+  }
   const exactFields = [
     "scanRunId",
     "requestId",
@@ -105,6 +119,14 @@ function assertStoredChannelScope(channel, scanRunId, channelCode) {
 }
 
 function assertRateLimitScope(existing, expected) {
+  const existingHasRetention =
+    existing.retentionContractVersion !== undefined;
+  const expectedHasRetention =
+    expected.retentionContractVersion !== undefined;
+  if (existingHasRetention || expectedHasRetention) {
+    assertRateLimitRetentionStorage(existing);
+    assertRateLimitRetentionStorage(expected);
+  }
   const fields = [
     "bucketId",
     "appId",
@@ -126,7 +148,8 @@ function assertRateLimitScope(existing, expected) {
 async function createPublicLiteRun(db, command) {
   assertDb(db);
   assertPlainObject(command, "command");
-  const run = buildRunDocument(command.run);
+  const run = withRunRetentionStorage(
+      buildRunDocument(command.run));
   const channels = command.channels.map(buildChannelDocument);
   if (channels.length !== channelCodes.length ||
       new Set(channels.map((item) => item.channelCode)).size !==
@@ -138,7 +161,8 @@ async function createPublicLiteRun(db, command) {
     throw new TypeError("command must contain two rate-limit records");
   }
   const rateLimitCandidates = command.rateLimitRecords
-      .map(createRateLimitRecord);
+      .map((input) => withRateLimitRetentionStorage(
+          createRateLimitRecord(input)));
   if (new Set(rateLimitCandidates.map((item) => item.bucketId)).size !== 2) {
     throw new TypeError("rate-limit bucket ids must be unique");
   }
@@ -205,6 +229,7 @@ async function createPublicLiteRun(db, command) {
 }
 
 function assertPublicLiteAccess(run, accessSecret, now) {
+  assertRunRetentionStorage(run);
   if (run.accessTier !== "publicLite" || run.identityMode !== "anonymous" ||
       run.accessSecretAlgorithm !== "sha256") {
     fail("not-found", "Tarama bulunamadı veya erişim anahtarı geçersiz.");

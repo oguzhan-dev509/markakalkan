@@ -44,6 +44,9 @@ const {
   assertImmutableRecord,
 } = require("./lifecycle");
 
+const {
+  splitRetentionStorageFields,
+} = require("./retention_firestore_adapter");
 const ACCESS_SECRET_ALGORITHM_V1 = "sha256";
 const STORAGE_FINGERPRINT_ALGORITHM_V1 = "sha256-canonical-json-v1";
 
@@ -85,7 +88,11 @@ function uniqueStrings(values, label, maximum = 64) {
 }
 
 function withStorageFingerprint(document) {
-  const withoutFingerprint = {...document};
+  const {
+    fingerprintDocument,
+    retentionStorageFields,
+  } = splitRetentionStorageFields(document);
+  const withoutFingerprint = {...fingerprintDocument};
   delete withoutFingerprint.storageFingerprintAlgorithm;
   delete withoutFingerprint.storageFingerprintSha256;
   const fingerprintPayload = {
@@ -94,6 +101,7 @@ function withStorageFingerprint(document) {
   };
   return {
     ...fingerprintPayload,
+    ...retentionStorageFields,
     storageFingerprintSha256:
       canonicalJsonDigestSha256(fingerprintPayload),
   };
