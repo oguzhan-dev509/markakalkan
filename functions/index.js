@@ -127,6 +127,11 @@ const {
   buildListRiskOperationsReadModel,
 } = require("./risk_operations/v1");
 const {
+  buildGetPublicLiteRiskScanReport,
+  buildGetPublicLiteRiskScanStatus,
+  buildStartPublicLiteRiskScan,
+} = require("./risk_scan/v1/public_lite_callable");
+const {
   buildCreateCustomsBorderIntervention,
   buildCreateCustomsProtectionProfile,
   buildCreateAndActivateCustomsProtectionProfile,
@@ -291,6 +296,12 @@ exports.provisionInternalTenantBrandPilot =
     buildProvisionInternalTenantBrandPilot({db});
 exports.listRiskOperationsReadModel =
     buildListRiskOperationsReadModel({db});
+exports.startPublicLiteRiskScan =
+    buildStartPublicLiteRiskScan({db});
+exports.getPublicLiteRiskScanStatus =
+    buildGetPublicLiteRiskScanStatus({db});
+exports.getPublicLiteRiskScanReport =
+    buildGetPublicLiteRiskScanReport({db});
 exports.createCustomsProtectionProfile =
     buildCreateCustomsProtectionProfile({db});
 exports.createAndActivateCustomsProtectionProfile =
