@@ -5853,4 +5853,29 @@ allow delete: if request.auth != null
       allow read, write: if false;
     }
 
+    // ============================================================
+    // HRT - RISK VE SUPHELI TARAMALAR / PUBLIC LITE STORAGE
+    // Tum istemci erisimi kapali; erisim yalniz App Check korumali
+    // callable projectionlari ve guvenilir Admin SDK uzerindendir.
+    // ============================================================
+    match /risk_scan_runs/{runId} {
+      allow read, write: if false;
+
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+
+    match /risk_scan_reports/{reportId} {
+      allow read, write: if false;
+    }
+
+    match /risk_scan_claims/{claimId} {
+      allow read, write: if false;
+    }
+
+    match /risk_scan_rate_limits/{bucketId} {
+      allow read, write: if false;
+    }
+
 }
