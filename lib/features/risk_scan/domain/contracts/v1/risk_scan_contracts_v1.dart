@@ -3,10 +3,14 @@ library;
 part 'risk_scan_common_v1.dart';
 part 'risk_scan_run_contract_v1.dart';
 part 'risk_scan_channel_contract_v1.dart';
+part 'risk_scan_observation_contract_v1.dart';
+part 'risk_scan_finding_contract_v1.dart';
 
 const String riskScanTargetContractVersionV1 = 'risk-scan-target-v1';
 const String riskScanRunContractVersionV1 = 'risk-scan-run-v1';
 const String riskScanChannelContractVersionV1 = 'risk-scan-channel-v1';
+const String riskScanObservationContractVersionV1 = 'risk-scan-observation-v1';
+const String riskScanFindingContractVersionV1 = 'risk-scan-finding-v1';
 
 enum RiskScanMode { quick }
 
@@ -123,3 +127,163 @@ RiskScanChannelStatus _channelStatusFrom(Object? value) => _enumValue(value, {
   'failed_terminal': RiskScanChannelStatus.failedTerminal,
   'skipped': RiskScanChannelStatus.skipped,
 }, 'status');
+
+enum RiskScanObservationSourceType { domain, webPage, marketplaceListing }
+
+enum RiskScanAcquisitionStatus {
+  discovered,
+  acquired,
+  acquiredWithLimits,
+  failedRetryable,
+  failedTerminal,
+  excluded,
+}
+
+enum RiskScanFindingType {
+  similarDomain,
+  brandNameSimilarity,
+  contentSimilarity,
+  marketplaceListingSignal,
+}
+
+enum RiskScanRiskLevel { low, medium, high, critical }
+
+enum RiskScanConfidenceLevel { low, medium, high }
+
+enum RiskScanImpactLevel { low, medium, high, critical }
+
+enum RiskScanInterventionDifficulty { easy, moderate, difficult }
+
+enum RiskScanReviewStatus {
+  signal,
+  reviewRequired,
+  suspicious,
+  confirmed,
+  falsePositive,
+}
+
+enum RiskScanRecommendationCode {
+  reviewFinding,
+  compareWithOfficialSource,
+  monitorSource,
+  noImmediateAction,
+}
+
+enum RiskScanPromotionStatus { notRequested, promoted }
+
+String _observationSourceTypeValue(RiskScanObservationSourceType value) =>
+    switch (value) {
+      RiskScanObservationSourceType.domain => 'domain',
+      RiskScanObservationSourceType.webPage => 'web_page',
+      RiskScanObservationSourceType.marketplaceListing => 'marketplace_listing',
+    };
+
+RiskScanObservationSourceType _observationSourceTypeFrom(Object? value) =>
+    _enumValue(value, {
+      'domain': RiskScanObservationSourceType.domain,
+      'web_page': RiskScanObservationSourceType.webPage,
+      'marketplace_listing': RiskScanObservationSourceType.marketplaceListing,
+    }, 'sourceType');
+
+String _acquisitionStatusValue(RiskScanAcquisitionStatus value) =>
+    switch (value) {
+      RiskScanAcquisitionStatus.acquiredWithLimits => 'acquired_with_limits',
+      RiskScanAcquisitionStatus.failedRetryable => 'failed_retryable',
+      RiskScanAcquisitionStatus.failedTerminal => 'failed_terminal',
+      _ => value.name,
+    };
+
+RiskScanAcquisitionStatus _acquisitionStatusFrom(Object? value) =>
+    _enumValue(value, {
+      'discovered': RiskScanAcquisitionStatus.discovered,
+      'acquired': RiskScanAcquisitionStatus.acquired,
+      'acquired_with_limits': RiskScanAcquisitionStatus.acquiredWithLimits,
+      'failed_retryable': RiskScanAcquisitionStatus.failedRetryable,
+      'failed_terminal': RiskScanAcquisitionStatus.failedTerminal,
+      'excluded': RiskScanAcquisitionStatus.excluded,
+    }, 'acquisitionStatus');
+
+String _findingTypeValue(RiskScanFindingType value) => switch (value) {
+  RiskScanFindingType.similarDomain => 'similar_domain',
+  RiskScanFindingType.brandNameSimilarity => 'brand_name_similarity',
+  RiskScanFindingType.contentSimilarity => 'content_similarity',
+  RiskScanFindingType.marketplaceListingSignal => 'marketplace_listing_signal',
+};
+
+RiskScanFindingType _findingTypeFrom(Object? value) => _enumValue(value, {
+  'similar_domain': RiskScanFindingType.similarDomain,
+  'brand_name_similarity': RiskScanFindingType.brandNameSimilarity,
+  'content_similarity': RiskScanFindingType.contentSimilarity,
+  'marketplace_listing_signal': RiskScanFindingType.marketplaceListingSignal,
+}, 'findingType');
+
+String _riskLevelValue(RiskScanRiskLevel value) => value.name;
+
+RiskScanRiskLevel _riskLevelFrom(Object? value) => _enumValue(value, {
+  for (final item in RiskScanRiskLevel.values) item.name: item,
+}, 'riskLevel');
+
+String _confidenceLevelValue(RiskScanConfidenceLevel value) => value.name;
+
+RiskScanConfidenceLevel _confidenceLevelFrom(Object? value) => _enumValue(
+  value,
+  {for (final item in RiskScanConfidenceLevel.values) item.name: item},
+  'confidenceLevel',
+);
+
+String _impactLevelValue(RiskScanImpactLevel value) => value.name;
+
+RiskScanImpactLevel _impactLevelFrom(Object? value) => _enumValue(value, {
+  for (final item in RiskScanImpactLevel.values) item.name: item,
+}, 'impactLevel');
+
+String _interventionDifficultyValue(RiskScanInterventionDifficulty value) =>
+    value.name;
+
+RiskScanInterventionDifficulty _interventionDifficultyFrom(Object? value) =>
+    _enumValue(value, {
+      for (final item in RiskScanInterventionDifficulty.values) item.name: item,
+    }, 'interventionDifficulty');
+
+String _reviewStatusValue(RiskScanReviewStatus value) => switch (value) {
+  RiskScanReviewStatus.reviewRequired => 'review_required',
+  RiskScanReviewStatus.falsePositive => 'false_positive',
+  _ => value.name,
+};
+
+RiskScanReviewStatus _reviewStatusFrom(Object? value) => _enumValue(value, {
+  'signal': RiskScanReviewStatus.signal,
+  'review_required': RiskScanReviewStatus.reviewRequired,
+  'suspicious': RiskScanReviewStatus.suspicious,
+  'confirmed': RiskScanReviewStatus.confirmed,
+  'false_positive': RiskScanReviewStatus.falsePositive,
+}, 'reviewStatus');
+
+String _recommendationCodeValue(RiskScanRecommendationCode value) =>
+    switch (value) {
+      RiskScanRecommendationCode.reviewFinding => 'review_finding',
+      RiskScanRecommendationCode.compareWithOfficialSource =>
+        'compare_with_official_source',
+      RiskScanRecommendationCode.monitorSource => 'monitor_source',
+      RiskScanRecommendationCode.noImmediateAction => 'no_immediate_action',
+    };
+
+RiskScanRecommendationCode _recommendationCodeFrom(Object? value) =>
+    _enumValue(value, {
+      'review_finding': RiskScanRecommendationCode.reviewFinding,
+      'compare_with_official_source':
+          RiskScanRecommendationCode.compareWithOfficialSource,
+      'monitor_source': RiskScanRecommendationCode.monitorSource,
+      'no_immediate_action': RiskScanRecommendationCode.noImmediateAction,
+    }, 'recommendationCode');
+
+String _promotionStatusValue(RiskScanPromotionStatus value) => switch (value) {
+  RiskScanPromotionStatus.notRequested => 'not_requested',
+  RiskScanPromotionStatus.promoted => 'promoted',
+};
+
+RiskScanPromotionStatus _promotionStatusFrom(Object? value) =>
+    _enumValue(value, {
+      'not_requested': RiskScanPromotionStatus.notRequested,
+      'promoted': RiskScanPromotionStatus.promoted,
+    }, 'promotionStatus');
