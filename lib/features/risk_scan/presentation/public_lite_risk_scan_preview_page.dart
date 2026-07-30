@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:markakalkan/features/risk_scan/data/public_lite_risk_scan_repository.dart';
+import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_controller.dart';
 
 const Key publicLiteRiskScanBrandFieldKey = Key('publicLiteRiskScanBrandField');
 const Key publicLiteRiskScanWebsiteFieldKey = Key(
@@ -17,16 +18,21 @@ const Key publicLiteRiskScanRefreshButtonKey = Key(
 const Key publicLiteRiskScanReportButtonKey = Key(
   'publicLiteRiskScanReportButton',
 );
+const Key publicLiteRiskScanStatusRegionKey = Key(
+  'publicLiteRiskScanStatusRegion',
+);
 
 final class PublicLiteRiskScanPreviewPage extends StatefulWidget {
   const PublicLiteRiskScanPreviewPage({
     super.key,
     this.repository,
+    this.controller,
     this.requestIdFactory,
     this.clientNonceFactory,
   });
 
   final PublicLiteRiskScanRepository? repository;
+  final PublicLiteRiskScanController? controller;
   final String Function()? requestIdFactory;
   final String Function()? clientNonceFactory;
 
@@ -36,181 +42,105 @@ final class PublicLiteRiskScanPreviewPage extends StatefulWidget {
 }
 
 final class _PublicLiteRiskScanPreviewPageState
-    extends State<PublicLiteRiskScanPreviewPage> {
+    extends State<PublicLiteRiskScanPreviewPage>
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _brandController = TextEditingController();
   final _websiteController = TextEditingController();
 
-  late final PublicLiteRiskScanRepository _repository;
+  late final PublicLiteRiskScanController _operation;
+  late final bool _ownsOperation;
   late final String Function() _requestIdFactory;
   late final String Function() _clientNonceFactory;
-
-  String? _accessKey;
-  String? _outcome;
-  String? _errorMessage;
-  PublicLiteRiskScanProjection? _projection;
-  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ?? CallablePublicLiteRiskScanRepository();
+    WidgetsBinding.instance.addObserver(this);
+
+    _ownsOperation = widget.controller == null;
+    _operation =
+        widget.controller ??
+        PublicLiteRiskScanController(
+          repository:
+              widget.repository ?? CallablePublicLiteRiskScanRepository(),
+        );
     _requestIdFactory = widget.requestIdFactory ?? _newUuidV4;
     _clientNonceFactory = widget.clientNonceFactory ?? _newClientNonce;
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _operation.setForeground(state == AppLifecycleState.resumed);
+  }
+
+  @override
   void dispose() {
-    _accessKey = null;
+    WidgetsBinding.instance.removeObserver(this);
+    if (_ownsOperation) {
+      _operation.dispose();
+    }
     _brandController.dispose();
     _websiteController.dispose();
     super.dispose();
   }
 
   Future<void> _start() async {
-    if (_busy || !(_formKey.currentState?.validate() ?? false)) return;
-
-    setState(() {
-      _busy = true;
-      _errorMessage = null;
-      _projection = null;
-      _accessKey = null;
-      _outcome = null;
-    });
-
-    try {
-      final result = await _repository.start(
-        PublicLiteRiskScanStartRequest(
-          requestId: _requestIdFactory(),
-          brandName: _brandController.text,
-          officialWebsiteUrl: _websiteController.text,
-          anonymousClientNonce: _clientNonceFactory(),
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _accessKey = result.accessKey;
-        _projection = result.projection;
-        _outcome = result.outcome;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = _messageFor(error);
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-        });
-      }
+    if (_operation.isBusy || !(_formKey.currentState?.validate() ?? false)) {
+      return;
     }
-  }
 
-  Future<void> _refreshStatus() async {
-    final accessKey = _accessKey;
-    if (_busy || accessKey == null) return;
-
-    setState(() {
-      _busy = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final projection = await _repository.getStatus(accessKey);
-      if (!mounted) return;
-      setState(() {
-        _projection = projection;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = _messageFor(error);
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _loadReport() async {
-    final accessKey = _accessKey;
-    if (_busy || accessKey == null) return;
-
-    setState(() {
-      _busy = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final projection = await _repository.getReport(accessKey);
-      if (!mounted) return;
-      setState(() {
-        _projection = projection;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = _messageFor(error);
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-        });
-      }
-    }
-  }
-
-  String _messageFor(Object error) {
-    if (error is PublicLiteRiskScanRepositoryException) {
-      return error.message;
-    }
-    if (error is FormatException) {
-      return error.message.toString();
-    }
-    return 'Risk taraması işlemi tamamlanamadı.';
+    await _operation.start(
+      PublicLiteRiskScanStartRequest(
+        requestId: _requestIdFactory(),
+        brandName: _brandController.text,
+        officialWebsiteUrl: _websiteController.text,
+        anonymousClientNonce: _clientNonceFactory(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final projection = _projection;
+    return AnimatedBuilder(
+      animation: _operation,
+      builder: (context, _) {
+        final projection = _operation.projection;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Hızlı Risk Taraması — Önizleme')),
-      body: SafeArea(
-        child: SelectionArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1040),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _PreviewNotice(),
-                    const SizedBox(height: 20),
-                    const _PurposeGrid(),
-                    const SizedBox(height: 24),
-                    _buildForm(context),
-                    if (_errorMessage != null) ...[
-                      const SizedBox(height: 16),
-                      _ErrorCard(message: _errorMessage!),
-                    ],
-                    if (projection != null) ...[
-                      const SizedBox(height: 24),
-                      _buildProjection(context, projection),
-                    ],
-                  ],
+        return Scaffold(
+          appBar: AppBar(title: const Text('Hızlı Risk Taraması — Önizleme')),
+          body: SafeArea(
+            child: SelectionArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1040),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _PreviewNotice(),
+                        const SizedBox(height: 20),
+                        const _PurposeGrid(),
+                        const SizedBox(height: 24),
+                        _buildForm(context),
+                        if (_operation.errorMessage != null) ...[
+                          const SizedBox(height: 16),
+                          _ErrorCard(message: _operation.errorMessage!),
+                        ],
+                        if (projection != null) ...[
+                          const SizedBox(height: 24),
+                          _buildProjection(context, projection),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -236,7 +166,7 @@ final class _PublicLiteRiskScanPreviewPageState
               TextFormField(
                 key: publicLiteRiskScanBrandFieldKey,
                 controller: _brandController,
-                enabled: !_busy,
+                enabled: !_operation.isBusy,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Marka adı',
@@ -251,7 +181,7 @@ final class _PublicLiteRiskScanPreviewPageState
               TextFormField(
                 key: publicLiteRiskScanWebsiteFieldKey,
                 controller: _websiteController,
-                enabled: !_busy,
+                enabled: !_operation.isBusy,
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.done,
                 decoration: const InputDecoration(
@@ -278,14 +208,16 @@ final class _PublicLiteRiskScanPreviewPageState
                 alignment: Alignment.centerLeft,
                 child: FilledButton.icon(
                   key: publicLiteRiskScanStartButtonKey,
-                  onPressed: _busy ? null : _start,
-                  icon: _busy
+                  onPressed: _operation.isBusy ? null : _start,
+                  icon: _operation.isBusy
                       ? const SizedBox.square(
                           dimension: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.radar),
-                  label: Text(_busy ? 'İşlem sürüyor' : 'Taramayı başlat'),
+                  label: Text(
+                    _operation.isBusy ? 'İşlem sürüyor' : 'Taramayı başlat',
+                  ),
                 ),
               ),
             ],
@@ -300,84 +232,112 @@ final class _PublicLiteRiskScanPreviewPageState
     PublicLiteRiskScanProjection projection,
   ) {
     final report = projection.report;
+    final remaining = _operation.remainingAccess;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      projection.isReportReady
-                          ? Icons.task_alt
-                          : Icons.manage_search,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _outcome == 'idempotent_success'
-                                ? 'Mevcut tarama güvenli biçimde geri getirildi'
-                                : 'Tarama oluşturuldu',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 4),
-                          Text('Durum: ${_statusLabel(projection.status)}'),
-                          Text(
-                            'Kapsama: '
-                            '${_coverageLabel(projection.coverageStatus)}',
-                          ),
-                          Text('Tarama no: ${projection.scanRunId}'),
-                        ],
+    return Semantics(
+      key: publicLiteRiskScanStatusRegionKey,
+      container: true,
+      liveRegion: true,
+      label: _operation.accessibilityStatus,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        projection.isReportReady
+                            ? Icons.task_alt
+                            : Icons.manage_search,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    OutlinedButton.icon(
-                      key: publicLiteRiskScanRefreshButtonKey,
-                      onPressed: _busy ? null : _refreshStatus,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Durumu yenile'),
-                    ),
-                    FilledButton.tonalIcon(
-                      key: publicLiteRiskScanReportButtonKey,
-                      onPressed: _busy || !projection.isReportReady
-                          ? null
-                          : _loadReport,
-                      icon: const Icon(Icons.description_outlined),
-                      label: const Text('Raporu getir'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Erişim anahtarı yalnız bu sayfanın geçici belleğinde '
-                  'tutulur; ekranda gösterilmez ve kalıcı depoya yazılmaz.',
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _operation.outcome == 'idempotent_success'
+                                  ? 'Mevcut tarama güvenli biçimde geri getirildi'
+                                  : 'Tarama oluşturuldu',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Durum: ${_statusLabel(projection.status)}'),
+                            Text(
+                              'Kapsama: '
+                              '${_coverageLabel(projection.coverageStatus)}',
+                            ),
+                            Text('Tarama no: ${projection.scanRunId}'),
+                            if (remaining != null)
+                              Text(
+                                'Erişim süresi: '
+                                '${_remainingLabel(remaining)}',
+                              ),
+                            Text(
+                              _operation.isForeground
+                                  ? 'Otomatik izleme etkin'
+                                  : 'Otomatik izleme duraklatıldı',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      OutlinedButton.icon(
+                        key: publicLiteRiskScanRefreshButtonKey,
+                        onPressed:
+                            _operation.isBusy ||
+                                !_operation.isForeground ||
+                                _operation.state ==
+                                    PublicLiteRiskScanOperationState.expired
+                            ? null
+                            : _operation.refreshNow,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Şimdi yenile'),
+                      ),
+                      FilledButton.tonalIcon(
+                        key: publicLiteRiskScanReportButtonKey,
+                        onPressed:
+                            _operation.isBusy ||
+                                !projection.isReportReady ||
+                                report != null
+                            ? null
+                            : _operation.loadReportNow,
+                        icon: const Icon(Icons.description_outlined),
+                        label: Text(
+                          report == null ? 'Raporu getir' : 'Rapor hazır',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Erişim anahtarı yalnız controller belleğinde tutulur; '
+                    'ekranda gösterilmez ve kalıcı depoya yazılmaz.',
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        _ChannelCard(channels: projection.channels),
-        if (report != null) ...[
           const SizedBox(height: 16),
-          _ReportCard(report: report),
+          _ChannelCard(channels: projection.channels),
+          if (report != null) ...[
+            const SizedBox(height: 16),
+            _ReportCard(report: report),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -649,6 +609,21 @@ String _channelLabel(String? value) {
   };
   if (value == null) return 'Bilinmeyen kanal';
   return labels[value] ?? value;
+}
+
+String _remainingLabel(Duration value) {
+  if (value <= Duration.zero) return 'Süre doldu';
+  final hours = value.inHours;
+  final minutes = value.inMinutes.remainder(60);
+  final seconds = value.inSeconds.remainder(60);
+
+  if (hours > 0) {
+    return '$hours sa $minutes dk';
+  }
+  if (minutes > 0) {
+    return '$minutes dk $seconds sn';
+  }
+  return '$seconds sn';
 }
 
 String _nullableLabel(String? value) =>

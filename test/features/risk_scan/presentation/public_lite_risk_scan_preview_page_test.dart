@@ -1,16 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/risk_scan/data/public_lite_risk_scan_repository.dart';
+import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_controller.dart';
 import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_preview_page.dart';
 
 void main() {
-  testWidgets('preview explains purpose and starts a scan', (tester) async {
+  testWidgets('preview explains purpose and starts a scan on mobile', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final repository = _FakeRepository();
+    final controller = PublicLiteRiskScanController(
+      repository: repository,
+      schedule: _noOpSchedule,
+      now: () => _now,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: PublicLiteRiskScanPreviewPage(
-          repository: repository,
+          controller: controller,
           requestIdFactory: () => '11111111-1111-4111-8111-111111111111',
           clientNonceFactory: () => 'nonce-1',
         ),
@@ -39,17 +50,74 @@ void main() {
     expect(repository.lastStartRequest?.brandName, 'MarkaKalkan');
     expect(find.text('Tarama oluşturuldu'), findsOneWidget);
     expect(find.textContaining('Tarama no:'), findsOneWidget);
-    expect(find.textContaining('Erişim anahtarı yalnız'), findsOneWidget);
+    expect(find.textContaining('controller belleğinde'), findsOneWidget);
     expect(find.text(_accessKey), findsNothing);
+
+    final semantics = tester.getSemantics(
+      find.byKey(publicLiteRiskScanStatusRegionKey),
+    );
+    expect(semantics.label, contains('Tarama durumu'));
+
+    controller.dispose();
   });
 
-  testWidgets('report remains disabled before completion', (tester) async {
-    final repository = _FakeRepository();
+  testWidgets('desktop layout exposes lifecycle controls', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final controller = PublicLiteRiskScanController(
+      repository: _FakeRepository(),
+      schedule: _noOpSchedule,
+      now: () => _now,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: PublicLiteRiskScanPreviewPage(
-          repository: repository,
+          controller: controller,
+          requestIdFactory: () => '11111111-1111-4111-8111-111111111111',
+          clientNonceFactory: () => 'nonce-1',
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(publicLiteRiskScanBrandFieldKey),
+      'MarkaKalkan',
+    );
+    await tester.enterText(
+      find.byKey(publicLiteRiskScanWebsiteFieldKey),
+      'https://markakalkan.com',
+    );
+    await tester.tap(find.byKey(publicLiteRiskScanStartButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Otomatik izleme etkin'), findsOneWidget);
+    expect(find.textContaining('Erişim süresi:'), findsOneWidget);
+    expect(find.byKey(publicLiteRiskScanRefreshButtonKey), findsOneWidget);
+    expect(find.byKey(publicLiteRiskScanReportButtonKey), findsOneWidget);
+
+    final reportButton = tester.widget<FilledButton>(
+      find.byKey(publicLiteRiskScanReportButtonKey),
+    );
+    expect(reportButton.onPressed, isNull);
+
+    controller.dispose();
+  });
+
+  testWidgets('application lifecycle pauses and resumes the controller', (
+    tester,
+  ) async {
+    final controller = PublicLiteRiskScanController(
+      repository: _FakeRepository(),
+      schedule: _noOpSchedule,
+      now: () => _now,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PublicLiteRiskScanPreviewPage(
+          controller: controller,
           requestIdFactory: () => '11111111-1111-4111-8111-111111111111',
           clientNonceFactory: () => 'nonce-1',
         ),
@@ -67,14 +135,35 @@ void main() {
     await tester.ensureVisible(find.byKey(publicLiteRiskScanStartButtonKey));
     await tester.tap(find.byKey(publicLiteRiskScanStartButtonKey));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(publicLiteRiskScanReportButtonKey));
 
-    final button = tester.widget<FilledButton>(
-      find.byKey(publicLiteRiskScanReportButtonKey),
-    );
-    expect(button.onPressed, isNull);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+
+    expect(controller.state, PublicLiteRiskScanOperationState.paused);
+    expect(controller.isForeground, isFalse);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+
+    expect(controller.state, PublicLiteRiskScanOperationState.paused);
+    expect(controller.isForeground, isFalse);
+    expect(find.text('Otomatik izleme duraklatıldı'), findsOneWidget);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(controller.isForeground, isTrue);
+
+    controller.dispose();
   });
 }
+
+final DateTime _now = DateTime.utc(2026, 7, 30, 12);
+
+PublicLiteRiskScanCancel _noOpSchedule(Duration delay, VoidCallback callback) =>
+    () {};
 
 final class _FakeRepository implements PublicLiteRiskScanRepository {
   int startCalls = 0;
@@ -86,21 +175,20 @@ final class _FakeRepository implements PublicLiteRiskScanRepository {
   ) async {
     startCalls += 1;
     lastStartRequest = request;
-    return PublicLiteRiskScanStartResult.fromMap({
-      'contractVersion': publicLiteRiskScanCallableContractVersionV1,
-      'outcome': 'created',
-      'accessKey': _accessKey,
-      'projection': _projection(),
-    });
+    return PublicLiteRiskScanStartResult(
+      outcome: 'created',
+      accessKey: _accessKey,
+      projection: _projection(),
+    );
   }
 
   @override
   Future<PublicLiteRiskScanProjection> getStatus(String accessKey) async =>
-      PublicLiteRiskScanProjection.fromMap(_projection());
+      _projection(status: 'assessing');
 
   @override
   Future<PublicLiteRiskScanProjection> getReport(String accessKey) async =>
-      PublicLiteRiskScanProjection.fromMap(_projection());
+      _projection(status: 'completed', report: _report());
 }
 
 const String _accessKey =
@@ -108,17 +196,20 @@ const String _accessKey =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.'
     'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 
-Map<String, dynamic> _projection() => {
+PublicLiteRiskScanProjection _projection({
+  String status = 'created',
+  PublicLiteRiskScanReport? report,
+}) => PublicLiteRiskScanProjection.fromMap({
   'contractVersion': publicLiteRiskScanProjectionContractVersionV1,
   'scanRunId': 'a' * 64,
   'scanMode': 'quick',
   'accessTier': 'publicLite',
   'identityMode': 'anonymous',
-  'status': 'created',
+  'status': status,
   'coverageStatus': 'insufficient',
-  'createdAt': '2026-07-30T12:00:00Z',
-  'updatedAt': '2026-07-30T12:00:00Z',
-  'expiresAt': '2026-07-31T12:00:00Z',
+  'createdAt': _now.toIso8601String(),
+  'updatedAt': _now.toIso8601String(),
+  'expiresAt': _now.add(const Duration(hours: 24)).toIso8601String(),
   'target': {
     'brandNameNormalized': 'markakalkan',
     'officialHost': 'markakalkan.com',
@@ -128,8 +219,40 @@ Map<String, dynamic> _projection() => {
     _channel('openWeb'),
     _channel('marketplaceLimited'),
   ],
-  'report': null,
-};
+  'report': report == null
+      ? null
+      : {
+          'reportId': report.reportId,
+          'reportVersion': report.reportVersion,
+          'generatedAt': report.generatedAt?.toIso8601String(),
+          'status': report.status,
+          'coverageStatus': report.coverageStatus,
+          'overallRiskLevel': report.overallRiskLevel,
+          'overallConfidenceLevel': report.overallConfidenceLevel,
+          'recommendedAction': report.recommendedAction,
+          'summary': report.summary,
+          'findingCount': report.findingCount,
+          'observationCount': report.observationCount,
+          'topFindingSnapshots': <Object?>[],
+          'channelDistribution': <Object?>[],
+        },
+});
+
+PublicLiteRiskScanReport _report() => PublicLiteRiskScanReport.fromMap({
+  'reportId': 'report-1',
+  'reportVersion': 1,
+  'generatedAt': _now.add(const Duration(minutes: 2)).toIso8601String(),
+  'status': 'completed',
+  'coverageStatus': 'limited',
+  'overallRiskLevel': 'medium',
+  'overallConfidenceLevel': 'medium',
+  'recommendedAction': 'review_top_findings',
+  'summary': 'Rapor hazır.',
+  'findingCount': 0,
+  'observationCount': 3,
+  'topFindingSnapshots': <Object?>[],
+  'channelDistribution': <Object?>[],
+});
 
 Map<String, dynamic> _channel(String code) => {
   'channelCode': code,
