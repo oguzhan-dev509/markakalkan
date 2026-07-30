@@ -17,6 +17,7 @@ import 'package:markakalkan/features/verification/presentation/qr_scanner_page.d
 import 'package:markakalkan/features/traceability/presentation/suspicious_verification_scans_page.dart';
 import 'package:markakalkan/features/traceability/presentation/traceability_cases_page.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
+import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_preview_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_center_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_detail_page.dart';
 import 'package:markakalkan/features/case_evidence_center/presentation/case_evidence_item_detail_page.dart';
@@ -597,6 +598,15 @@ abstract final class AppRouter {
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/case-evidence-center/legal-hold'),
         builder: (_) => CaseLegalHoldPage(initialCaseId: caseId),
+      ),
+    );
+  }
+
+  static Future<void> openPublicLiteRiskScanPreview(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/risk-scan/public-lite-preview'),
+        builder: (_) => const PublicLiteRiskScanPreviewPage(),
       ),
     );
   }
