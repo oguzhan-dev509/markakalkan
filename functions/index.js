@@ -132,6 +132,9 @@ const {
   buildStartPublicLiteRiskScan,
 } = require("./risk_scan/v1/public_lite_callable");
 const {
+  buildCleanupExpiredRiskScanRuns,
+} = require("./risk_scan/v1/scheduled_cleanup");
+const {
   buildCreateCustomsBorderIntervention,
   buildCreateCustomsProtectionProfile,
   buildCreateAndActivateCustomsProtectionProfile,
@@ -302,6 +305,8 @@ exports.getPublicLiteRiskScanStatus =
     buildGetPublicLiteRiskScanStatus({db});
 exports.getPublicLiteRiskScanReport =
     buildGetPublicLiteRiskScanReport({db});
+exports.cleanupExpiredRiskScanRuns =
+    buildCleanupExpiredRiskScanRuns({db});
 exports.createCustomsProtectionProfile =
     buildCreateCustomsProtectionProfile({db});
 exports.createAndActivateCustomsProtectionProfile =
