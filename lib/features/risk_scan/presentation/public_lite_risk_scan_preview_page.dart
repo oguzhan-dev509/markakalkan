@@ -21,6 +21,19 @@ const Key publicLiteRiskScanReportButtonKey = Key(
 const Key publicLiteRiskScanStatusRegionKey = Key(
   'publicLiteRiskScanStatusRegion',
 );
+const Key publicLiteRiskScanTimelineKey = Key('publicLiteRiskScanTimeline');
+const Key publicLiteRiskScanTrustNoticeKey = Key(
+  'publicLiteRiskScanTrustNotice',
+);
+const Key publicLiteRiskScanRetryButtonKey = Key(
+  'publicLiteRiskScanRetryButton',
+);
+const Key publicLiteRiskScanRestartButtonKey = Key(
+  'publicLiteRiskScanRestartButton',
+);
+const Key publicLiteRiskScanResultFocusKey = Key(
+  'publicLiteRiskScanResultFocus',
+);
 
 final class PublicLiteRiskScanPreviewPage extends StatefulWidget {
   const PublicLiteRiskScanPreviewPage({
@@ -47,11 +60,13 @@ final class _PublicLiteRiskScanPreviewPageState
   final _formKey = GlobalKey<FormState>();
   final _brandController = TextEditingController();
   final _websiteController = TextEditingController();
+  final _resultFocusNode = FocusNode(debugLabel: 'publicLiteRiskScanResult');
 
   late final PublicLiteRiskScanController _operation;
   late final bool _ownsOperation;
   late final String Function() _requestIdFactory;
   late final String Function() _clientNonceFactory;
+  late PublicLiteRiskScanOperationState _lastOperationState;
 
   @override
   void initState() {
@@ -67,6 +82,25 @@ final class _PublicLiteRiskScanPreviewPageState
         );
     _requestIdFactory = widget.requestIdFactory ?? _newUuidV4;
     _clientNonceFactory = widget.clientNonceFactory ?? _newClientNonce;
+    _lastOperationState = _operation.state;
+  }
+
+  void _scheduleFocusForTransition() {
+    final nextState = _operation.state;
+    if (nextState == _lastOperationState) return;
+    _lastOperationState = nextState;
+
+    final shouldFocus =
+        nextState == PublicLiteRiskScanOperationState.completed ||
+        nextState == PublicLiteRiskScanOperationState.terminal ||
+        nextState == PublicLiteRiskScanOperationState.expired ||
+        nextState == PublicLiteRiskScanOperationState.failed;
+    if (!shouldFocus) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_resultFocusNode.canRequestFocus) return;
+      _resultFocusNode.requestFocus();
+    });
   }
 
   @override
@@ -80,6 +114,7 @@ final class _PublicLiteRiskScanPreviewPageState
     if (_ownsOperation) {
       _operation.dispose();
     }
+    _resultFocusNode.dispose();
     _brandController.dispose();
     _websiteController.dispose();
     super.dispose();
@@ -100,12 +135,25 @@ final class _PublicLiteRiskScanPreviewPageState
     );
   }
 
+  Future<void> _retry() async {
+    final state = _operation.state;
+    if (_operation.projection == null ||
+        state == PublicLiteRiskScanOperationState.failed ||
+        state == PublicLiteRiskScanOperationState.terminal ||
+        state == PublicLiteRiskScanOperationState.expired) {
+      await _start();
+      return;
+    }
+    await _operation.refreshNow();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _operation,
       builder: (context, _) {
         final projection = _operation.projection;
+        _scheduleFocusForTransition();
 
         return Scaffold(
           appBar: AppBar(title: const Text('Hızlı Risk Taraması — Önizleme')),
@@ -122,16 +170,30 @@ final class _PublicLiteRiskScanPreviewPageState
                         const _PreviewNotice(),
                         const SizedBox(height: 20),
                         const _PurposeGrid(),
+                        const SizedBox(height: 16),
+                        const _TrustNotice(),
                         const SizedBox(height: 24),
                         _buildForm(context),
-                        if (_operation.errorMessage != null) ...[
-                          const SizedBox(height: 16),
-                          _ErrorCard(message: _operation.errorMessage!),
-                        ],
-                        if (projection != null) ...[
-                          const SizedBox(height: 24),
-                          _buildProjection(context, projection),
-                        ],
+                        Focus(
+                          key: publicLiteRiskScanResultFocusKey,
+                          focusNode: _resultFocusNode,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (_operation.errorMessage != null) ...[
+                                const SizedBox(height: 16),
+                                _ErrorCard(
+                                  message: _operation.errorMessage!,
+                                  onRetry: _operation.isBusy ? null : _retry,
+                                ),
+                              ],
+                              if (projection != null) ...[
+                                const SizedBox(height: 24),
+                                _buildProjection(context, projection),
+                              ],
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -242,6 +304,11 @@ final class _PublicLiteRiskScanPreviewPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _OperationTimeline(
+            key: publicLiteRiskScanTimelineKey,
+            status: projection.status,
+          ),
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -319,6 +386,16 @@ final class _PublicLiteRiskScanPreviewPageState
                           report == null ? 'Raporu getir' : 'Rapor hazır',
                         ),
                       ),
+                      if (_operation.state ==
+                              PublicLiteRiskScanOperationState.terminal ||
+                          _operation.state ==
+                              PublicLiteRiskScanOperationState.expired)
+                        FilledButton.icon(
+                          key: publicLiteRiskScanRestartButtonKey,
+                          onPressed: _operation.isBusy ? null : _start,
+                          icon: const Icon(Icons.restart_alt),
+                          label: const Text('Yeni tarama başlat'),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -361,6 +438,47 @@ final class _PreviewNotice extends StatelessWidget {
                 'İzole frontend önizlemesi: Firebase Rules UpdateRelease '
                 'destek engeli çözülene kadar bu ekran ana sayfa veya kamu '
                 'navigasyonunda yayımlanmayacaktır.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _TrustNotice extends StatelessWidget {
+  const _TrustNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: publicLiteRiskScanTrustNoticeKey,
+      child: const Padding(
+        padding: EdgeInsets.all(18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.privacy_tip_outlined),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Veri kullanımı ve gizlilik',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Bu Public Lite akışı hesap girişi veya kişisel profil '
+                    'bilgisi istemez. Marka adı ve resmî internet adresi '
+                    'yalnız taramanın oluşturulması, durumunun izlenmesi ve '
+                    'maskelenmiş raporun sunulması amacıyla işlenir. Erişim '
+                    'anahtarı cihazda kalıcı olarak saklanmaz ve bu ekran '
+                    'sonuçları kendiliğinden kamuya yayımlamaz.',
+                  ),
+                ],
               ),
             ),
           ],
@@ -457,9 +575,10 @@ final class _PurposeItem {
 }
 
 final class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message});
+  const _ErrorCard({required this.message, required this.onRetry});
 
   final String message;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -467,11 +586,22 @@ final class _ErrorCard extends StatelessWidget {
       color: Theme.of(context).colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: Row(
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             const Icon(Icons.error_outline),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: Text(message),
+            ),
+            OutlinedButton.icon(
+              key: publicLiteRiskScanRetryButtonKey,
+              onPressed: onRetry,
+              icon: const Icon(Icons.replay),
+              label: const Text('Tekrar dene'),
+            ),
           ],
         ),
       ),
@@ -498,18 +628,34 @@ final class _ChannelCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             for (final channel in channels)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.travel_explore_outlined),
-                title: Text(_channelLabel(channel.channelCode)),
-                subtitle: Text(
-                  'Durum: ${_statusLabel(channel.status)} · '
-                  'Kapsama: ${_coverageLabel(channel.coverageStatus)}',
-                ),
-                trailing: Text(
-                  '${channel.observationCount} gözlem\n'
-                  '${channel.findingCount} bulgu',
-                  textAlign: TextAlign.end,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.travel_explore_outlined),
+                  title: Text(_channelLabel(channel.channelCode)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Durum: ${_statusLabel(channel.status)} · '
+                        'Kapsama: '
+                        '${_coverageLabel(channel.coverageStatus)}',
+                      ),
+                      if (channel.limitReasonCodes.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Sınırlama nedenleri: '
+                          '${channel.limitReasonCodes.map(_limitReasonLabel).join(' · ')}',
+                        ),
+                      ],
+                    ],
+                  ),
+                  trailing: Text(
+                    '${channel.observationCount} gözlem\n'
+                    '${channel.findingCount} bulgu',
+                    textAlign: TextAlign.end,
+                  ),
                 ),
               ),
           ],
@@ -536,6 +682,8 @@ final class _ReportCard extends StatelessWidget {
               'Public Lite risk raporu',
               style: Theme.of(context).textTheme.titleLarge,
             ),
+            const SizedBox(height: 6),
+            Text('Rapor üretim zamanı: ${_dateTimeLabel(report.generatedAt)}'),
             const SizedBox(height: 10),
             Text(report.summary ?? 'Rapor özeti bulunmuyor.'),
             const SizedBox(height: 12),
@@ -543,12 +691,65 @@ final class _ReportCard extends StatelessWidget {
               spacing: 16,
               runSpacing: 8,
               children: [
-                Text('Genel risk: ${_nullableLabel(report.overallRiskLevel)}'),
-                Text('Güven: ${_nullableLabel(report.overallConfidenceLevel)}'),
+                Text(
+                  'Genel risk: '
+                  '${_riskLevelLabel(report.overallRiskLevel)}',
+                ),
+                Text(
+                  'Güven: '
+                  '${_confidenceLabel(report.overallConfidenceLevel)}',
+                ),
                 Text('Bulgu: ${report.findingCount}'),
                 Text('Gözlem: ${report.observationCount}'),
               ],
             ),
+            const SizedBox(height: 16),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.next_plan_outlined),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Önerilen sonraki adım: '
+                        '${_recommendedActionLabel(report.recommendedAction)}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (report.channelDistribution.isNotEmpty) ...[
+              const Divider(height: 32),
+              Text(
+                'Rapor kanal dağılımı',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              for (final channel in report.channelDistribution)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.donut_small_outlined),
+                  title: Text(_channelLabel(channel.channelCode)),
+                  subtitle: Text(
+                    'Kapsama: '
+                    '${_coverageLabel(channel.coverageStatus)} · '
+                    'Durum: ${_statusLabel(channel.status)}',
+                  ),
+                  trailing: Text(
+                    '${channel.observationCount} gözlem\n'
+                    '${channel.findingCount} bulgu',
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+            ],
             if (report.topFindingSnapshots.isNotEmpty) ...[
               const Divider(height: 32),
               Text(
@@ -562,10 +763,126 @@ final class _ReportCard extends StatelessWidget {
                   leading: const Icon(Icons.warning_amber_outlined),
                   title: Text(finding.title ?? 'Başlıksız bulgu'),
                   subtitle: Text(finding.summary ?? 'Özet bulunmuyor.'),
-                  trailing: Text(_nullableLabel(finding.riskLevel)),
+                  trailing: Text(_riskLevelLabel(finding.riskLevel)),
                 ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _OperationTimeline extends StatelessWidget {
+  const _OperationTimeline({super.key, required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    const stages = <String>[
+      'Hazırlık',
+      'Kaynak tarama',
+      'Risk değerlendirme',
+      'Raporlama',
+      'Sonuç',
+    ];
+    final currentIndex = _operationStageIndex(status);
+    final terminal =
+        status == 'failedTerminal' ||
+        status == 'cancelled' ||
+        status == 'expired';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Tarama ilerlemesi',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = constraints.maxWidth >= 850
+                    ? (constraints.maxWidth - 48) / 5
+                    : constraints.maxWidth >= 520
+                    ? (constraints.maxWidth - 12) / 2
+                    : constraints.maxWidth;
+
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (var index = 0; index < stages.length; index += 1)
+                      SizedBox(
+                        width: itemWidth,
+                        child: _ProgressStage(
+                          label: index == stages.length - 1 && terminal
+                              ? 'Sonlandırıldı'
+                              : stages[index],
+                          completed: index < currentIndex,
+                          active: index == currentIndex,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _ProgressStage extends StatelessWidget {
+  const _ProgressStage({
+    required this.label,
+    required this.completed,
+    required this.active,
+  });
+
+  final String label;
+  final bool completed;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final icon = completed
+        ? Icons.check_circle
+        : active
+        ? Icons.radio_button_checked
+        : Icons.radio_button_unchecked;
+    final color = completed || active
+        ? colorScheme.primary
+        : colorScheme.outline;
+
+    return Semantics(
+      label:
+          '$label: '
+          '${completed
+              ? 'tamamlandı'
+              : active
+              ? 'şu anda yürütülüyor'
+              : 'bekliyor'}',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: color),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(width: 8),
+              Expanded(child: Text(label)),
+            ],
+          ),
         ),
       ),
     );
@@ -611,6 +928,79 @@ String _channelLabel(String? value) {
   return labels[value] ?? value;
 }
 
+String _limitReasonLabel(String value) {
+  const labels = <String, String>{
+    'public_lite_scope': 'Public Lite kapsam sınırı',
+    'marketplace_limited': 'Pazaryeri erişimi sınırlı',
+    'robots_restricted': 'Kaynak otomatik erişimi sınırlandırdı',
+    'rate_limited': 'Kaynak sorgu hızını sınırladı',
+    'source_unavailable': 'Kaynak geçici olarak kullanılamadı',
+    'insufficient_public_data': 'Yeterli kamuya açık veri bulunamadı',
+    'timeout': 'Kaynak zamanında yanıt vermedi',
+  };
+  return labels[value] ?? value;
+}
+
+String _recommendedActionLabel(String? value) {
+  const labels = <String, String>{
+    'review_top_findings': 'Öne çıkan bulguları inceleyin',
+    'claim_scan': 'Taramayı hesabınıza bağlayın',
+    'start_human_review': 'Uzman incelemesi başlatın',
+    'no_immediate_action': 'Şimdilik acil işlem gerekmiyor',
+  };
+  if (value == null) return 'Belirtilmedi';
+  return labels[value] ?? value;
+}
+
+String _riskLevelLabel(String? value) {
+  const labels = <String, String>{
+    'low': 'Düşük',
+    'medium': 'Orta',
+    'high': 'Yüksek',
+    'critical': 'Kritik',
+  };
+  if (value == null) return 'Belirtilmedi';
+  return labels[value] ?? value;
+}
+
+String _confidenceLabel(String? value) {
+  const labels = <String, String>{
+    'low': 'Düşük',
+    'medium': 'Orta',
+    'high': 'Yüksek',
+  };
+  if (value == null) return 'Belirtilmedi';
+  return labels[value] ?? value;
+}
+
+String _dateTimeLabel(DateTime? value) {
+  if (value == null) return 'Belirtilmedi';
+  final utc = value.toUtc();
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+
+  return '${twoDigits(utc.day)}.${twoDigits(utc.month)}.${utc.year} '
+      '${twoDigits(utc.hour)}:${twoDigits(utc.minute)} UTC';
+}
+
+int _operationStageIndex(String status) {
+  if (status == 'created' ||
+      status == 'validatingTarget' ||
+      status == 'queued') {
+    return 0;
+  }
+  if (status == 'acquiring') return 1;
+  if (status == 'assessing' || status == 'failedRetryable') return 2;
+  if (status == 'reporting') return 3;
+  if (status == 'completed' ||
+      status == 'completedWithLimits' ||
+      status == 'failedTerminal' ||
+      status == 'cancelled' ||
+      status == 'expired') {
+    return 4;
+  }
+  return 0;
+}
+
 String _remainingLabel(Duration value) {
   if (value <= Duration.zero) return 'Süre doldu';
   final hours = value.inHours;
@@ -625,9 +1015,6 @@ String _remainingLabel(Duration value) {
   }
   return '$seconds sn';
 }
-
-String _nullableLabel(String? value) =>
-    value == null || value.trim().isEmpty ? 'Belirtilmedi' : value;
 
 String _newUuidV4() {
   final random = Random.secure();
