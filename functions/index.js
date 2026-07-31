@@ -393,3 +393,21 @@ exports.getCaseEvidenceObjectDetail =
     buildGetCaseEvidenceObjectDetail({db, admin});
 exports.createCaseFromRiskOperation =
     buildCreateCaseFromRiskOperation({db});
+
+// BEGIN MHL-1B-1D-P4 CALLABLE EXPORTS
+const {
+  buildCreateInterventionLegalMatterCallable:
+    mhlBuildCreateInterventionLegalMatterCallable,
+  buildTransitionInterventionLegalMatterCallable:
+    mhlBuildTransitionInterventionLegalMatterCallable,
+  buildRecordInterventionLegalApprovalDecisionCallable:
+    mhlBuildRecordInterventionLegalApprovalDecisionCallable,
+} = require("./intervention_legal/v1/callable");
+
+exports.createInterventionLegalMatter =
+  mhlBuildCreateInterventionLegalMatterCallable();
+exports.transitionInterventionLegalMatter =
+  mhlBuildTransitionInterventionLegalMatterCallable();
+exports.recordInterventionLegalApprovalDecision =
+  mhlBuildRecordInterventionLegalApprovalDecisionCallable();
+// END MHL-1B-1D-P4 CALLABLE EXPORTS
