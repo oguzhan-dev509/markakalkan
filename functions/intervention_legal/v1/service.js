@@ -44,9 +44,9 @@ const LAWYER_APPROVAL_TYPES = Object.freeze([
 
 function commandActorUid(command) {
   return requiredString(
-    command.actorUid || command.decidedByUid,
-    "actorUid",
-    128,
+      command.actorUid || command.decidedByUid,
+      "actorUid",
+      128,
   );
 }
 
@@ -66,8 +66,8 @@ async function assertLegalMatterCommandAuthority({
 }) {
   if (!LEGAL_MATTER_OPERATION_CODES.includes(operationCode)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "legal matter operation code is unsupported",
+        "invalid-argument",
+        "legal matter operation code is unsupported",
     );
   }
   const authority = await store.resolveLegalMatterAuthority({
@@ -78,8 +78,8 @@ async function assertLegalMatterCommandAuthority({
   });
   if (!authority || authority.authorized !== true) {
     throw new InterventionLegalContractError(
-      "permission-denied",
-      "legal matter command authority is not sufficient",
+        "permission-denied",
+        "legal matter command authority is not sufficient",
     );
   }
   return authority;
@@ -88,26 +88,26 @@ async function assertLegalMatterCommandAuthority({
 function assertScopeMatches(command, caseScope) {
   if (!caseScope || typeof caseScope !== "object") {
     throw new InterventionLegalContractError(
-      "not-found",
-      "canonical case was not found",
+        "not-found",
+        "canonical case was not found",
     );
   }
   if (caseScope.tenantId !== command.tenantId) {
     throw new InterventionLegalContractError(
-      "permission-denied",
-      "case tenant scope mismatch",
+        "permission-denied",
+        "case tenant scope mismatch",
     );
   }
   if (caseScope.canonicalBrandId !== command.canonicalBrandId) {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "case brand scope mismatch",
+        "failed-precondition",
+        "case brand scope mismatch",
     );
   }
   if (caseScope.archived === true || caseScope.status === "archived") {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "archived case cannot open a legal matter",
+        "failed-precondition",
+        "archived case cannot open a legal matter",
     );
   }
   return true;
@@ -118,12 +118,12 @@ function resolveIdempotentReceipt(receipt, payloadFingerprint) {
   if (!checked) return null;
   if (checked.payloadFingerprint !== payloadFingerprint) {
     throw new InterventionLegalContractError(
-      "already-exists",
-      "idempotency key is already used with a different payload",
-      {
-        resultType: checked.resultType,
-        resultId: checked.resultId,
-      },
+        "already-exists",
+        "idempotency key is already used with a different payload",
+        {
+          resultType: checked.resultType,
+          resultId: checked.resultId,
+        },
     );
   }
   return Object.freeze({
@@ -223,8 +223,8 @@ function buildCreateLegalMatterService(dependencies) {
         });
       }
       throw new InterventionLegalContractError(
-        "already-exists",
-        "an active legal matter already uses the canonical key",
+          "already-exists",
+          "an active legal matter already uses the canonical key",
       );
     }
 
@@ -308,8 +308,8 @@ function buildTransitionLegalMatterService(dependencies) {
     });
     if (!current) {
       throw new InterventionLegalContractError(
-        "not-found",
-        "legal matter was not found",
+          "not-found",
+          "legal matter was not found",
       );
     }
     await assertLegalMatterCommandAuthority({
@@ -321,12 +321,12 @@ function buildTransitionLegalMatterService(dependencies) {
     });
     if (current.version !== command.expectedVersion) {
       throw new InterventionLegalContractError(
-        "aborted",
-        "legal matter version conflict",
-        {
-          expectedVersion: command.expectedVersion,
-          actualVersion: current.version,
-        },
+          "aborted",
+          "legal matter version conflict",
+          {
+            expectedVersion: command.expectedVersion,
+            actualVersion: current.version,
+          },
       );
     }
 
@@ -401,45 +401,45 @@ function buildRecordApprovalDecisionService(dependencies) {
     });
     if (!approvalRequest) {
       throw new InterventionLegalContractError(
-        "not-found",
-        "approval request was not found",
+          "not-found",
+          "approval request was not found",
       );
     }
     if (!Number.isSafeInteger(approvalRequest.version)) {
       throw new InterventionLegalContractError(
-        "internal",
-        "approval request version is invalid",
+          "internal",
+          "approval request version is invalid",
       );
     }
     if (
       approvalRequest.version !== command.expectedApprovalRequestVersion
     ) {
       throw new InterventionLegalContractError(
-        "aborted",
-        "approval request version conflict",
-        {
-          expectedApprovalRequestVersion:
+          "aborted",
+          "approval request version conflict",
+          {
+            expectedApprovalRequestVersion:
             command.expectedApprovalRequestVersion,
-          actualApprovalRequestVersion: approvalRequest.version,
-        },
+            actualApprovalRequestVersion: approvalRequest.version,
+          },
       );
     }
     if (approvalRequest.legalMatterId !== command.legalMatterId) {
       throw new InterventionLegalContractError(
-        "failed-precondition",
-        "approval request does not belong to the legal matter",
+          "failed-precondition",
+          "approval request does not belong to the legal matter",
       );
     }
     if (approvalRequest.approvalType !== command.approvalType) {
       throw new InterventionLegalContractError(
-        "failed-precondition",
-        "approval type mismatch",
+          "failed-precondition",
+          "approval type mismatch",
       );
     }
     if (approvalRequest.status !== "pending") {
       throw new InterventionLegalContractError(
-        "failed-precondition",
-        "approval request is not pending",
+          "failed-precondition",
+          "approval request is not pending",
       );
     }
 
@@ -448,8 +448,8 @@ function buildRecordApprovalDecisionService(dependencies) {
     });
     if (!matter) {
       throw new InterventionLegalContractError(
-        "not-found",
-        "legal matter was not found",
+          "not-found",
+          "legal matter was not found",
       );
     }
 
@@ -473,14 +473,14 @@ function buildRecordApprovalDecisionService(dependencies) {
       });
       if (!authority || authority.authorized !== true) {
         throw new InterventionLegalContractError(
-          "permission-denied",
-          "client authority is not sufficient",
+            "permission-denied",
+            "client authority is not sufficient",
         );
       }
     } else if (!APPROVAL_TYPES.includes(command.approvalType)) {
       throw new InterventionLegalContractError(
-        "invalid-argument",
-        "approval type is unsupported",
+          "invalid-argument",
+          "approval type is unsupported",
       );
     }
 

@@ -34,14 +34,14 @@ function createFakeStore(overrides = {}) {
       return receipts.get(receiptKey(input)) || null;
     },
     async resolveCaseScope({caseId}) {
-      return caseId === "case-1"
-        ? {
+      return caseId === "case-1" ?
+        {
           caseId,
           tenantId: "tenant-1",
           canonicalBrandId: "brand-1",
           status: "open",
-        }
-        : null;
+        } :
+        null;
     },
     async resolveLegalMatterAuthority({uid, operationCode}) {
       return {
@@ -112,17 +112,17 @@ function createFakeStore(overrides = {}) {
       });
       if (approvalRequest.version !== expectedApprovalRequestVersion) {
         throw new InterventionLegalContractError(
-          "aborted",
-          "approval request version conflict",
+            "aborted",
+            "approval request version conflict",
         );
       }
       approvals.set(
-        approvalRequest.approvalRequestId,
-        {
-          ...approvalRequest,
-          status: decision.decision,
-          version: expectedApprovalRequestVersion + 1,
-        },
+          approvalRequest.approvalRequestId,
+          {
+            ...approvalRequest,
+            status: decision.decision,
+            version: expectedApprovalRequestVersion + 1,
+          },
       );
       receipts.set(receiptKey({
         scopeType: "legal_approval_decision",
@@ -170,20 +170,20 @@ test("storage port lists all required methods", () => {
   assert.equal(REQUIRED_STORAGE_METHODS.length, 11);
   assert.equal(REQUIRED_STORAGE_METHODS.includes("resolveCaseScope"), true);
   assert.equal(
-    REQUIRED_STORAGE_METHODS.includes("resolveLegalMatterAuthority"),
-    true,
+      REQUIRED_STORAGE_METHODS.includes("resolveLegalMatterAuthority"),
+      true,
   );
   assert.equal(
-    REQUIRED_STORAGE_METHODS.includes("recordApprovalDecisionAtomic"),
-    true,
+      REQUIRED_STORAGE_METHODS.includes("recordApprovalDecisionAtomic"),
+      true,
   );
 });
 
 test("storage port rejects an incomplete adapter", () => {
   assert.throws(
-    () => assertStoragePort({getCommandReceipt() {}}),
-    (error) =>
-      error instanceof InterventionLegalContractError &&
+      () => assertStoragePort({getCommandReceipt() {}}),
+      (error) =>
+        error instanceof InterventionLegalContractError &&
       error.code === "failed-precondition" &&
       error.details.missing.includes("resolveCaseScope"),
   );
@@ -210,6 +210,7 @@ test("create service writes an intake-pending legal matter", async () => {
   assert.equal(bundle.receipt.actorUid, "owner-1");
 });
 
+// eslint-disable-next-line max-len
 test("create service rejects an unauthorized actor before writing", async () => {
   const store = createFakeStore();
   const createMatter = buildCreateLegalMatterService({
@@ -218,8 +219,8 @@ test("create service rejects an unauthorized actor before writing", async () => 
   });
 
   await assert.rejects(
-    () => createMatter(createCommand({actorUid: "intruder-1"})),
-    (error) => error.code === "permission-denied",
+      () => createMatter(createCommand({actorUid: "intruder-1"})),
+      (error) => error.code === "permission-denied",
   );
   assert.equal(store.__atomicBundles.length, 0);
 });
@@ -231,8 +232,8 @@ test("create service rejects a missing canonical case", async () => {
   });
 
   await assert.rejects(
-    () => createMatter(createCommand({caseId: "missing"})),
-    (error) => error.code === "not-found",
+      () => createMatter(createCommand({caseId: "missing"})),
+      (error) => error.code === "not-found",
   );
 });
 
@@ -253,8 +254,8 @@ test("create service rejects tenant scope mismatch", async () => {
   });
 
   await assert.rejects(
-    () => createMatter(createCommand()),
-    (error) => error.code === "permission-denied",
+      () => createMatter(createCommand()),
+      (error) => error.code === "permission-denied",
   );
 });
 
@@ -275,8 +276,8 @@ test("create service rejects brand scope mismatch", async () => {
   });
 
   await assert.rejects(
-    () => createMatter(createCommand()),
-    (error) => error.code === "failed-precondition",
+      () => createMatter(createCommand()),
+      (error) => error.code === "failed-precondition",
   );
 });
 
@@ -297,8 +298,8 @@ test("create service rejects archived canonical case", async () => {
   });
 
   await assert.rejects(
-    () => createMatter(createCommand()),
-    /archived case/,
+      () => createMatter(createCommand()),
+      /archived case/,
   );
 });
 
@@ -325,10 +326,10 @@ test("idempotency key conflict is rejected", async () => {
 
   await createMatter(createCommand());
   await assert.rejects(
-    () => createMatter(createCommand({
-      matterScopeCode: "domain_enforcement",
-    })),
-    (error) => error.code === "already-exists",
+      () => createMatter(createCommand({
+        matterScopeCode: "domain_enforcement",
+      })),
+      (error) => error.code === "already-exists",
   );
 });
 
@@ -377,6 +378,7 @@ test("transition service updates status and increments version", async () => {
   assert.equal(result.matter.statusReasonCode, "intake_accepted");
 });
 
+// eslint-disable-next-line max-len
 test("transition service rejects an unauthorized actor before writing", async () => {
   const store = createFakeStore();
   const createMatter = buildCreateLegalMatterService({
@@ -391,17 +393,17 @@ test("transition service rejects an unauthorized actor before writing", async ()
   const bundleCount = store.__atomicBundles.length;
 
   await assert.rejects(
-    () => transitionMatter({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-transition-denied",
-      idempotencyKey: "idem-transition-denied",
-      actorUid: "intruder-1",
-      expectedVersion: 1,
-      legalMatterId: created.resultId,
-      nextStatus: "legal_review",
-      reasonCode: "intake_accepted",
-    }),
-    (error) => error.code === "permission-denied",
+      () => transitionMatter({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-transition-denied",
+        idempotencyKey: "idem-transition-denied",
+        actorUid: "intruder-1",
+        expectedVersion: 1,
+        legalMatterId: created.resultId,
+        nextStatus: "legal_review",
+        reasonCode: "intake_accepted",
+      }),
+      (error) => error.code === "permission-denied",
   );
   assert.equal(store.__atomicBundles.length, bundleCount);
 });
@@ -419,18 +421,18 @@ test("transition service rejects optimistic concurrency conflict", async () => {
   const created = await createMatter(createCommand());
 
   await assert.rejects(
-    () => transitionMatter({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-transition",
-      idempotencyKey: "idem-transition",
-      actorUid: "owner-1",
-      expectedVersion: 0,
-      legalMatterId: created.resultId,
-      nextStatus: "legal_review",
-      reasonCode: "intake_accepted",
-    }),
-    (error) =>
-      error.code === "aborted" &&
+      () => transitionMatter({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-transition",
+        idempotencyKey: "idem-transition",
+        actorUid: "owner-1",
+        expectedVersion: 0,
+        legalMatterId: created.resultId,
+        nextStatus: "legal_review",
+        reasonCode: "intake_accepted",
+      }),
+      (error) =>
+        error.code === "aborted" &&
       error.details.actualVersion === 1,
   );
 });
@@ -448,17 +450,17 @@ test("transition service rejects forbidden lifecycle jump", async () => {
   const created = await createMatter(createCommand());
 
   await assert.rejects(
-    () => transitionMatter({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-transition",
-      idempotencyKey: "idem-transition",
-      actorUid: "owner-1",
-      expectedVersion: 1,
-      legalMatterId: created.resultId,
-      nextStatus: "submitted",
-      reasonCode: "skip",
-    }),
-    (error) => error.code === "failed-precondition",
+      () => transitionMatter({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-transition",
+        idempotencyKey: "idem-transition",
+        actorUid: "owner-1",
+        expectedVersion: 1,
+        legalMatterId: created.resultId,
+        nextStatus: "submitted",
+        reasonCode: "skip",
+      }),
+      (error) => error.code === "failed-precondition",
   );
 });
 
@@ -561,19 +563,19 @@ test("lawyer cannot be sole preparer and approver", async () => {
   });
 
   await assert.rejects(
-    () => decide({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-decision",
-      idempotencyKey: "idem-decision",
-      expectedApprovalRequestVersion: 1,
-      approvalRequestId: "lar_1",
-      legalMatterId: "lm_1",
-      approvalType: "lawyer_legal_approval",
-      decision: "approved",
-      decisionReasonCode: "legally_sufficient",
-      decidedByUid: "lawyer-1",
-    }),
-    /sole final legal approver/,
+      () => decide({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-decision",
+        idempotencyKey: "idem-decision",
+        expectedApprovalRequestVersion: 1,
+        approvalRequestId: "lar_1",
+        legalMatterId: "lm_1",
+        approvalType: "lawyer_legal_approval",
+        decision: "approved",
+        decisionReasonCode: "legally_sufficient",
+        decidedByUid: "lawyer-1",
+      }),
+      /sole final legal approver/,
   );
 });
 
@@ -598,19 +600,19 @@ test("client authorization requires resolved client authority", async () => {
   });
 
   await assert.rejects(
-    () => decide({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-decision",
-      idempotencyKey: "idem-decision",
-      expectedApprovalRequestVersion: 1,
-      approvalRequestId: "lar_1",
-      legalMatterId: "lm_1",
-      approvalType: "client_budget_authorization",
-      decision: "approved",
-      decisionReasonCode: "budget_confirmed",
-      decidedByUid: "unauthorized-client",
-    }),
-    (error) => error.code === "permission-denied",
+      () => decide({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-decision",
+        idempotencyKey: "idem-decision",
+        expectedApprovalRequestVersion: 1,
+        approvalRequestId: "lar_1",
+        legalMatterId: "lm_1",
+        approvalType: "client_budget_authorization",
+        decision: "approved",
+        decisionReasonCode: "budget_confirmed",
+        decidedByUid: "unauthorized-client",
+      }),
+      (error) => error.code === "permission-denied",
   );
 });
 
@@ -671,19 +673,19 @@ test("approval request type mismatch is rejected", async () => {
   });
 
   await assert.rejects(
-    () => decide({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-decision",
-      idempotencyKey: "idem-decision",
-      expectedApprovalRequestVersion: 1,
-      approvalRequestId: "lar_1",
-      legalMatterId: "lm_1",
-      approvalType: "lawyer_legal_approval",
-      decision: "approved",
-      decisionReasonCode: "legally_sufficient",
-      decidedByUid: "lawyer-1",
-    }),
-    /approval type mismatch/,
+      () => decide({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-decision",
+        idempotencyKey: "idem-decision",
+        expectedApprovalRequestVersion: 1,
+        approvalRequestId: "lar_1",
+        legalMatterId: "lm_1",
+        approvalType: "lawyer_legal_approval",
+        decision: "approved",
+        decisionReasonCode: "legally_sufficient",
+        decidedByUid: "lawyer-1",
+      }),
+      /approval type mismatch/,
   );
 });
 
@@ -708,20 +710,20 @@ test("approval decision rejects stale approval request version", async () => {
   });
 
   await assert.rejects(
-    () => decide({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-decision-stale",
-      idempotencyKey: "idem-decision-stale",
-      expectedApprovalRequestVersion: 1,
-      approvalRequestId: "lar_1",
-      legalMatterId: "lm_1",
-      approvalType: "client_budget_authorization",
-      decision: "approved",
-      decisionReasonCode: "budget_confirmed",
-      decidedByUid: "client-1",
-    }),
-    (error) =>
-      error.code === "aborted" &&
+      () => decide({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-decision-stale",
+        idempotencyKey: "idem-decision-stale",
+        expectedApprovalRequestVersion: 1,
+        approvalRequestId: "lar_1",
+        legalMatterId: "lm_1",
+        approvalType: "client_budget_authorization",
+        decision: "approved",
+        decisionReasonCode: "budget_confirmed",
+        decidedByUid: "client-1",
+      }),
+      (error) =>
+        error.code === "aborted" &&
       error.details.actualApprovalRequestVersion === 2,
   );
 });
@@ -747,19 +749,19 @@ test("non-pending approval request cannot receive a new decision", async () => {
   });
 
   await assert.rejects(
-    () => decide({
-      contractVersion: CONTRACT_VERSION,
-      requestId: "req-decision",
-      idempotencyKey: "idem-decision",
-      expectedApprovalRequestVersion: 1,
-      approvalRequestId: "lar_1",
-      legalMatterId: "lm_1",
-      approvalType: "client_budget_authorization",
-      decision: "approved",
-      decisionReasonCode: "budget_confirmed",
-      decidedByUid: "client-1",
-    }),
-    /not pending/,
+      () => decide({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-decision",
+        idempotencyKey: "idem-decision",
+        expectedApprovalRequestVersion: 1,
+        approvalRequestId: "lar_1",
+        legalMatterId: "lm_1",
+        approvalType: "client_budget_authorization",
+        decision: "approved",
+        decisionReasonCode: "budget_confirmed",
+        decidedByUid: "client-1",
+      }),
+      /not pending/,
   );
 });
 
@@ -804,15 +806,16 @@ test("approval decision service is idempotent", async () => {
 
 test("invalid clock is rejected at service construction", () => {
   assert.throws(
-    () => buildCreateLegalMatterService({
-      store: createFakeStore(),
-      clock: () => "not-a-time",
-    }),
-    /ISO-8601/,
+      () => buildCreateLegalMatterService({
+        store: createFakeStore(),
+        clock: () => "not-a-time",
+      }),
+      /ISO-8601/,
   );
 });
 
 
+// eslint-disable-next-line max-len
 test("create service scopes idempotency to tenant and command type", async () => {
   const calls = [];
   const store = createFakeStore({

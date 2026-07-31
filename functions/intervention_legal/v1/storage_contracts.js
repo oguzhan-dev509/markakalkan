@@ -22,13 +22,13 @@ const REQUIRED_STORAGE_METHODS = Object.freeze([
 function assertStoragePort(store) {
   objectRequired(store, "store");
   const missing = REQUIRED_STORAGE_METHODS.filter(
-    (name) => typeof store[name] !== "function",
+      (name) => typeof store[name] !== "function",
   );
   if (missing.length > 0) {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "storage port is incomplete",
-      {missing},
+        "failed-precondition",
+        "storage port is incomplete",
+        {missing},
     );
   }
   return store;
@@ -37,15 +37,15 @@ function assertStoragePort(store) {
 function assertClock(clock) {
   if (typeof clock !== "function") {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "clock must be a function",
+        "failed-precondition",
+        "clock must be a function",
     );
   }
   const value = clock();
   if (typeof value !== "string" || Number.isNaN(Date.parse(value))) {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "clock must return an ISO-8601 timestamp",
+        "failed-precondition",
+        "clock must return an ISO-8601 timestamp",
     );
   }
   return clock;
@@ -62,8 +62,8 @@ function assertReceiptShape(receipt) {
   ]) {
     if (typeof receipt[field] !== "string" || receipt[field].trim() === "") {
       throw new InterventionLegalContractError(
-        "internal",
-        `receipt.${field} is invalid`,
+          "internal",
+          `receipt.${field} is invalid`,
       );
     }
   }

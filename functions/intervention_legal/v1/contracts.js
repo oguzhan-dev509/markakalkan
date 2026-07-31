@@ -171,8 +171,8 @@ function isPlainObject(value) {
 function objectRequired(value, field = "payload") {
   if (!isPlainObject(value)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} must be a plain object`,
+        "invalid-argument",
+        `${field} must be a plain object`,
     );
   }
   return value;
@@ -184,19 +184,19 @@ function exactKeys(value, allowed, required = []) {
   const unsupported = Object.keys(value).filter((key) => !allowedSet.has(key));
   if (unsupported.length > 0) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "unsupported request fields",
-      {unsupported},
+        "invalid-argument",
+        "unsupported request fields",
+        {unsupported},
     );
   }
   const missing = required.filter(
-    (key) => value[key] === undefined || value[key] === null,
+      (key) => value[key] === undefined || value[key] === null,
   );
   if (missing.length > 0) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "required request fields missing",
-      {missing},
+        "invalid-argument",
+        "required request fields missing",
+        {missing},
     );
   }
   return value;
@@ -205,15 +205,15 @@ function exactKeys(value, allowed, required = []) {
 function requiredString(value, field, maxLength = 256) {
   if (typeof value !== "string") {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} must be a string`,
+        "invalid-argument",
+        `${field} must be a string`,
     );
   }
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.length > maxLength) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} length is invalid`,
+        "invalid-argument",
+        `${field} length is invalid`,
     );
   }
   return normalized;
@@ -228,8 +228,8 @@ function requiredCode(value, field, maxLength = 96) {
   const normalized = requiredString(value, field, maxLength).toLowerCase();
   if (!/^[a-z0-9][a-z0-9._:-]*$/.test(normalized)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} must be a language-independent code`,
+        "invalid-argument",
+        `${field} must be a language-independent code`,
     );
   }
   return normalized;
@@ -244,8 +244,8 @@ function requiredCountryCode(value, field = "countryCode") {
   const normalized = requiredString(value, field, 2).toUpperCase();
   if (!/^[A-Z]{2}$/.test(normalized)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} must be ISO 3166-1 alpha-2`,
+        "invalid-argument",
+        `${field} must be ISO 3166-1 alpha-2`,
     );
   }
   return normalized;
@@ -255,9 +255,9 @@ function enumValue(value, allowed, field) {
   const normalized = requiredString(value, field, 96);
   if (!allowed.includes(normalized)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} is unsupported`,
-      {value: normalized, allowed},
+        "invalid-argument",
+        `${field} is unsupported`,
+        {value: normalized, allowed},
     );
   }
   return normalized;
@@ -267,8 +267,8 @@ function optionalBoolean(value, field, defaultValue = false) {
   if (value === undefined || value === null) return defaultValue;
   if (typeof value !== "boolean") {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} must be boolean`,
+        "invalid-argument",
+        `${field} must be boolean`,
     );
   }
   return value;
@@ -277,16 +277,16 @@ function optionalBoolean(value, field, defaultValue = false) {
 function requiredStringArray(value, field, maxItems = 100) {
   if (!Array.isArray(value) || value.length > maxItems) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} must be an array with at most ${maxItems} items`,
+        "invalid-argument",
+        `${field} must be an array with at most ${maxItems} items`,
     );
   }
   const normalized = value.map((item, index) =>
     requiredString(item, `${field}[${index}]`, 256));
   if (new Set(normalized).size !== normalized.length) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      `${field} must not contain duplicates`,
+        "invalid-argument",
+        `${field} must not contain duplicates`,
     );
   }
   return Object.freeze(normalized);
@@ -312,8 +312,8 @@ function baseCommand(raw, extraAllowed, extraRequired, options = {}) {
   exactKeys(raw, allowed, required);
   if (raw.contractVersion !== CONTRACT_VERSION) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "contractVersion is unsupported",
+        "invalid-argument",
+        "contractVersion is unsupported",
     );
   }
   const result = {
@@ -324,8 +324,8 @@ function baseCommand(raw, extraAllowed, extraRequired, options = {}) {
   if (options.expectedVersion) {
     if (!Number.isSafeInteger(raw.expectedVersion) || raw.expectedVersion < 0) {
       throw new InterventionLegalContractError(
-        "invalid-argument",
-        "expectedVersion must be a non-negative safe integer",
+          "invalid-argument",
+          "expectedVersion must be a non-negative safe integer",
       );
     }
     result.expectedVersion = raw.expectedVersion;
@@ -335,51 +335,51 @@ function baseCommand(raw, extraAllowed, extraRequired, options = {}) {
 
 function parseCreateLegalMatterCommand(raw) {
   const base = baseCommand(
-    raw,
-    [
-      "actorUid",
-      "tenantId",
-      "canonicalBrandId",
-      "caseId",
-      "jurisdictionCode",
-      "matterScopeCode",
-      "countryCode",
-      "priorityCode",
-      "title",
-      "sourceSystemCode",
-      "sourceRecordId",
-    ],
-    [
-      "actorUid",
-      "tenantId",
-      "canonicalBrandId",
-      "caseId",
-      "jurisdictionCode",
-      "matterScopeCode",
-      "countryCode",
-    ],
+      raw,
+      [
+        "actorUid",
+        "tenantId",
+        "canonicalBrandId",
+        "caseId",
+        "jurisdictionCode",
+        "matterScopeCode",
+        "countryCode",
+        "priorityCode",
+        "title",
+        "sourceSystemCode",
+        "sourceRecordId",
+      ],
+      [
+        "actorUid",
+        "tenantId",
+        "canonicalBrandId",
+        "caseId",
+        "jurisdictionCode",
+        "matterScopeCode",
+        "countryCode",
+      ],
   );
   return Object.freeze({
     ...base,
     actorUid: requiredString(raw.actorUid, "actorUid", 128),
     tenantId: requiredString(raw.tenantId, "tenantId", 128),
     canonicalBrandId: requiredString(
-      raw.canonicalBrandId,
-      "canonicalBrandId",
-      128,
+        raw.canonicalBrandId,
+        "canonicalBrandId",
+        128,
     ),
     caseId: requiredString(raw.caseId, "caseId", 128),
     jurisdictionCode: requiredCode(
-      raw.jurisdictionCode,
-      "jurisdictionCode",
+        raw.jurisdictionCode,
+        "jurisdictionCode",
     ),
     matterScopeCode: requiredCode(raw.matterScopeCode, "matterScopeCode"),
     countryCode: requiredCountryCode(raw.countryCode),
     priorityCode: optionalCode(raw.priorityCode, "priorityCode"),
     title: optionalString(raw.title, "title", 300),
     sourceSystemCode: optionalCode(
-      raw.sourceSystemCode,
-      "sourceSystemCode",
+        raw.sourceSystemCode,
+        "sourceSystemCode",
     ),
     sourceRecordId: optionalString(raw.sourceRecordId, "sourceRecordId", 256),
   });
@@ -387,19 +387,19 @@ function parseCreateLegalMatterCommand(raw) {
 
 function parseTransitionLegalMatterCommand(raw) {
   const base = baseCommand(
-    raw,
-    ["actorUid", "legalMatterId", "nextStatus", "reasonCode", "note"],
-    ["actorUid", "legalMatterId", "nextStatus", "reasonCode"],
-    {expectedVersion: true},
+      raw,
+      ["actorUid", "legalMatterId", "nextStatus", "reasonCode", "note"],
+      ["actorUid", "legalMatterId", "nextStatus", "reasonCode"],
+      {expectedVersion: true},
   );
   return Object.freeze({
     ...base,
     actorUid: requiredString(raw.actorUid, "actorUid", 128),
     legalMatterId: requiredString(raw.legalMatterId, "legalMatterId", 128),
     nextStatus: enumValue(
-      raw.nextStatus,
-      LEGAL_MATTER_STATUSES,
-      "nextStatus",
+        raw.nextStatus,
+        LEGAL_MATTER_STATUSES,
+        "nextStatus",
     ),
     reasonCode: requiredCode(raw.reasonCode, "reasonCode"),
     note: optionalString(raw.note, "note", 2000),
@@ -408,50 +408,50 @@ function parseTransitionLegalMatterCommand(raw) {
 
 function parseApprovalDecisionCommand(raw) {
   const base = baseCommand(
-    raw,
-    [
-      "expectedApprovalRequestVersion",
-      "approvalRequestId",
-      "legalMatterId",
-      "approvalType",
-      "decision",
-      "decisionReasonCode",
-      "decisionNote",
-      "decidedByUid",
-    ],
-    [
-      "expectedApprovalRequestVersion",
-      "approvalRequestId",
-      "legalMatterId",
-      "approvalType",
-      "decision",
-      "decisionReasonCode",
-      "decidedByUid",
-    ],
+      raw,
+      [
+        "expectedApprovalRequestVersion",
+        "approvalRequestId",
+        "legalMatterId",
+        "approvalType",
+        "decision",
+        "decisionReasonCode",
+        "decisionNote",
+        "decidedByUid",
+      ],
+      [
+        "expectedApprovalRequestVersion",
+        "approvalRequestId",
+        "legalMatterId",
+        "approvalType",
+        "decision",
+        "decisionReasonCode",
+        "decidedByUid",
+      ],
   );
   if (
     !Number.isSafeInteger(raw.expectedApprovalRequestVersion) ||
     raw.expectedApprovalRequestVersion < 0
   ) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "expectedApprovalRequestVersion must be a non-negative safe integer",
+        "invalid-argument",
+        "expectedApprovalRequestVersion must be a non-negative safe integer",
     );
   }
   return Object.freeze({
     ...base,
     expectedApprovalRequestVersion: raw.expectedApprovalRequestVersion,
     approvalRequestId: requiredString(
-      raw.approvalRequestId,
-      "approvalRequestId",
-      128,
+        raw.approvalRequestId,
+        "approvalRequestId",
+        128,
     ),
     legalMatterId: requiredString(raw.legalMatterId, "legalMatterId", 128),
     approvalType: enumValue(raw.approvalType, APPROVAL_TYPES, "approvalType"),
     decision: enumValue(raw.decision, ["approved", "rejected"], "decision"),
     decisionReasonCode: requiredCode(
-      raw.decisionReasonCode,
-      "decisionReasonCode",
+        raw.decisionReasonCode,
+        "decisionReasonCode",
     ),
     decisionNote: optionalString(raw.decisionNote, "decisionNote", 2000),
     decidedByUid: requiredString(raw.decidedByUid, "decidedByUid", 128),
@@ -463,8 +463,8 @@ function assertSegregationOfDuties({preparedByUid, approvedByUid}) {
   const approver = requiredString(approvedByUid, "approvedByUid", 128);
   if (preparer === approver) {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "the sole final legal approver cannot be the preparer",
+        "failed-precondition",
+        "the sole final legal approver cannot be the preparer",
     );
   }
   return true;
@@ -473,33 +473,33 @@ function assertSegregationOfDuties({preparedByUid, approvedByUid}) {
 function assertLegalProfessionalCanApprove(profile, jurisdictionCode) {
   objectRequired(profile, "profile");
   const status = enumValue(
-    profile.status,
-    PROFESSIONAL_STATUSES,
-    "profile.status",
+      profile.status,
+      PROFESSIONAL_STATUSES,
+      "profile.status",
   );
   if (status !== "active") {
     throw new InterventionLegalContractError(
-      "permission-denied",
-      "legal professional is not active",
+        "permission-denied",
+        "legal professional is not active",
     );
   }
   const roles = requiredStringArray(profile.roleCodes, "profile.roleCodes", 20);
   if (!roles.some((role) => LAWYER_APPROVER_ROLES.includes(role))) {
     throw new InterventionLegalContractError(
-      "permission-denied",
-      "profile has no lawyer approval role",
+        "permission-denied",
+        "profile has no lawyer approval role",
     );
   }
   const jurisdictions = requiredStringArray(
-    profile.jurisdictionCodes,
-    "profile.jurisdictionCodes",
-    100,
+      profile.jurisdictionCodes,
+      "profile.jurisdictionCodes",
+      100,
   ).map((value) => value.toLowerCase());
   const requested = requiredCode(jurisdictionCode, "jurisdictionCode");
   if (!jurisdictions.includes("*") && !jurisdictions.includes(requested)) {
     throw new InterventionLegalContractError(
-      "permission-denied",
-      "profile does not cover the requested jurisdiction",
+        "permission-denied",
+        "profile does not cover the requested jurisdiction",
     );
   }
   return true;
@@ -508,28 +508,29 @@ function assertLegalProfessionalCanApprove(profile, jurisdictionCode) {
 function assertExternalDispatchReadiness(input) {
   objectRequired(input, "dispatchReadiness");
   exactKeys(
-    input,
-    [
-      "documentStatus",
-      "immutableApprovedSnapshotExists",
-      "lawyerApprovalDecisionExists",
-      "clientAuthorizationRequired",
-      "clientAuthorizationExists",
-      "dataMinimizationConfirmed",
-      "artifactIntegrityHash",
-    ],
-    [
-      "documentStatus",
-      "immutableApprovedSnapshotExists",
-      "lawyerApprovalDecisionExists",
-      "clientAuthorizationRequired",
-      "clientAuthorizationExists",
-      "dataMinimizationConfirmed",
-      "artifactIntegrityHash",
-    ],
+      input,
+      [
+        "documentStatus",
+        "immutableApprovedSnapshotExists",
+        "lawyerApprovalDecisionExists",
+        "clientAuthorizationRequired",
+        "clientAuthorizationExists",
+        "dataMinimizationConfirmed",
+        "artifactIntegrityHash",
+      ],
+      [
+        "documentStatus",
+        "immutableApprovedSnapshotExists",
+        "lawyerApprovalDecisionExists",
+        "clientAuthorizationRequired",
+        "clientAuthorizationExists",
+        "dataMinimizationConfirmed",
+        "artifactIntegrityHash",
+      ],
   );
 
   const failures = [];
+  // eslint-disable-next-line max-len
   if (input.documentStatus !== "approved") failures.push("document_not_approved");
   if (input.immutableApprovedSnapshotExists !== true) {
     failures.push("approved_snapshot_missing");
@@ -547,18 +548,18 @@ function assertExternalDispatchReadiness(input) {
     failures.push("data_minimization_unconfirmed");
   }
   const hash = requiredString(
-    input.artifactIntegrityHash,
-    "artifactIntegrityHash",
-    128,
+      input.artifactIntegrityHash,
+      "artifactIntegrityHash",
+      128,
   ).toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(hash)) {
     failures.push("artifact_integrity_hash_invalid");
   }
   if (failures.length > 0) {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "external dispatch gate is not satisfied",
-      {failures},
+        "failed-precondition",
+        "external dispatch gate is not satisfied",
+        {failures},
     );
   }
   return true;

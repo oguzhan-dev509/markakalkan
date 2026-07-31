@@ -15,16 +15,17 @@ function prefixedId(prefix, payload, hashLength = 24) {
   const normalizedPrefix = requiredString(prefix, "prefix", 20).toLowerCase();
   if (!/^[a-z][a-z0-9_]*$/.test(normalizedPrefix)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "prefix is invalid",
+        "invalid-argument",
+        "prefix is invalid",
     );
   }
   if (!Number.isSafeInteger(hashLength) || hashLength < 16 || hashLength > 64) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "hashLength must be between 16 and 64",
+        "invalid-argument",
+        "hashLength must be between 16 and 64",
     );
   }
+  // eslint-disable-next-line max-len
   return `${normalizedPrefix}_${sha256Hex(stableStringify(payload)).slice(0, hashLength)}`;
 }
 
@@ -53,8 +54,8 @@ function buildAssignmentId({legalMatterId, assigneeUid, roleCode}) {
 function buildAssessmentId({legalMatterId, version}) {
   if (!Number.isSafeInteger(version) || version < 1) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "assessment version must be a positive integer",
+        "invalid-argument",
+        "assessment version must be a positive integer",
     );
   }
   return prefixedId("las", {
@@ -66,8 +67,8 @@ function buildAssessmentId({legalMatterId, version}) {
 function buildPlanId({legalMatterId, planSequence}) {
   if (!Number.isSafeInteger(planSequence) || planSequence < 1) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "planSequence must be a positive integer",
+        "invalid-argument",
+        "planSequence must be a positive integer",
     );
   }
   return prefixedId("lip", {
@@ -79,8 +80,8 @@ function buildPlanId({legalMatterId, planSequence}) {
 function buildActionId({legalMatterId, planId, actionSequence}) {
   if (!Number.isSafeInteger(actionSequence) || actionSequence < 1) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "actionSequence must be a positive integer",
+        "invalid-argument",
+        "actionSequence must be a positive integer",
     );
   }
   return prefixedId("lia", {
@@ -105,8 +106,8 @@ function buildApprovalRequestId({
 }) {
   if (!Number.isSafeInteger(requestSequence) || requestSequence < 1) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "requestSequence must be a positive integer",
+        "invalid-argument",
+        "requestSequence must be a positive integer",
     );
   }
   return prefixedId("lar", {
@@ -123,9 +124,9 @@ function buildApprovalDecisionId({
 }) {
   return prefixedId("lad", {
     approvalRequestId: requiredString(
-      approvalRequestId,
-      "approvalRequestId",
-      128,
+        approvalRequestId,
+        "approvalRequestId",
+        128,
     ),
     decidedByUid: requiredString(decidedByUid, "decidedByUid", 128),
     decision: requiredString(decision, "decision", 32),

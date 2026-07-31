@@ -69,22 +69,22 @@ function mapInterventionLegalError(error) {
   }
 
   return new HttpsError(
-    "internal",
-    "Müdahale ve Hukuk işlemi tamamlanamadı.",
+      "internal",
+      "Müdahale ve Hukuk işlemi tamamlanamadı.",
   );
 }
 
 function assertCallableRequest(request) {
   if (!request?.auth?.uid) {
     throw new HttpsError(
-      "unauthenticated",
-      "Oturum açmanız gerekir.",
+        "unauthenticated",
+        "Oturum açmanız gerekir.",
     );
   }
   if (!request?.app?.appId) {
     throw new HttpsError(
-      "failed-precondition",
-      "Uygulama doğrulaması gerekir.",
+        "failed-precondition",
+        "Uygulama doğrulaması gerekir.",
     );
   }
   return request.auth.uid;
@@ -107,9 +107,9 @@ function injectAuthenticatedActor(data, actorField, uid) {
 
   if (clientActorFields.length > 0) {
     throw new HttpsError(
-      "invalid-argument",
-      "Aktör kimliği istemci tarafından gönderilemez.",
-      {unsupported: clientActorFields},
+        "invalid-argument",
+        "Aktör kimliği istemci tarafından gönderilemez.",
+        {unsupported: clientActorFields},
     );
   }
 
@@ -175,9 +175,9 @@ function createInterventionLegalCallableHandlers({
       const uid = assertCallableRequest(request);
       try {
         const command = injectAuthenticatedActor(
-          request.data,
-          definition.actorField,
-          uid,
+            request.data,
+            definition.actorField,
+            uid,
         );
         const result = await definition.service(command);
         log.info("intervention legal callable completed", {
@@ -231,8 +231,8 @@ function buildCreateInterventionLegalMatterCallable(
 ) {
   const resolved = resolveBuildDependencies(dependencies);
   return resolved.onCallImpl(
-    CALLABLE_OPTIONS,
-    resolved.handlers.createLegalMatter,
+      CALLABLE_OPTIONS,
+      resolved.handlers.createLegalMatter,
   );
 }
 
@@ -241,8 +241,8 @@ function buildTransitionInterventionLegalMatterCallable(
 ) {
   const resolved = resolveBuildDependencies(dependencies);
   return resolved.onCallImpl(
-    CALLABLE_OPTIONS,
-    resolved.handlers.transitionLegalMatter,
+      CALLABLE_OPTIONS,
+      resolved.handlers.transitionLegalMatter,
   );
 }
 
@@ -251,8 +251,8 @@ function buildRecordInterventionLegalApprovalDecisionCallable(
 ) {
   const resolved = resolveBuildDependencies(dependencies);
   return resolved.onCallImpl(
-    CALLABLE_OPTIONS,
-    resolved.handlers.recordApprovalDecision,
+      CALLABLE_OPTIONS,
+      resolved.handlers.recordApprovalDecision,
   );
 }
 

@@ -115,12 +115,12 @@ test("three builders pass identical hardened options to onCall", () => {
 
   assert.equal(captures.length, 3);
   assert.equal(
-    captures.every((item) => item.options === CALLABLE_OPTIONS),
-    true,
+      captures.every((item) => item.options === CALLABLE_OPTIONS),
+      true,
   );
   assert.equal(
-    captures.every((item) => typeof item.handler === "function"),
-    true,
+      captures.every((item) => typeof item.handler === "function"),
+      true,
   );
 });
 
@@ -148,12 +148,12 @@ test("missing authentication is rejected before service execution", async () => 
   });
 
   await assert.rejects(
-    () => handlers.createLegalMatter({
-      app: {appId: "verified-app"},
-      data: {},
-    }),
-    (error) =>
-      error instanceof HttpsError &&
+      () => handlers.createLegalMatter({
+        app: {appId: "verified-app"},
+        data: {},
+      }),
+      (error) =>
+        error instanceof HttpsError &&
       error.code === "unauthenticated",
   );
   assert.equal(harness.calls.create.length, 0);
@@ -167,12 +167,12 @@ test("missing App Check is rejected before service execution", async () => {
   });
 
   await assert.rejects(
-    () => handlers.createLegalMatter({
-      auth: {uid: "authenticated-user"},
-      data: {},
-    }),
-    (error) =>
-      error instanceof HttpsError &&
+      () => handlers.createLegalMatter({
+        auth: {uid: "authenticated-user"},
+        data: {},
+      }),
+      (error) =>
+        error instanceof HttpsError &&
       error.code === "failed-precondition",
   );
   assert.equal(harness.calls.create.length, 0);
@@ -203,11 +203,11 @@ test("create handler rejects client actor identity", async () => {
   });
 
   await assert.rejects(
-    () => handlers.createLegalMatter(request({
-      actorUid: "spoofed-user",
-    })),
-    (error) =>
-      error instanceof HttpsError &&
+      () => handlers.createLegalMatter(request({
+        actorUid: "spoofed-user",
+      })),
+      (error) =>
+        error instanceof HttpsError &&
       error.code === "invalid-argument",
   );
   assert.equal(harness.calls.create.length, 0);
@@ -238,11 +238,11 @@ test("transition handler rejects client actor identity", async () => {
   });
 
   await assert.rejects(
-    () => handlers.transitionLegalMatter(request({
-      decidedByUid: "spoofed-user",
-    })),
-    (error) =>
-      error instanceof HttpsError &&
+      () => handlers.transitionLegalMatter(request({
+        decidedByUid: "spoofed-user",
+      })),
+      (error) =>
+        error instanceof HttpsError &&
       error.code === "invalid-argument",
   );
   assert.equal(harness.calls.transition.length, 0);
@@ -273,11 +273,11 @@ test("approval handler rejects client actor identity", async () => {
   });
 
   await assert.rejects(
-    () => handlers.recordApprovalDecision(request({
-      decidedByUid: "spoofed-user",
-    })),
-    (error) =>
-      error instanceof HttpsError &&
+      () => handlers.recordApprovalDecision(request({
+        decidedByUid: "spoofed-user",
+      })),
+      (error) =>
+        error instanceof HttpsError &&
       error.code === "invalid-argument",
   );
   assert.equal(harness.calls.approval.length, 0);
@@ -298,11 +298,11 @@ test("contract error codes map to controlled HttpsError codes", () => {
   ];
   for (const code of codes) {
     const mapped = mapInterventionLegalError(
-      new InterventionLegalContractError(
-        code,
-        `message-${code}`,
-        {code},
-      ),
+        new InterventionLegalContractError(
+            code,
+            `message-${code}`,
+            {code},
+        ),
     );
     assert.equal(mapped instanceof HttpsError, true);
     assert.equal(mapped.code, code);
@@ -313,24 +313,24 @@ test("contract error codes map to controlled HttpsError codes", () => {
 
 test("unknown errors map to generic internal HttpsError", () => {
   const mapped = mapInterventionLegalError(
-    new Error("sensitive implementation detail"),
+      new Error("sensitive implementation detail"),
   );
   assert.equal(mapped instanceof HttpsError, true);
   assert.equal(mapped.code, "internal");
   assert.equal(
-    mapped.message,
-    "Müdahale ve Hukuk işlemi tamamlanamadı.",
+      mapped.message,
+      "Müdahale ve Hukuk işlemi tamamlanamadı.",
   );
   assert.equal(
-    mapped.message.includes("sensitive implementation detail"),
-    false,
+      mapped.message.includes("sensitive implementation detail"),
+      false,
   );
 });
 
 test("existing HttpsError is preserved", () => {
   const source = new HttpsError(
-    "permission-denied",
-    "already mapped",
+      "permission-denied",
+      "already mapped",
   );
   assert.equal(mapInterventionLegalError(source), source);
 });
@@ -340,8 +340,8 @@ test("logging records outcomes without uid or raw command payload", async () => 
   const harness = createServices({
     async transitionLegalMatter() {
       throw new InterventionLegalContractError(
-        "permission-denied",
-        "not allowed",
+          "permission-denied",
+          "not allowed",
       );
     },
   });
@@ -352,10 +352,10 @@ test("logging records outcomes without uid or raw command payload", async () => 
 
   await handlers.createLegalMatter(request({requestId: "req-1"}));
   await assert.rejects(
-    () => handlers.transitionLegalMatter(
-      request({legalMatterId: "lm-1"}),
-    ),
-    (error) => error.code === "permission-denied",
+      () => handlers.transitionLegalMatter(
+          request({legalMatterId: "lm-1"}),
+      ),
+      (error) => error.code === "permission-denied",
   );
 
   assert.equal(log.records.length, 2);
@@ -369,21 +369,21 @@ test("logging records outcomes without uid or raw command payload", async () => 
 test("standalone guards enforce request and actor rules", () => {
   assert.equal(assertCallableRequest(request()), "authenticated-user");
   assert.deepEqual(
-    injectAuthenticatedActor(
-      {value: 1},
-      "actorUid",
-      "authenticated-user",
-    ),
-    {value: 1, actorUid: "authenticated-user"},
+      injectAuthenticatedActor(
+          {value: 1},
+          "actorUid",
+          "authenticated-user",
+      ),
+      {value: 1, actorUid: "authenticated-user"},
   );
   assert.throws(
-    () => injectAuthenticatedActor(
-      {actorUid: "spoofed"},
-      "actorUid",
-      "authenticated-user",
-    ),
-    (error) =>
-      error instanceof HttpsError &&
+      () => injectAuthenticatedActor(
+          {actorUid: "spoofed"},
+          "actorUid",
+          "authenticated-user",
+      ),
+      (error) =>
+        error instanceof HttpsError &&
       error.code === "invalid-argument",
   );
 });

@@ -222,8 +222,8 @@ test("create service writes one atomic matter event receipt bundle", async () =>
   });
   const records = await eventRecords();
   assert.equal(
-    records.every((record) => record.actorUid === "owner-1"),
-    true,
+      records.every((record) => record.actorUid === "owner-1"),
+      true,
   );
   assert.equal(result.matter.createdByUid, "owner-1");
 });
@@ -585,14 +585,14 @@ test("parallel competing approval decisions commit one winner", async () => {
     legalMatterId: created.resultId,
   });
   await db
-    .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
-    .doc("membership-owner")
-    .set({
-      tenantId: "tenant-1",
-      uid: "client-1",
-      role: "owner",
-      status: "active",
-    });
+      .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
+      .doc("membership-owner")
+      .set({
+        tenantId: "tenant-1",
+        uid: "client-1",
+        role: "owner",
+        status: "active",
+      });
 
   const decide = buildServices().decideApproval;
   const common = {
@@ -620,25 +620,25 @@ test("parallel competing approval decisions commit one winner", async () => {
   ]);
 
   const fulfilled = results.filter(
-    (item) => item.status === "fulfilled",
+      (item) => item.status === "fulfilled",
   );
   const rejected = results.filter(
-    (item) => item.status === "rejected",
+      (item) => item.status === "rejected",
   );
   assert.equal(fulfilled.length, 1);
   assert.equal(rejected.length, 1);
   assert.equal(rejected[0].reason.code, "aborted");
   assert.equal(
-    await countCollection(
-      FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_DECISIONS,
-    ),
-    1,
+      await countCollection(
+          FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_DECISIONS,
+      ),
+      1,
   );
   const request = (
     await db
-      .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS)
-      .doc("lar-1")
-      .get()
+        .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS)
+        .doc("lar-1")
+        .get()
   ).data();
   assert.equal(request.version, 2);
 });

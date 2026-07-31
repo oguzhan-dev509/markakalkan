@@ -10,15 +10,15 @@ const {
 
 function normalizeText(value, field, maxLength = 512) {
   return requiredString(value, field, maxLength)
-    .normalize("NFKC")
-    .replace(/\s+/g, " ")
-    .trim();
+      .normalize("NFKC")
+      .replace(/\s+/g, " ")
+      .trim();
 }
 
 function normalizeInternalCode(value, field) {
   return requiredCode(value, field)
-    .normalize("NFKC")
-    .toLowerCase();
+      .normalize("NFKC")
+      .toLowerCase();
 }
 
 function normalizeJurisdictionCode(value) {
@@ -57,8 +57,8 @@ function sha256Hex(value) {
 function canonicalPayloadFingerprint(value) {
   if (value === undefined) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "fingerprint payload is required",
+        "invalid-argument",
+        "fingerprint payload is required",
     );
   }
   return sha256Hex(stableStringify(value));
@@ -67,16 +67,16 @@ function canonicalPayloadFingerprint(value) {
 function canonicalizeLegalMatterIdentity(input) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "legal matter identity must be an object",
+        "invalid-argument",
+        "legal matter identity must be an object",
     );
   }
   return Object.freeze({
     tenantId: normalizeText(input.tenantId, "tenantId", 128),
     canonicalBrandId: normalizeText(
-      input.canonicalBrandId,
-      "canonicalBrandId",
-      128,
+        input.canonicalBrandId,
+        "canonicalBrandId",
+        128,
     ),
     caseId: normalizeText(input.caseId, "caseId", 128),
     jurisdictionCode: normalizeJurisdictionCode(input.jurisdictionCode),
@@ -88,14 +88,14 @@ function canonicalizeLegalMatterIdentity(input) {
 function canonicalizeReference(input) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "reference must be an object",
+        "invalid-argument",
+        "reference must be an object",
     );
   }
   return Object.freeze({
     referenceType: normalizeInternalCode(
-      input.referenceType,
-      "referenceType",
+        input.referenceType,
+        "referenceType",
     ),
     referenceId: normalizeText(input.referenceId, "referenceId", 256),
   });

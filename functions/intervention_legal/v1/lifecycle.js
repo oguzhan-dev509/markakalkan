@@ -155,9 +155,9 @@ function lifecycleRequired(name) {
   const lifecycle = LIFECYCLES[name];
   if (!lifecycle) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "unknown lifecycle",
-      {name},
+        "invalid-argument",
+        "unknown lifecycle",
+        {name},
     );
   }
   return lifecycle;
@@ -167,9 +167,9 @@ function assertKnownStatus(lifecycleName, status) {
   const lifecycle = lifecycleRequired(lifecycleName);
   if (!lifecycle.statuses.includes(status)) {
     throw new InterventionLegalContractError(
-      "invalid-argument",
-      "unknown lifecycle status",
-      {lifecycleName, status},
+        "invalid-argument",
+        "unknown lifecycle status",
+        {lifecycleName, status},
     );
   }
   return status;
@@ -189,9 +189,9 @@ function canTransition(lifecycleName, currentStatus, nextStatus) {
 function assertTransition(lifecycleName, currentStatus, nextStatus) {
   if (!canTransition(lifecycleName, currentStatus, nextStatus)) {
     throw new InterventionLegalContractError(
-      "failed-precondition",
-      "lifecycle transition denied",
-      {lifecycleName, currentStatus, nextStatus},
+        "failed-precondition",
+        "lifecycle transition denied",
+        {lifecycleName, currentStatus, nextStatus},
     );
   }
   return true;

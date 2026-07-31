@@ -50,9 +50,9 @@ function buildCommandReceiptId({scopeType, scopeId, idempotencyKey}) {
     scopeType: requiredString(scopeType, "scopeType", 96),
     scopeId: requiredString(scopeId, "scopeId", 128),
     idempotencyKey: requiredString(
-      idempotencyKey,
-      "idempotencyKey",
-      256,
+        idempotencyKey,
+        "idempotencyKey",
+        256,
     ),
   });
 }
@@ -60,45 +60,45 @@ function buildCommandReceiptId({scopeType, scopeId, idempotencyKey}) {
 function buildMatterIdFromKey(legalMatterKey) {
   return prefixedId("lm", {
     legalMatterKey: requiredString(
-      legalMatterKey,
-      "legalMatterKey",
-      64,
+        legalMatterKey,
+        "legalMatterKey",
+        64,
     ),
   });
 }
 
 function legalMatterRef(db, legalMatterId) {
   return db
-    .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES)
-    .doc(requiredString(legalMatterId, "legalMatterId", 128));
+      .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES)
+      .doc(requiredString(legalMatterId, "legalMatterId", 128));
 }
 
 function legalMatterEventRef(db, eventId) {
   return db
-    .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_EVENTS)
-    .doc(requiredString(eventId, "eventId", 128));
+      .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_EVENTS)
+      .doc(requiredString(eventId, "eventId", 128));
 }
 
 function commandReceiptRef(db, input) {
   return db
-    .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_EVENTS)
-    .doc(buildCommandReceiptId(input));
+      .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_EVENTS)
+      .doc(buildCommandReceiptId(input));
 }
 
 function approvalRequestRef(db, approvalRequestId) {
   return db
-    .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS)
-    .doc(requiredString(
-      approvalRequestId,
-      "approvalRequestId",
-      128,
-    ));
+      .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS)
+      .doc(requiredString(
+          approvalRequestId,
+          "approvalRequestId",
+          128,
+      ));
 }
 
 function approvalDecisionRef(db, decisionId) {
   return db
-    .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_DECISIONS)
-    .doc(requiredString(decisionId, "decisionId", 128));
+      .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_DECISIONS)
+      .doc(requiredString(decisionId, "decisionId", 128));
 }
 
 function commandReceiptDocument({
@@ -153,8 +153,8 @@ function assertReceiptReplay(existing, incoming) {
     existing.payloadFingerprint !== incoming.payloadFingerprint
   ) {
     fail(
-      "already-exists",
-      "command receipt conflicts with the incoming payload",
+        "already-exists",
+        "command receipt conflicts with the incoming payload",
     );
   }
   return true;
@@ -207,9 +207,9 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
     async resolveCaseScope({caseId}) {
       const normalizedCaseId = requiredString(caseId, "caseId", 128);
       const snapshot = await db
-        .collection(FIRESTORE_COLLECTIONS.CASE_FILES)
-        .doc(normalizedCaseId)
-        .get();
+          .collection(FIRESTORE_COLLECTIONS.CASE_FILES)
+          .doc(normalizedCaseId)
+          .get();
       const data = snapshotData(snapshot);
       if (!data) return null;
       return Object.freeze({
@@ -232,31 +232,31 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
     }) {
       const normalizedUid = requiredString(uid, "uid", 128);
       const normalizedTenantId = requiredString(
-        tenantId,
-        "tenantId",
-        128,
+          tenantId,
+          "tenantId",
+          128,
       );
       const normalizedBrandId = requiredString(
-        canonicalBrandId,
-        "canonicalBrandId",
-        128,
+          canonicalBrandId,
+          "canonicalBrandId",
+          128,
       );
       const normalizedOperation = enumValue(
-        operationCode,
-        LEGAL_MATTER_OPERATION_CODES,
-        "operationCode",
+          operationCode,
+          LEGAL_MATTER_OPERATION_CODES,
+          "operationCode",
       );
 
       const snapshot = await db
-        .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
-        .where("tenantId", "==", normalizedTenantId)
-        .where("uid", "==", normalizedUid)
-        .limit(10)
-        .get();
+          .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
+          .where("tenantId", "==", normalizedTenantId)
+          .where("uid", "==", normalizedUid)
+          .limit(10)
+          .get();
 
       const active = snapshot.docs
-        .map((doc) => ({membershipId: doc.id, ...doc.data()}))
-        .filter((item) => item.status === "active");
+          .map((doc) => ({membershipId: doc.id, ...doc.data()}))
+          .filter((item) => item.status === "active");
 
       const owner = active.find((item) => item.role === "owner");
       if (owner) {
@@ -270,10 +270,10 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
 
       const delegated = active.find((item) => {
         const allowedOperations = Array.isArray(
-          item.delegatedLegalMatterOperations,
+            item.delegatedLegalMatterOperations,
         ) ? item.delegatedLegalMatterOperations : [];
         const allowedBrands = Array.isArray(
-          item.delegatedCanonicalBrandIds,
+            item.delegatedCanonicalBrandIds,
         ) ? item.delegatedCanonicalBrandIds : [];
         return (
           allowedOperations.includes(normalizedOperation) &&
@@ -301,18 +301,18 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
 
     async findLegalMatterByKey({tenantId, legalMatterKey}) {
       const normalizedTenantId = requiredString(
-        tenantId,
-        "tenantId",
-        128,
+          tenantId,
+          "tenantId",
+          128,
       );
       const normalizedKey = requiredString(
-        legalMatterKey,
-        "legalMatterKey",
-        64,
+          legalMatterKey,
+          "legalMatterKey",
+          64,
       );
       const ref = legalMatterRef(
-        db,
-        buildMatterIdFromKey(normalizedKey),
+          db,
+          buildMatterIdFromKey(normalizedKey),
       );
       const data = snapshotData(await ref.get());
       if (!data) return null;
@@ -327,7 +327,7 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
 
     async getLegalMatterById({legalMatterId}) {
       return snapshotData(
-        await legalMatterRef(db, legalMatterId).get(),
+          await legalMatterRef(db, legalMatterId).get(),
       );
     },
 
@@ -362,8 +362,8 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
 
         if (existingMatter || existingEvent) {
           fail(
-            "already-exists",
-            "partial or duplicate legal matter bundle exists",
+              "already-exists",
+              "partial or duplicate legal matter bundle exists",
           );
         }
 
@@ -374,18 +374,18 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
         };
         transaction.create(matterRef, matter);
         transaction.create(
-          eventRef,
-          domainEventDocument(event, scope),
+            eventRef,
+            domainEventDocument(event, scope),
         );
         transaction.create(
-          receiptRef,
-          commandReceiptDocument({
-            scopeType: "create_legal_matter",
-            scopeId: matter.tenantId,
-            receipt,
-            ...scope,
-            legalMatterId: matter.legalMatterId,
-          }),
+            receiptRef,
+            commandReceiptDocument({
+              scopeType: "create_legal_matter",
+              scopeId: matter.tenantId,
+              receipt,
+              ...scope,
+              legalMatterId: matter.legalMatterId,
+            }),
         );
         return {matter, idempotentReplay: false};
       });
@@ -403,8 +403,8 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
       objectRequired(receipt, "receipt");
 
       const matterRef = legalMatterRef(
-        db,
-        currentMatter.legalMatterId,
+          db,
+          currentMatter.legalMatterId,
       );
       const eventRef = legalMatterEventRef(db, event.eventId);
       const receiptRef = commandReceiptRef(db, {
@@ -449,18 +449,18 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
         };
         transaction.update(matterRef, nextMatter);
         transaction.create(
-          eventRef,
-          domainEventDocument(event, scope),
+            eventRef,
+            domainEventDocument(event, scope),
         );
         transaction.create(
-          receiptRef,
-          commandReceiptDocument({
-            scopeType: "legal_matter",
-            scopeId: currentMatter.legalMatterId,
-            receipt,
-            ...scope,
-            legalMatterId: currentMatter.legalMatterId,
-          }),
+            receiptRef,
+            commandReceiptDocument({
+              scopeType: "legal_matter",
+              scopeId: currentMatter.legalMatterId,
+              receipt,
+              ...scope,
+              legalMatterId: currentMatter.legalMatterId,
+            }),
         );
         return {matter: nextMatter, idempotentReplay: false};
       });
@@ -468,17 +468,17 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
 
     async getApprovalRequestById({approvalRequestId}) {
       return snapshotData(
-        await approvalRequestRef(db, approvalRequestId).get(),
+          await approvalRequestRef(db, approvalRequestId).get(),
       );
     },
 
     async getLegalTeamProfileByUid({uid}) {
       const normalizedUid = requiredString(uid, "uid", 128);
       return snapshotData(
-        await db
-          .collection(FIRESTORE_COLLECTIONS.LEGAL_TEAM_PROFILES)
-          .doc(normalizedUid)
-          .get(),
+          await db
+              .collection(FIRESTORE_COLLECTIONS.LEGAL_TEAM_PROFILES)
+              .doc(normalizedUid)
+              .get(),
       );
     },
 
@@ -490,31 +490,31 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
     }) {
       const normalizedUid = requiredString(uid, "uid", 128);
       const normalizedTenantId = requiredString(
-        tenantId,
-        "tenantId",
-        128,
+          tenantId,
+          "tenantId",
+          128,
       );
       const normalizedBrandId = requiredString(
-        canonicalBrandId,
-        "canonicalBrandId",
-        128,
+          canonicalBrandId,
+          "canonicalBrandId",
+          128,
       );
       const normalizedApprovalType = requiredString(
-        approvalType,
-        "approvalType",
-        96,
+          approvalType,
+          "approvalType",
+          96,
       );
 
       const snapshot = await db
-        .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
-        .where("tenantId", "==", normalizedTenantId)
-        .where("uid", "==", normalizedUid)
-        .limit(10)
-        .get();
+          .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
+          .where("tenantId", "==", normalizedTenantId)
+          .where("uid", "==", normalizedUid)
+          .limit(10)
+          .get();
 
       const active = snapshot.docs
-        .map((doc) => ({membershipId: doc.id, ...doc.data()}))
-        .filter((item) => item.status === "active");
+          .map((doc) => ({membershipId: doc.id, ...doc.data()}))
+          .filter((item) => item.status === "active");
 
       const owner = active.find((item) => item.role === "owner");
       if (owner) {
@@ -527,10 +527,10 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
 
       const delegated = active.find((item) => {
         const allowedTypes = Array.isArray(
-          item.delegatedLegalApprovalTypes,
+            item.delegatedLegalApprovalTypes,
         ) ? item.delegatedLegalApprovalTypes : [];
         const allowedBrands = Array.isArray(
-          item.delegatedCanonicalBrandIds,
+            item.delegatedCanonicalBrandIds,
         ) ? item.delegatedCanonicalBrandIds : [];
         return (
           allowedTypes.includes(normalizedApprovalType) &&
@@ -567,8 +567,8 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
         expectedApprovalRequestVersion < 0
       ) {
         fail(
-          "internal",
-          "expected approval request version is invalid",
+            "internal",
+            "expected approval request version is invalid",
         );
       }
       objectRequired(decision, "decision");
@@ -576,16 +576,16 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
       objectRequired(receipt, "receipt");
 
       const requestRef = approvalRequestRef(
-        db,
-        approvalRequest.approvalRequestId,
+          db,
+          approvalRequest.approvalRequestId,
       );
       const matterRef = legalMatterRef(
-        db,
-        approvalRequest.legalMatterId,
+          db,
+          approvalRequest.legalMatterId,
       );
       const decisionRef = approvalDecisionRef(
-        db,
-        decision.decisionId,
+          db,
+          decision.decisionId,
       );
       const eventRef = legalMatterEventRef(db, event.eventId);
       const receiptRef = commandReceiptRef(db, {
@@ -624,8 +624,8 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
           fail("not-found", "legal matter was not found");
         }
         assertApprovalRequestMatches(
-          persistedRequest,
-          approvalRequest,
+            persistedRequest,
+            approvalRequest,
         );
         if (
           persistedRequest.version !== expectedApprovalRequestVersion
@@ -637,14 +637,14 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
         }
         if (persistedRequest.status !== "pending") {
           fail(
-            "failed-precondition",
-            "approval request is not pending",
+              "failed-precondition",
+              "approval request is not pending",
           );
         }
         if (existingDecision || existingEvent) {
           fail(
-            "already-exists",
-            "partial or duplicate approval decision bundle exists",
+              "already-exists",
+              "partial or duplicate approval decision bundle exists",
           );
         }
 
@@ -666,18 +666,18 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
         transaction.update(requestRef, nextRequest);
         transaction.create(decisionRef, decision);
         transaction.create(
-          eventRef,
-          domainEventDocument(event, scope),
+            eventRef,
+            domainEventDocument(event, scope),
         );
         transaction.create(
-          receiptRef,
-          commandReceiptDocument({
-            scopeType: "legal_approval_decision",
-            scopeId: approvalRequest.approvalRequestId,
-            receipt,
-            ...scope,
-            legalMatterId: matter.legalMatterId,
-          }),
+            receiptRef,
+            commandReceiptDocument({
+              scopeType: "legal_approval_decision",
+              scopeId: approvalRequest.approvalRequestId,
+              receipt,
+              ...scope,
+              legalMatterId: matter.legalMatterId,
+            }),
         );
 
         return {decision, idempotentReplay: false};
