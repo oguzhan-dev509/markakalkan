@@ -747,6 +747,7 @@ test("recordApprovalDecisionAtomic commits request decision event receipt", asyn
   const adapter = createInterventionLegalFirestoreAdapter(db);
 
   const result = await adapter.recordApprovalDecisionAtomic({
+      expectedApprovalRequestVersion: 1,
     approvalRequest,
     decision,
     event,
@@ -825,12 +826,14 @@ test("recordApprovalDecisionAtomic replays identical decision", async () => {
   });
   const adapter = createInterventionLegalFirestoreAdapter(db);
   await adapter.recordApprovalDecisionAtomic({
+      expectedApprovalRequestVersion: 1,
     approvalRequest,
     decision,
     event,
     receipt,
   });
   const replay = await adapter.recordApprovalDecisionAtomic({
+      expectedApprovalRequestVersion: 1,
     approvalRequest,
     decision,
     event,
@@ -838,6 +841,52 @@ test("recordApprovalDecisionAtomic replays identical decision", async () => {
   });
   assert.equal(replay.idempotentReplay, true);
   assert.equal(replay.decision.decisionId, decisionId);
+});
+
+test("recordApprovalDecisionAtomic rejects persisted version conflict", async () => {
+  const db = new FakeFirestore();
+  const matter = matterDocument();
+  db.seed(
+    FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES,
+    matter.legalMatterId,
+    matter,
+  );
+  const approvalRequest = {
+    approvalRequestId: "lar_1",
+    legalMatterId: matter.legalMatterId,
+    approvalType: "client_budget_authorization",
+    status: "pending",
+    version: 1,
+  };
+  db.seed(
+    FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS,
+    "lar_1",
+    {...approvalRequest, version: 2},
+  );
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+
+  await assert.rejects(
+    () => adapter.recordApprovalDecisionAtomic({
+      expectedApprovalRequestVersion: 1,
+      approvalRequest,
+      decision: {
+        decisionId: "lad_stale",
+        decision: "approved",
+        decidedAt: "2026-07-31T09:02:00.000Z",
+      },
+      event: eventDocument({
+        requestId: "req-decision-stale",
+        eventType: "legal_approval_decided",
+      }),
+      receipt: receiptDocument({
+        requestId: "req-decision-stale",
+        idempotencyKey: "idem-decision-stale",
+      }),
+    }),
+    (error) =>
+      error.code === "aborted" &&
+      error.details.actualApprovalRequestVersion === 2,
+  );
 });
 
 test("recordApprovalDecisionAtomic rejects non-pending persisted request", async () => {
@@ -853,6 +902,7 @@ test("recordApprovalDecisionAtomic rejects non-pending persisted request", async
     legalMatterId: matter.legalMatterId,
     approvalType: "client_budget_authorization",
     status: "pending",
+    version: 1,
   };
   db.seed(
     FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS,
@@ -862,6 +912,7 @@ test("recordApprovalDecisionAtomic rejects non-pending persisted request", async
   const adapter = createInterventionLegalFirestoreAdapter(db);
   await assert.rejects(
     () => adapter.recordApprovalDecisionAtomic({
+      expectedApprovalRequestVersion: 1,
       approvalRequest,
       decision: {
         decisionId: "lad_1",

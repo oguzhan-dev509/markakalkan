@@ -472,6 +472,7 @@ test("tenant owner approval commits immutable decision bundle", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-approval-1",
     idempotencyKey: "idem-approval-1",
+    expectedApprovalRequestVersion: 1,
     approvalRequestId: "lar-1",
     legalMatterId: created.resultId,
     approvalType: "client_budget_authorization",
@@ -502,6 +503,70 @@ test("tenant owner approval commits immutable decision bundle", async () => {
   });
 });
 
+test("parallel competing approval decisions commit one winner", async () => {
+  const created = await createMatter();
+  await seedApprovalRequest({
+    legalMatterId: created.resultId,
+  });
+  await db
+    .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
+    .doc("membership-owner")
+    .set({
+      tenantId: "tenant-1",
+      uid: "client-1",
+      role: "owner",
+      status: "active",
+    });
+
+  const decide = buildServices().decideApproval;
+  const common = {
+    contractVersion: CONTRACT_VERSION,
+    expectedApprovalRequestVersion: 1,
+    approvalRequestId: "lar-1",
+    legalMatterId: created.resultId,
+    approvalType: "client_budget_authorization",
+    decisionReasonCode: "budget_confirmed",
+    decidedByUid: "client-1",
+  };
+  const results = await Promise.allSettled([
+    decide({
+      ...common,
+      requestId: "req-approval-a",
+      idempotencyKey: "idem-approval-a",
+      decision: "approved",
+    }),
+    decide({
+      ...common,
+      requestId: "req-approval-b",
+      idempotencyKey: "idem-approval-b",
+      decision: "rejected",
+    }),
+  ]);
+
+  const fulfilled = results.filter(
+    (item) => item.status === "fulfilled",
+  );
+  const rejected = results.filter(
+    (item) => item.status === "rejected",
+  );
+  assert.equal(fulfilled.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].reason.code, "aborted");
+  assert.equal(
+    await countCollection(
+      FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_DECISIONS,
+    ),
+    1,
+  );
+  const request = (
+    await db
+      .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS)
+      .doc("lar-1")
+      .get()
+  ).data();
+  assert.equal(request.version, 2);
+});
+
 test("unauthorized client approval creates no decision bundle", async () => {
   const created = await createMatter();
   await seedApprovalRequest({
@@ -513,6 +578,7 @@ test("unauthorized client approval creates no decision bundle", async () => {
         contractVersion: CONTRACT_VERSION,
         requestId: "req-approval-unauthorized",
         idempotencyKey: "idem-approval-unauthorized",
+        expectedApprovalRequestVersion: 1,
         approvalRequestId: "lar-1",
         legalMatterId: created.resultId,
         approvalType: "client_budget_authorization",
@@ -565,6 +631,7 @@ test("active covered lawyer can commit legal approval", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-lawyer-approval",
     idempotencyKey: "idem-lawyer-approval",
+    expectedApprovalRequestVersion: 1,
     approvalRequestId: "lar-1",
     legalMatterId: created.resultId,
     approvalType: "lawyer_legal_approval",

@@ -80,10 +80,25 @@ function createFakeStore(overrides = {}) {
     async resolveClientAuthority({uid}) {
       return {authorized: uid === "client-1"};
     },
-    async recordApprovalDecisionAtomic({approvalRequest, decision, receipt}) {
+    async recordApprovalDecisionAtomic({
+      approvalRequest,
+      expectedApprovalRequestVersion,
+      decision,
+      receipt,
+    }) {
+      if (approvalRequest.version !== expectedApprovalRequestVersion) {
+        throw new InterventionLegalContractError(
+          "aborted",
+          "approval request version conflict",
+        );
+      }
       approvals.set(
         approvalRequest.approvalRequestId,
-        {...approvalRequest, status: decision.decision},
+        {
+          ...approvalRequest,
+          status: decision.decision,
+          version: expectedApprovalRequestVersion + 1,
+        },
       );
       receipts.set(receiptKey({
         scopeType: "legal_approval_decision",
@@ -408,6 +423,7 @@ test("lawyer approval requires active covered legal profile", async () => {
     approvalType: "lawyer_legal_approval",
     status: "pending",
     preparedByUid: "operations-1",
+    version: 1,
   });
   store.__seedProfile("lawyer-1", {
     status: "active",
@@ -423,6 +439,7 @@ test("lawyer approval requires active covered legal profile", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-decision",
     idempotencyKey: "idem-decision",
+    expectedApprovalRequestVersion: 1,
     approvalRequestId: "lar_1",
     legalMatterId: "lm_1",
     approvalType: "lawyer_legal_approval",
@@ -449,6 +466,7 @@ test("lawyer cannot be sole preparer and approver", async () => {
     approvalType: "lawyer_legal_approval",
     status: "pending",
     preparedByUid: "lawyer-1",
+    version: 1,
   });
   store.__seedProfile("lawyer-1", {
     status: "active",
@@ -465,6 +483,7 @@ test("lawyer cannot be sole preparer and approver", async () => {
       contractVersion: CONTRACT_VERSION,
       requestId: "req-decision",
       idempotencyKey: "idem-decision",
+      expectedApprovalRequestVersion: 1,
       approvalRequestId: "lar_1",
       legalMatterId: "lm_1",
       approvalType: "lawyer_legal_approval",
@@ -489,6 +508,7 @@ test("client authorization requires resolved client authority", async () => {
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
     status: "pending",
+    version: 1,
   });
   const decide = buildRecordApprovalDecisionService({
     store,
@@ -500,6 +520,7 @@ test("client authorization requires resolved client authority", async () => {
       contractVersion: CONTRACT_VERSION,
       requestId: "req-decision",
       idempotencyKey: "idem-decision",
+      expectedApprovalRequestVersion: 1,
       approvalRequestId: "lar_1",
       legalMatterId: "lm_1",
       approvalType: "client_budget_authorization",
@@ -524,6 +545,7 @@ test("authorized client can approve budget request", async () => {
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
     status: "pending",
+    version: 1,
   });
   const decide = buildRecordApprovalDecisionService({
     store,
@@ -534,6 +556,7 @@ test("authorized client can approve budget request", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-decision",
     idempotencyKey: "idem-decision",
+    expectedApprovalRequestVersion: 1,
     approvalRequestId: "lar_1",
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
@@ -558,6 +581,7 @@ test("approval request type mismatch is rejected", async () => {
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
     status: "pending",
+    version: 1,
   });
   const decide = buildRecordApprovalDecisionService({
     store,
@@ -569,6 +593,7 @@ test("approval request type mismatch is rejected", async () => {
       contractVersion: CONTRACT_VERSION,
       requestId: "req-decision",
       idempotencyKey: "idem-decision",
+      expectedApprovalRequestVersion: 1,
       approvalRequestId: "lar_1",
       legalMatterId: "lm_1",
       approvalType: "lawyer_legal_approval",
@@ -577,6 +602,45 @@ test("approval request type mismatch is rejected", async () => {
       decidedByUid: "lawyer-1",
     }),
     /approval type mismatch/,
+  );
+});
+
+test("approval decision rejects stale approval request version", async () => {
+  const store = createFakeStore();
+  store.__seedMatter({
+    legalMatterId: "lm_1",
+    tenantId: "tenant-1",
+    canonicalBrandId: "brand-1",
+    jurisdictionCode: "tr.istanbul",
+  });
+  store.__seedApproval({
+    approvalRequestId: "lar_1",
+    legalMatterId: "lm_1",
+    approvalType: "client_budget_authorization",
+    status: "pending",
+    version: 2,
+  });
+  const decide = buildRecordApprovalDecisionService({
+    store,
+    clock: () => NOW,
+  });
+
+  await assert.rejects(
+    () => decide({
+      contractVersion: CONTRACT_VERSION,
+      requestId: "req-decision-stale",
+      idempotencyKey: "idem-decision-stale",
+      expectedApprovalRequestVersion: 1,
+      approvalRequestId: "lar_1",
+      legalMatterId: "lm_1",
+      approvalType: "client_budget_authorization",
+      decision: "approved",
+      decisionReasonCode: "budget_confirmed",
+      decidedByUid: "client-1",
+    }),
+    (error) =>
+      error.code === "aborted" &&
+      error.details.actualApprovalRequestVersion === 2,
   );
 });
 
@@ -593,6 +657,7 @@ test("non-pending approval request cannot receive a new decision", async () => {
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
     status: "approved",
+    version: 1,
   });
   const decide = buildRecordApprovalDecisionService({
     store,
@@ -604,6 +669,7 @@ test("non-pending approval request cannot receive a new decision", async () => {
       contractVersion: CONTRACT_VERSION,
       requestId: "req-decision",
       idempotencyKey: "idem-decision",
+      expectedApprovalRequestVersion: 1,
       approvalRequestId: "lar_1",
       legalMatterId: "lm_1",
       approvalType: "client_budget_authorization",
@@ -628,6 +694,7 @@ test("approval decision service is idempotent", async () => {
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
     status: "pending",
+    version: 1,
   });
   const decide = buildRecordApprovalDecisionService({
     store,
@@ -637,6 +704,7 @@ test("approval decision service is idempotent", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-decision",
     idempotencyKey: "idem-decision",
+    expectedApprovalRequestVersion: 1,
     approvalRequestId: "lar_1",
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
@@ -742,6 +810,7 @@ test("approval service propagates transaction-level replay", async () => {
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",
     status: "pending",
+    version: 1,
   });
   store.recordApprovalDecisionAtomic = async ({decision}) => ({
     decision,
@@ -756,6 +825,7 @@ test("approval service propagates transaction-level replay", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-approval-race",
     idempotencyKey: "idem-approval-race",
+    expectedApprovalRequestVersion: 1,
     approvalRequestId: "lar_1",
     legalMatterId: "lm_1",
     approvalType: "client_budget_authorization",

@@ -347,6 +347,25 @@ function buildRecordApprovalDecisionService(dependencies) {
         "approval request was not found",
       );
     }
+    if (!Number.isSafeInteger(approvalRequest.version)) {
+      throw new InterventionLegalContractError(
+        "internal",
+        "approval request version is invalid",
+      );
+    }
+    if (
+      approvalRequest.version !== command.expectedApprovalRequestVersion
+    ) {
+      throw new InterventionLegalContractError(
+        "aborted",
+        "approval request version conflict",
+        {
+          expectedApprovalRequestVersion:
+            command.expectedApprovalRequestVersion,
+          actualApprovalRequestVersion: approvalRequest.version,
+        },
+      );
+    }
     if (approvalRequest.legalMatterId !== command.legalMatterId) {
       throw new InterventionLegalContractError(
         "failed-precondition",
@@ -441,6 +460,8 @@ function buildRecordApprovalDecisionService(dependencies) {
 
     const result = await store.recordApprovalDecisionAtomic({
       approvalRequest,
+      expectedApprovalRequestVersion:
+        command.expectedApprovalRequestVersion,
       decision,
       event,
       receipt: createReceipt({

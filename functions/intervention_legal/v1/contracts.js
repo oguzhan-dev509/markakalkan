@@ -401,6 +401,7 @@ function parseApprovalDecisionCommand(raw) {
   const base = baseCommand(
     raw,
     [
+      "expectedApprovalRequestVersion",
       "approvalRequestId",
       "legalMatterId",
       "approvalType",
@@ -410,6 +411,7 @@ function parseApprovalDecisionCommand(raw) {
       "decidedByUid",
     ],
     [
+      "expectedApprovalRequestVersion",
       "approvalRequestId",
       "legalMatterId",
       "approvalType",
@@ -418,8 +420,18 @@ function parseApprovalDecisionCommand(raw) {
       "decidedByUid",
     ],
   );
+  if (
+    !Number.isSafeInteger(raw.expectedApprovalRequestVersion) ||
+    raw.expectedApprovalRequestVersion < 0
+  ) {
+    throw new InterventionLegalContractError(
+      "invalid-argument",
+      "expectedApprovalRequestVersion must be a non-negative safe integer",
+    );
+  }
   return Object.freeze({
     ...base,
+    expectedApprovalRequestVersion: raw.expectedApprovalRequestVersion,
     approvalRequestId: requiredString(
       raw.approvalRequestId,
       "approvalRequestId",

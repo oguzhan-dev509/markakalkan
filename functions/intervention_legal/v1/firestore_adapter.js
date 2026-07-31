@@ -478,11 +478,21 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
 
     async recordApprovalDecisionAtomic({
       approvalRequest,
+      expectedApprovalRequestVersion,
       decision,
       event,
       receipt,
     }) {
       objectRequired(approvalRequest, "approvalRequest");
+      if (
+        !Number.isSafeInteger(expectedApprovalRequestVersion) ||
+        expectedApprovalRequestVersion < 0
+      ) {
+        fail(
+          "internal",
+          "expected approval request version is invalid",
+        );
+      }
       objectRequired(decision, "decision");
       objectRequired(event, "event");
       objectRequired(receipt, "receipt");
@@ -539,6 +549,14 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
           persistedRequest,
           approvalRequest,
         );
+        if (
+          persistedRequest.version !== expectedApprovalRequestVersion
+        ) {
+          fail("aborted", "approval request version conflict", {
+            expectedApprovalRequestVersion,
+            actualApprovalRequestVersion: persistedRequest.version,
+          });
+        }
         if (persistedRequest.status !== "pending") {
           fail(
             "failed-precondition",
@@ -559,7 +577,7 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
           decidedAt: decision.decidedAt,
           decidedByUid: decision.decidedByUid,
           updatedAt: decision.decidedAt,
-          version: Number(persistedRequest.version || 0) + 1,
+          version: expectedApprovalRequestVersion + 1,
         };
         const scope = {
           tenantId: matter.tenantId,

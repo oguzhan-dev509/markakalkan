@@ -116,6 +116,7 @@ test("approval decision keeps client and lawyer approval types distinct", () => 
     contractVersion: contracts.CONTRACT_VERSION,
     requestId: "req-approval",
     idempotencyKey: "idem-approval",
+    expectedApprovalRequestVersion: 1,
     approvalRequestId: "lar_123",
     legalMatterId: "lm_123",
     approvalType: "lawyer_legal_approval",
@@ -127,6 +128,26 @@ test("approval decision keeps client and lawyer approval types distinct", () => 
   assert.notEqual(
     lawyer.approvalType,
     "client_action_authorization",
+  );
+  assert.equal(lawyer.expectedApprovalRequestVersion, 1);
+});
+
+test("approval decision requires approval request version", () => {
+  assert.throws(
+    () => contracts.parseApprovalDecisionCommand({
+      contractVersion: contracts.CONTRACT_VERSION,
+      requestId: "req-approval-missing-version",
+      idempotencyKey: "idem-approval-missing-version",
+      approvalRequestId: "lar_123",
+      legalMatterId: "lm_123",
+      approvalType: "client_budget_authorization",
+      decision: "approved",
+      decisionReasonCode: "budget_confirmed",
+      decidedByUid: "client-1",
+    }),
+    (error) =>
+      error instanceof contracts.InterventionLegalContractError &&
+      error.code === "invalid-argument",
   );
 });
 
