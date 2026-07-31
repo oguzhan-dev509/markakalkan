@@ -104,6 +104,11 @@ const LAWYER_APPROVER_ROLES = Object.freeze([
   "senior_legal_reviewer",
 ]);
 
+const LEGAL_MATTER_OPERATION_CODES = Object.freeze([
+  "create_legal_matter",
+  "transition_legal_matter",
+]);
+
 const APPROVAL_TYPES = Object.freeze([
   "client_action_authorization",
   "client_budget_authorization",
@@ -570,6 +575,7 @@ module.exports = Object.freeze({
   PROFESSIONAL_STATUSES,
   ROLE_CODES,
   LAWYER_APPROVER_ROLES,
+  LEGAL_MATTER_OPERATION_CODES,
   APPROVAL_TYPES,
   LINK_TYPES,
   INTERVENTION_ACTION_TYPES,

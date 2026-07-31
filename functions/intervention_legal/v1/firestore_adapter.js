@@ -1,7 +1,9 @@
 "use strict";
 
 const {
+  LEGAL_MATTER_OPERATION_CODES,
   InterventionLegalContractError,
+  enumValue,
   objectRequired,
   requiredString,
 } = require("./contracts");
@@ -220,6 +222,81 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
           data.status === "archived" ||
           data.dispositionStatus === "archived",
       });
+    },
+
+    async resolveLegalMatterAuthority({
+      uid,
+      tenantId,
+      canonicalBrandId,
+      operationCode,
+    }) {
+      const normalizedUid = requiredString(uid, "uid", 128);
+      const normalizedTenantId = requiredString(
+        tenantId,
+        "tenantId",
+        128,
+      );
+      const normalizedBrandId = requiredString(
+        canonicalBrandId,
+        "canonicalBrandId",
+        128,
+      );
+      const normalizedOperation = enumValue(
+        operationCode,
+        LEGAL_MATTER_OPERATION_CODES,
+        "operationCode",
+      );
+
+      const snapshot = await db
+        .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
+        .where("tenantId", "==", normalizedTenantId)
+        .where("uid", "==", normalizedUid)
+        .limit(10)
+        .get();
+
+      const active = snapshot.docs
+        .map((doc) => ({membershipId: doc.id, ...doc.data()}))
+        .filter((item) => item.status === "active");
+
+      const owner = active.find((item) => item.role === "owner");
+      if (owner) {
+        return Object.freeze({
+          authorized: true,
+          authoritySource: "tenant_owner",
+          membershipId: owner.membershipId,
+          operationCode: normalizedOperation,
+        });
+      }
+
+      const delegated = active.find((item) => {
+        const allowedOperations = Array.isArray(
+          item.delegatedLegalMatterOperations,
+        ) ? item.delegatedLegalMatterOperations : [];
+        const allowedBrands = Array.isArray(
+          item.delegatedCanonicalBrandIds,
+        ) ? item.delegatedCanonicalBrandIds : [];
+        return (
+          allowedOperations.includes(normalizedOperation) &&
+          (
+            allowedBrands.includes("*") ||
+            allowedBrands.includes(normalizedBrandId)
+          )
+        );
+      });
+
+      return delegated ?
+        Object.freeze({
+          authorized: true,
+          authoritySource: "explicit_delegation",
+          membershipId: delegated.membershipId,
+          operationCode: normalizedOperation,
+        }) :
+        Object.freeze({
+          authorized: false,
+          authoritySource: "none",
+          membershipId: null,
+          operationCode: normalizedOperation,
+        });
     },
 
     async findLegalMatterByKey({tenantId, legalMatterKey}) {

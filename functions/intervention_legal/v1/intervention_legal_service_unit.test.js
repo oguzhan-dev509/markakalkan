@@ -43,6 +43,15 @@ function createFakeStore(overrides = {}) {
         }
         : null;
     },
+    async resolveLegalMatterAuthority({uid, operationCode}) {
+      return {
+        authorized: uid === "owner-1",
+        authoritySource: uid === "owner-1" ?
+          "tenant_owner" :
+          "none",
+        operationCode,
+      };
+    },
     async findLegalMatterByKey({legalMatterKey}) {
       return mattersByKey.get(legalMatterKey) || null;
     },
@@ -158,8 +167,12 @@ function createCommand(overrides = {}) {
 }
 
 test("storage port lists all required methods", () => {
-  assert.equal(REQUIRED_STORAGE_METHODS.length, 10);
+  assert.equal(REQUIRED_STORAGE_METHODS.length, 11);
   assert.equal(REQUIRED_STORAGE_METHODS.includes("resolveCaseScope"), true);
+  assert.equal(
+    REQUIRED_STORAGE_METHODS.includes("resolveLegalMatterAuthority"),
+    true,
+  );
   assert.equal(
     REQUIRED_STORAGE_METHODS.includes("recordApprovalDecisionAtomic"),
     true,
@@ -195,6 +208,20 @@ test("create service writes an intake-pending legal matter", async () => {
   const bundle = store.__atomicBundles[0];
   assert.equal(bundle.event.actorUid, "owner-1");
   assert.equal(bundle.receipt.actorUid, "owner-1");
+});
+
+test("create service rejects an unauthorized actor before writing", async () => {
+  const store = createFakeStore();
+  const createMatter = buildCreateLegalMatterService({
+    store,
+    clock: () => NOW,
+  });
+
+  await assert.rejects(
+    () => createMatter(createCommand({actorUid: "intruder-1"})),
+    (error) => error.code === "permission-denied",
+  );
+  assert.equal(store.__atomicBundles.length, 0);
 });
 
 test("create service rejects a missing canonical case", async () => {
@@ -348,6 +375,35 @@ test("transition service updates status and increments version", async () => {
   assert.equal(result.matter.status, "legal_review");
   assert.equal(result.matter.version, 2);
   assert.equal(result.matter.statusReasonCode, "intake_accepted");
+});
+
+test("transition service rejects an unauthorized actor before writing", async () => {
+  const store = createFakeStore();
+  const createMatter = buildCreateLegalMatterService({
+    store,
+    clock: () => NOW,
+  });
+  const transitionMatter = buildTransitionLegalMatterService({
+    store,
+    clock: () => NOW,
+  });
+  const created = await createMatter(createCommand());
+  const bundleCount = store.__atomicBundles.length;
+
+  await assert.rejects(
+    () => transitionMatter({
+      contractVersion: CONTRACT_VERSION,
+      requestId: "req-transition-denied",
+      idempotencyKey: "idem-transition-denied",
+      actorUid: "intruder-1",
+      expectedVersion: 1,
+      legalMatterId: created.resultId,
+      nextStatus: "legal_review",
+      reasonCode: "intake_accepted",
+    }),
+    (error) => error.code === "permission-denied",
+  );
+  assert.equal(store.__atomicBundles.length, bundleCount);
 });
 
 test("transition service rejects optimistic concurrency conflict", async () => {

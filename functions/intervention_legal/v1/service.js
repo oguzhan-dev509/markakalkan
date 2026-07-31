@@ -2,6 +2,7 @@
 
 const {
   APPROVAL_TYPES,
+  LEGAL_MATTER_OPERATION_CODES,
   InterventionLegalContractError,
   assertLegalProfessionalCanApprove,
   requiredString,
@@ -54,6 +55,34 @@ function createServiceDependencies({store, clock}) {
     store: assertStoragePort(store),
     clock: assertClock(clock),
   });
+}
+
+async function assertLegalMatterCommandAuthority({
+  store,
+  command,
+  tenantId,
+  canonicalBrandId,
+  operationCode,
+}) {
+  if (!LEGAL_MATTER_OPERATION_CODES.includes(operationCode)) {
+    throw new InterventionLegalContractError(
+      "invalid-argument",
+      "legal matter operation code is unsupported",
+    );
+  }
+  const authority = await store.resolveLegalMatterAuthority({
+    uid: command.actorUid,
+    tenantId,
+    canonicalBrandId,
+    operationCode,
+  });
+  if (!authority || authority.authorized !== true) {
+    throw new InterventionLegalContractError(
+      "permission-denied",
+      "legal matter command authority is not sufficient",
+    );
+  }
+  return authority;
 }
 
 function assertScopeMatches(command, caseScope) {
@@ -169,6 +198,13 @@ function buildCreateLegalMatterService(dependencies) {
       caseId: command.caseId,
     });
     assertScopeMatches(command, caseScope);
+    await assertLegalMatterCommandAuthority({
+      store,
+      command,
+      tenantId: command.tenantId,
+      canonicalBrandId: command.canonicalBrandId,
+      operationCode: "create_legal_matter",
+    });
 
     const existing = await store.findLegalMatterByKey({
       tenantId: command.tenantId,
@@ -276,6 +312,13 @@ function buildTransitionLegalMatterService(dependencies) {
         "legal matter was not found",
       );
     }
+    await assertLegalMatterCommandAuthority({
+      store,
+      command,
+      tenantId: current.tenantId,
+      canonicalBrandId: current.canonicalBrandId,
+      operationCode: "transition_legal_matter",
+    });
     if (current.version !== command.expectedVersion) {
       throw new InterventionLegalContractError(
         "aborted",
@@ -503,6 +546,7 @@ module.exports = Object.freeze({
   LAWYER_APPROVAL_TYPES,
   commandActorUid,
   createServiceDependencies,
+  assertLegalMatterCommandAuthority,
   assertScopeMatches,
   resolveIdempotentReceipt,
   buildCreateLegalMatterService,

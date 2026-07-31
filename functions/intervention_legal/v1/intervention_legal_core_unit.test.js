@@ -42,6 +42,20 @@ test("contract collections and status catalogs are frozen", () => {
   assert.equal(Object.isFrozen(contracts.ACTION_STATUSES), true);
 });
 
+test("legal matter command operations are locked and language independent", () => {
+  assert.deepEqual(
+    contracts.LEGAL_MATTER_OPERATION_CODES,
+    [
+      "create_legal_matter",
+      "transition_legal_matter",
+    ],
+  );
+  assert.equal(
+    Object.isFrozen(contracts.LEGAL_MATTER_OPERATION_CODES),
+    true,
+  );
+});
+
 test("create legal matter command requires a canonical case reference", () => {
   const raw = {...baseCreate};
   delete raw.caseId;

@@ -616,6 +616,89 @@ test("getLegalTeamProfileByUid uses uid as profile document id", async () => {
   );
 });
 
+test("tenant owner can create and transition legal matters", async () => {
+  const db = new FakeFirestore();
+  db.seed(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS, "tm_owner", {
+    tenantId: "tenant-1",
+    uid: "owner-1",
+    role: "owner",
+    status: "active",
+  });
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+
+  for (const operationCode of [
+    "create_legal_matter",
+    "transition_legal_matter",
+  ]) {
+    const result = await adapter.resolveLegalMatterAuthority({
+      uid: "owner-1",
+      tenantId: "tenant-1",
+      canonicalBrandId: "brand-1",
+      operationCode,
+    });
+    assert.equal(result.authorized, true);
+    assert.equal(result.authoritySource, "tenant_owner");
+    assert.equal(result.operationCode, operationCode);
+  }
+});
+
+test("brand-scoped operation delegation grants matter authority", async () => {
+  const db = new FakeFirestore();
+  db.seed(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS, "tm_delegate", {
+    tenantId: "tenant-1",
+    uid: "delegate-1",
+    role: "member",
+    status: "active",
+    delegatedLegalMatterOperations: [
+      "transition_legal_matter",
+    ],
+    delegatedCanonicalBrandIds: ["brand-1"],
+  });
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+  const result = await adapter.resolveLegalMatterAuthority({
+    uid: "delegate-1",
+    tenantId: "tenant-1",
+    canonicalBrandId: "brand-1",
+    operationCode: "transition_legal_matter",
+  });
+  assert.equal(result.authorized, true);
+  assert.equal(result.authoritySource, "explicit_delegation");
+});
+
+test("wrong operation or brand denies delegated matter authority", async () => {
+  const db = new FakeFirestore();
+  db.seed(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS, "tm_delegate", {
+    tenantId: "tenant-1",
+    uid: "delegate-1",
+    role: "member",
+    status: "active",
+    delegatedLegalMatterOperations: [
+      "transition_legal_matter",
+    ],
+    delegatedCanonicalBrandIds: ["brand-1"],
+  });
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+
+  assert.equal(
+    (await adapter.resolveLegalMatterAuthority({
+      uid: "delegate-1",
+      tenantId: "tenant-1",
+      canonicalBrandId: "brand-1",
+      operationCode: "create_legal_matter",
+    })).authorized,
+    false,
+  );
+  assert.equal(
+    (await adapter.resolveLegalMatterAuthority({
+      uid: "delegate-1",
+      tenantId: "tenant-1",
+      canonicalBrandId: "brand-2",
+      operationCode: "transition_legal_matter",
+    })).authorized,
+    false,
+  );
+});
+
 test("tenant owner has client authority", async () => {
   const db = new FakeFirestore();
   db.seed(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS, "tm_1", {

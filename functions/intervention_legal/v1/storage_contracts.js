@@ -8,6 +8,7 @@ const {
 const REQUIRED_STORAGE_METHODS = Object.freeze([
   "getCommandReceipt",
   "resolveCaseScope",
+  "resolveLegalMatterAuthority",
   "findLegalMatterByKey",
   "getLegalMatterById",
   "createLegalMatterAtomic",

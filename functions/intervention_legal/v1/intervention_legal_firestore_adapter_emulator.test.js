@@ -97,6 +97,8 @@ async function seedCase({
   tenantId = "tenant-1",
   canonicalBrandId = "brand-1",
   status = "open",
+  seedAuthority = true,
+  authorityUid = "owner-1",
 } = {}) {
   await db
       .collection(FIRESTORE_COLLECTIONS.CASE_FILES)
@@ -107,6 +109,17 @@ async function seedCase({
         canonicalBrandId,
         status,
       });
+  if (seedAuthority) {
+    await db
+        .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
+        .doc(`matter-authority-${tenantId}-${authorityUid}`)
+        .set({
+          tenantId,
+          uid: authorityUid,
+          role: "owner",
+          status: "active",
+        });
+  }
 }
 
 function createCommand(overrides = {}) {
@@ -305,6 +318,25 @@ test("same idempotency key is isolated across tenants", async () => {
   });
 });
 
+test("unauthorized create leaves no MHL writes", async () => {
+  await seedCase({seedAuthority: false});
+
+  await assert.rejects(
+      () => buildServices().createMatter(createCommand({
+        actorUid: "intruder-1",
+      })),
+      (error) => error.code === "permission-denied",
+  );
+  assert.equal(
+      await countCollection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES),
+      0,
+  );
+  assert.deepEqual(await eventCounts(), {
+    domainEvents: 0,
+    receipts: 0,
+  });
+});
+
 test("case scope mismatch leaves no MHL writes", async () => {
   await seedCase({
     tenantId: "tenant-other",
@@ -342,6 +374,37 @@ test("transition persists matter event and receipt atomically", async () => {
   assert.deepEqual(await eventCounts(), {
     domainEvents: 2,
     receipts: 2,
+  });
+});
+
+test("unauthorized transition leaves matter and audit chain unchanged", async () => {
+  const created = await createMatter();
+
+  await assert.rejects(
+      () => buildServices().transitionMatter({
+        contractVersion: CONTRACT_VERSION,
+        requestId: "req-transition-denied",
+        idempotencyKey: "idem-transition-denied",
+        actorUid: "intruder-1",
+        expectedVersion: 1,
+        legalMatterId: created.resultId,
+        nextStatus: "legal_review",
+        reasonCode: "intake_accepted",
+      }),
+      (error) => error.code === "permission-denied",
+  );
+
+  const stored = (
+    await db
+        .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES)
+        .doc(created.resultId)
+        .get()
+  ).data();
+  assert.equal(stored.version, 1);
+  assert.equal(stored.status, "intake_pending");
+  assert.deepEqual(await eventCounts(), {
+    domainEvents: 1,
+    receipts: 1,
   });
 });
 
