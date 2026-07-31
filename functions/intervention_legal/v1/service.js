@@ -147,8 +147,8 @@ function buildCreateLegalMatterService(dependencies) {
     const payloadFingerprint = canonicalPayloadFingerprint(command);
 
     const receipt = await store.getCommandReceipt({
-      scopeType: "legal_matter",
-      scopeId: legalMatterId,
+      scopeType: "create_legal_matter",
+      scopeId: command.tenantId,
       idempotencyKey: command.idempotencyKey,
     });
     const replay = resolveIdempotentReceipt(receipt, payloadFingerprint);
@@ -230,7 +230,8 @@ function buildCreateLegalMatterService(dependencies) {
     });
 
     return Object.freeze({
-      idempotentReplay: false,
+      idempotentReplay:
+        Boolean(result && result.idempotentReplay === true),
       resultType: "legal_matter",
       resultId: legalMatterId,
       matter: result && result.matter ? result.matter : matter,
@@ -313,7 +314,8 @@ function buildTransitionLegalMatterService(dependencies) {
     });
 
     return Object.freeze({
-      idempotentReplay: false,
+      idempotentReplay:
+        Boolean(result && result.idempotentReplay === true),
       resultType: "legal_matter",
       resultId: current.legalMatterId,
       matter: result && result.matter ? result.matter : nextMatter,
@@ -451,7 +453,8 @@ function buildRecordApprovalDecisionService(dependencies) {
     });
 
     return Object.freeze({
-      idempotentReplay: false,
+      idempotentReplay:
+        Boolean(result && result.idempotentReplay === true),
       resultType: "legal_approval_decision",
       resultId: decisionId,
       decision: result && result.decision ? result.decision : decision,

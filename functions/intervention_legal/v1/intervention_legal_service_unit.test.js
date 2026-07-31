@@ -25,10 +25,12 @@ function createFakeStore(overrides = {}) {
   const mattersByKey = new Map();
   const approvals = new Map();
   const profiles = new Map();
+  const receiptKey = ({scopeType, scopeId, idempotencyKey}) =>
+    `${scopeType}|${scopeId}|${idempotencyKey}`;
 
   const store = {
-    async getCommandReceipt({idempotencyKey}) {
-      return receipts.get(idempotencyKey) || null;
+    async getCommandReceipt(input) {
+      return receipts.get(receiptKey(input)) || null;
     },
     async resolveCaseScope({caseId}) {
       return caseId === "case-1"
@@ -52,14 +54,22 @@ function createFakeStore(overrides = {}) {
       }
       matters.set(matter.legalMatterId, matter);
       mattersByKey.set(matter.legalMatterKey, matter);
-      receipts.set(receipt.idempotencyKey, receipt);
-      return {matter};
+      receipts.set(receiptKey({
+        scopeType: "create_legal_matter",
+        scopeId: matter.tenantId,
+        idempotencyKey: receipt.idempotencyKey,
+      }), receipt);
+      return {matter, idempotentReplay: false};
     },
     async transitionLegalMatterAtomic({nextMatter, receipt}) {
       matters.set(nextMatter.legalMatterId, nextMatter);
       mattersByKey.set(nextMatter.legalMatterKey, nextMatter);
-      receipts.set(receipt.idempotencyKey, receipt);
-      return {matter: nextMatter};
+      receipts.set(receiptKey({
+        scopeType: "legal_matter",
+        scopeId: nextMatter.legalMatterId,
+        idempotencyKey: receipt.idempotencyKey,
+      }), receipt);
+      return {matter: nextMatter, idempotentReplay: false};
     },
     async getApprovalRequestById({approvalRequestId}) {
       return approvals.get(approvalRequestId) || null;
@@ -75,8 +85,12 @@ function createFakeStore(overrides = {}) {
         approvalRequest.approvalRequestId,
         {...approvalRequest, status: decision.decision},
       );
-      receipts.set(receipt.idempotencyKey, receipt);
-      return {decision};
+      receipts.set(receiptKey({
+        scopeType: "legal_approval_decision",
+        scopeId: approvalRequest.approvalRequestId,
+        idempotencyKey: receipt.idempotencyKey,
+      }), receipt);
+      return {decision, idempotentReplay: false};
     },
     __seedMatter(matter) {
       matters.set(matter.legalMatterId, matter);
@@ -88,8 +102,8 @@ function createFakeStore(overrides = {}) {
     __seedProfile(uid, profile) {
       profiles.set(uid, profile);
     },
-    __seedReceipt(key, receipt) {
-      receipts.set(key, receipt);
+    __seedReceipt(scope, receipt) {
+      receipts.set(receiptKey(scope), receipt);
     },
   };
 
@@ -646,4 +660,109 @@ test("invalid clock is rejected at service construction", () => {
     }),
     /ISO-8601/,
   );
+});
+
+
+test("create service scopes idempotency to tenant and command type", async () => {
+  const calls = [];
+  const store = createFakeStore({
+    async getCommandReceipt(input) {
+      calls.push(input);
+      return null;
+    },
+  });
+  const createMatter = buildCreateLegalMatterService({
+    store,
+    clock: () => NOW,
+  });
+
+  await createMatter(createCommand());
+
+  assert.deepEqual(calls[0], {
+    scopeType: "create_legal_matter",
+    scopeId: "tenant-1",
+    idempotencyKey: "idem-create-1",
+  });
+});
+
+test("create service propagates transaction-level replay", async () => {
+  const store = createFakeStore({
+    async createLegalMatterAtomic({matter}) {
+      return {matter, idempotentReplay: true};
+    },
+  });
+  const createMatter = buildCreateLegalMatterService({
+    store,
+    clock: () => NOW,
+  });
+
+  const result = await createMatter(createCommand());
+  assert.equal(result.idempotentReplay, true);
+});
+
+test("transition service propagates transaction-level replay", async () => {
+  const store = createFakeStore();
+  const createMatter = buildCreateLegalMatterService({
+    store,
+    clock: () => NOW,
+  });
+  const created = await createMatter(createCommand());
+
+  store.transitionLegalMatterAtomic = async ({nextMatter}) => ({
+    matter: nextMatter,
+    idempotentReplay: true,
+  });
+  const transitionMatter = buildTransitionLegalMatterService({
+    store,
+    clock: () => NOW,
+  });
+  const result = await transitionMatter({
+    contractVersion: CONTRACT_VERSION,
+    requestId: "req-transition-race",
+    idempotencyKey: "idem-transition-race",
+    expectedVersion: 1,
+    legalMatterId: created.resultId,
+    nextStatus: "legal_review",
+    reasonCode: "intake_accepted",
+  });
+
+  assert.equal(result.idempotentReplay, true);
+});
+
+test("approval service propagates transaction-level replay", async () => {
+  const store = createFakeStore();
+  store.__seedMatter({
+    legalMatterId: "lm_1",
+    tenantId: "tenant-1",
+    canonicalBrandId: "brand-1",
+    jurisdictionCode: "tr.istanbul",
+  });
+  store.__seedApproval({
+    approvalRequestId: "lar_1",
+    legalMatterId: "lm_1",
+    approvalType: "client_budget_authorization",
+    status: "pending",
+  });
+  store.recordApprovalDecisionAtomic = async ({decision}) => ({
+    decision,
+    idempotentReplay: true,
+  });
+  const decide = buildRecordApprovalDecisionService({
+    store,
+    clock: () => NOW,
+  });
+
+  const result = await decide({
+    contractVersion: CONTRACT_VERSION,
+    requestId: "req-approval-race",
+    idempotencyKey: "idem-approval-race",
+    approvalRequestId: "lar_1",
+    legalMatterId: "lm_1",
+    approvalType: "client_budget_authorization",
+    decision: "approved",
+    decisionReasonCode: "budget_confirmed",
+    decidedByUid: "client-1",
+  });
+
+  assert.equal(result.idempotentReplay, true);
 });

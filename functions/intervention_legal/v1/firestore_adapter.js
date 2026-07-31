@@ -261,8 +261,8 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
       const matterRef = legalMatterRef(db, matter.legalMatterId);
       const eventRef = legalMatterEventRef(db, event.eventId);
       const receiptRef = commandReceiptRef(db, {
-        scopeType: "legal_matter",
-        scopeId: matter.legalMatterId,
+        scopeType: "create_legal_matter",
+        scopeId: matter.tenantId,
         idempotencyKey: receipt.idempotencyKey,
       });
 
@@ -302,8 +302,8 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
         transaction.create(
           receiptRef,
           commandReceiptDocument({
-            scopeType: "legal_matter",
-            scopeId: matter.legalMatterId,
+            scopeType: "create_legal_matter",
+            scopeId: matter.tenantId,
             receipt,
             ...scope,
             legalMatterId: matter.legalMatterId,

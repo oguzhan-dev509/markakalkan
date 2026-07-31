@@ -423,8 +423,8 @@ test("createLegalMatterAtomic creates matter event and receipt", async () => {
   assert.equal(storedEvent.recordType, "domain_event");
   assert.equal(storedEvent.tenantId, matter.tenantId);
   const receiptId = buildCommandReceiptId({
-    scopeType: "legal_matter",
-    scopeId: matter.legalMatterId,
+    scopeType: "create_legal_matter",
+    scopeId: matter.tenantId,
     idempotencyKey: receipt.idempotencyKey,
   });
   const storedReceipt = db.read(
@@ -447,8 +447,8 @@ test("getCommandReceipt reads the immutable receipt record", async () => {
   await adapter.createLegalMatterAtomic({matter, event, receipt});
 
   const stored = await adapter.getCommandReceipt({
-    scopeType: "legal_matter",
-    scopeId: matter.legalMatterId,
+    scopeType: "create_legal_matter",
+    scopeId: matter.tenantId,
     idempotencyKey: receipt.idempotencyKey,
   });
   assert.equal(stored.payloadFingerprint, receipt.payloadFingerprint);
@@ -880,5 +880,55 @@ test("recordApprovalDecisionAtomic rejects non-pending persisted request", async
     (error) =>
       error instanceof InterventionLegalContractError &&
       error.code === "failed-precondition",
+  );
+});
+
+
+test("create receipt conflicts across changed matter payload in one tenant", async () => {
+  const db = new FakeFirestore();
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+  const first = matterDocument();
+  const firstEvent = eventDocument();
+  const receipt = receiptDocument();
+
+  await adapter.createLegalMatterAtomic({
+    matter: first,
+    event: firstEvent,
+    receipt,
+  });
+
+  const secondIdentity = {
+    ...matterIdentity(),
+    matterScopeCode: "domain_enforcement",
+  };
+  const second = {
+    ...first,
+    legalMatterKey: buildLegalMatterKey(secondIdentity),
+    legalMatterId: buildLegalMatterId(secondIdentity),
+    matterScopeCode: "domain_enforcement",
+  };
+  const secondEvent = eventDocument({
+    legalMatterId: second.legalMatterId,
+    requestId: receipt.requestId,
+  });
+
+  await assert.rejects(
+    () => adapter.createLegalMatterAtomic({
+      matter: second,
+      event: secondEvent,
+      receipt: {
+        ...receipt,
+        payloadFingerprint: "b".repeat(64),
+        resultId: second.legalMatterId,
+      },
+    }),
+    (error) => error.code === "already-exists",
+  );
+  assert.equal(
+    db.read(
+      FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES,
+      second.legalMatterId,
+    ),
+    undefined,
   );
 });
