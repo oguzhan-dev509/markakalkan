@@ -124,6 +124,7 @@ function commandReceiptDocument({
     payloadFingerprint: receipt.payloadFingerprint,
     resultType: receipt.resultType,
     resultId: receipt.resultId,
+    actorUid: receipt.actorUid,
     recordedAt: receipt.recordedAt,
     immutable: true,
   });

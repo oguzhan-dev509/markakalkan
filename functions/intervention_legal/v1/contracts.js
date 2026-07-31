@@ -332,6 +332,7 @@ function parseCreateLegalMatterCommand(raw) {
   const base = baseCommand(
     raw,
     [
+      "actorUid",
       "tenantId",
       "canonicalBrandId",
       "caseId",
@@ -344,6 +345,7 @@ function parseCreateLegalMatterCommand(raw) {
       "sourceRecordId",
     ],
     [
+      "actorUid",
       "tenantId",
       "canonicalBrandId",
       "caseId",
@@ -354,6 +356,7 @@ function parseCreateLegalMatterCommand(raw) {
   );
   return Object.freeze({
     ...base,
+    actorUid: requiredString(raw.actorUid, "actorUid", 128),
     tenantId: requiredString(raw.tenantId, "tenantId", 128),
     canonicalBrandId: requiredString(
       raw.canonicalBrandId,
@@ -380,12 +383,13 @@ function parseCreateLegalMatterCommand(raw) {
 function parseTransitionLegalMatterCommand(raw) {
   const base = baseCommand(
     raw,
-    ["legalMatterId", "nextStatus", "reasonCode", "note"],
-    ["legalMatterId", "nextStatus", "reasonCode"],
+    ["actorUid", "legalMatterId", "nextStatus", "reasonCode", "note"],
+    ["actorUid", "legalMatterId", "nextStatus", "reasonCode"],
     {expectedVersion: true},
   );
   return Object.freeze({
     ...base,
+    actorUid: requiredString(raw.actorUid, "actorUid", 128),
     legalMatterId: requiredString(raw.legalMatterId, "legalMatterId", 128),
     nextStatus: enumValue(
       raw.nextStatus,

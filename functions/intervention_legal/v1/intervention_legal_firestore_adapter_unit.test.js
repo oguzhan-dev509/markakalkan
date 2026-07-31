@@ -242,6 +242,7 @@ function eventDocument({
     eventType,
     requestId: resolvedRequestId,
     idempotencyKey: "idem-1",
+    actorUid: "owner-1",
     eventData: {status: "intake_pending"},
     recordedAt: "2026-07-31T09:00:00.000Z",
   };
@@ -255,6 +256,7 @@ function receiptDocument(overrides = {}) {
     payloadFingerprint: "a".repeat(64),
     resultType: "legal_matter",
     resultId: matterDocument().legalMatterId,
+    actorUid: "owner-1",
     recordedAt: "2026-07-31T09:00:00.000Z",
     ...overrides,
   };
@@ -422,6 +424,7 @@ test("createLegalMatterAtomic creates matter event and receipt", async () => {
   );
   assert.equal(storedEvent.recordType, "domain_event");
   assert.equal(storedEvent.tenantId, matter.tenantId);
+  assert.equal(storedEvent.actorUid, "owner-1");
   const receiptId = buildCommandReceiptId({
     scopeType: "create_legal_matter",
     scopeId: matter.tenantId,
@@ -436,6 +439,7 @@ test("createLegalMatterAtomic creates matter event and receipt", async () => {
     COMMAND_RECEIPT_RECORD_TYPE,
   );
   assert.equal(storedReceipt.projectionEligible, false);
+  assert.equal(storedReceipt.actorUid, "owner-1");
 });
 
 test("getCommandReceipt reads the immutable receipt record", async () => {

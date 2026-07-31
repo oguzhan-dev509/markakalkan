@@ -25,6 +25,7 @@ function createFakeStore(overrides = {}) {
   const mattersByKey = new Map();
   const approvals = new Map();
   const profiles = new Map();
+  const atomicBundles = [];
   const receiptKey = ({scopeType, scopeId, idempotencyKey}) =>
     `${scopeType}|${scopeId}|${idempotencyKey}`;
 
@@ -48,7 +49,8 @@ function createFakeStore(overrides = {}) {
     async getLegalMatterById({legalMatterId}) {
       return matters.get(legalMatterId) || null;
     },
-    async createLegalMatterAtomic({matter, receipt}) {
+    async createLegalMatterAtomic({matter, event, receipt}) {
+      atomicBundles.push({operation: "create", matter, event, receipt});
       if (matters.has(matter.legalMatterId)) {
         throw new Error("duplicate matter");
       }
@@ -61,7 +63,13 @@ function createFakeStore(overrides = {}) {
       }), receipt);
       return {matter, idempotentReplay: false};
     },
-    async transitionLegalMatterAtomic({nextMatter, receipt}) {
+    async transitionLegalMatterAtomic({nextMatter, event, receipt}) {
+      atomicBundles.push({
+        operation: "transition",
+        matter: nextMatter,
+        event,
+        receipt,
+      });
       matters.set(nextMatter.legalMatterId, nextMatter);
       mattersByKey.set(nextMatter.legalMatterKey, nextMatter);
       receipts.set(receiptKey({
@@ -84,8 +92,15 @@ function createFakeStore(overrides = {}) {
       approvalRequest,
       expectedApprovalRequestVersion,
       decision,
+      event,
       receipt,
     }) {
+      atomicBundles.push({
+        operation: "approval",
+        decision,
+        event,
+        receipt,
+      });
       if (approvalRequest.version !== expectedApprovalRequestVersion) {
         throw new InterventionLegalContractError(
           "aborted",
@@ -120,6 +135,7 @@ function createFakeStore(overrides = {}) {
     __seedReceipt(scope, receipt) {
       receipts.set(receiptKey(scope), receipt);
     },
+    __atomicBundles: atomicBundles,
   };
 
   return Object.assign(store, overrides);
@@ -130,6 +146,7 @@ function createCommand(overrides = {}) {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-create-1",
     idempotencyKey: "idem-create-1",
+    actorUid: "owner-1",
     tenantId: "tenant-1",
     canonicalBrandId: "brand-1",
     caseId: "case-1",
@@ -173,6 +190,11 @@ test("create service writes an intake-pending legal matter", async () => {
   assert.equal(result.matter.caseId, "case-1");
   assert.equal(result.matter.version, 1);
   assert.equal(result.matter.createdAt, NOW);
+  assert.equal(result.matter.createdByUid, "owner-1");
+  assert.equal(result.matter.updatedByUid, "owner-1");
+  const bundle = store.__atomicBundles[0];
+  assert.equal(bundle.event.actorUid, "owner-1");
+  assert.equal(bundle.receipt.actorUid, "owner-1");
 });
 
 test("create service rejects a missing canonical case", async () => {
@@ -316,6 +338,7 @@ test("transition service updates status and increments version", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-transition-1",
     idempotencyKey: "idem-transition-1",
+    actorUid: "owner-1",
     expectedVersion: 1,
     legalMatterId: created.resultId,
     nextStatus: "legal_review",
@@ -344,6 +367,7 @@ test("transition service rejects optimistic concurrency conflict", async () => {
       contractVersion: CONTRACT_VERSION,
       requestId: "req-transition",
       idempotencyKey: "idem-transition",
+      actorUid: "owner-1",
       expectedVersion: 0,
       legalMatterId: created.resultId,
       nextStatus: "legal_review",
@@ -372,6 +396,7 @@ test("transition service rejects forbidden lifecycle jump", async () => {
       contractVersion: CONTRACT_VERSION,
       requestId: "req-transition",
       idempotencyKey: "idem-transition",
+      actorUid: "owner-1",
       expectedVersion: 1,
       legalMatterId: created.resultId,
       nextStatus: "submitted",
@@ -396,6 +421,7 @@ test("transition service is idempotent", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-transition",
     idempotencyKey: "idem-transition",
+    actorUid: "owner-1",
     expectedVersion: 1,
     legalMatterId: created.resultId,
     nextStatus: "legal_review",
@@ -788,6 +814,7 @@ test("transition service propagates transaction-level replay", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-transition-race",
     idempotencyKey: "idem-transition-race",
+    actorUid: "owner-1",
     expectedVersion: 1,
     legalMatterId: created.resultId,
     nextStatus: "legal_review",

@@ -12,6 +12,7 @@ const baseCreate = Object.freeze({
   contractVersion: contracts.CONTRACT_VERSION,
   requestId: "req-001",
   idempotencyKey: "idem-001",
+  actorUid: "owner-1",
   tenantId: "tenant-1",
   canonicalBrandId: "brand-1",
   caseId: "case-1",
@@ -50,6 +51,15 @@ test("create legal matter command requires a canonical case reference", () => {
   );
 });
 
+test("create legal matter command requires authenticated actor", () => {
+  const raw = {...baseCreate};
+  delete raw.actorUid;
+  assert.throws(
+    () => contracts.parseCreateLegalMatterCommand(raw),
+    /required request fields missing/,
+  );
+});
+
 test("create legal matter command rejects unsupported fields", () => {
   assert.throws(
     () => contracts.parseCreateLegalMatterCommand({
@@ -70,6 +80,7 @@ test("create legal matter command normalizes language-independent codes", () => 
   assert.equal(parsed.jurisdictionCode, "tr.istanbul");
   assert.equal(parsed.matterScopeCode, "counterfeit_enforcement");
   assert.equal(parsed.countryCode, "TR");
+  assert.equal(parsed.actorUid, "owner-1");
   assert.equal(Object.isFrozen(parsed), true);
 });
 
@@ -89,6 +100,7 @@ test("transition command requires optimistic concurrency version", () => {
       contractVersion: contracts.CONTRACT_VERSION,
       requestId: "req-transition",
       idempotencyKey: "idem-transition",
+      actorUid: "owner-1",
       legalMatterId: "lm_123",
       nextStatus: "legal_review",
       reasonCode: "intake_accepted",
@@ -102,6 +114,7 @@ test("transition command accepts a valid next status shape", () => {
     contractVersion: contracts.CONTRACT_VERSION,
     requestId: "req-transition",
     idempotencyKey: "idem-transition",
+    actorUid: "owner-1",
     expectedVersion: 0,
     legalMatterId: "lm_123",
     nextStatus: "legal_review",

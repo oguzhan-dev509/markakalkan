@@ -73,11 +73,15 @@ async function countCollection(name) {
   return (await db.collection(name).get()).size;
 }
 
-async function eventCounts() {
+async function eventRecords() {
   const snapshot = await db
       .collection(FIRESTORE_COLLECTIONS.LEGAL_MATTER_EVENTS)
       .get();
-  const records = snapshot.docs.map((doc) => doc.data());
+  return snapshot.docs.map((doc) => doc.data());
+}
+
+async function eventCounts() {
+  const records = await eventRecords();
   return {
     domainEvents: records.filter(
         (record) => record.recordType === "domain_event",
@@ -110,6 +114,7 @@ function createCommand(overrides = {}) {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-create-1",
     idempotencyKey: "idem-create-1",
+    actorUid: "owner-1",
     tenantId: "tenant-1",
     canonicalBrandId: "brand-1",
     caseId: "case-1",
@@ -202,6 +207,12 @@ test("create service writes one atomic matter event receipt bundle", async () =>
     domainEvents: 1,
     receipts: 1,
   });
+  const records = await eventRecords();
+  assert.equal(
+    records.every((record) => record.actorUid === "owner-1"),
+    true,
+  );
+  assert.equal(result.matter.createdByUid, "owner-1");
 });
 
 test("parallel exact create collapses to one atomic winner", async () => {
@@ -319,6 +330,7 @@ test("transition persists matter event and receipt atomically", async () => {
     contractVersion: CONTRACT_VERSION,
     requestId: "req-transition-1",
     idempotencyKey: "idem-transition-1",
+    actorUid: "owner-1",
     expectedVersion: 1,
     legalMatterId: created.resultId,
     nextStatus: "legal_review",
@@ -338,6 +350,7 @@ test("parallel competing transitions commit only one winner", async () => {
   const transition = buildServices().transitionMatter;
   const common = {
     contractVersion: CONTRACT_VERSION,
+    actorUid: "owner-1",
     expectedVersion: 1,
     legalMatterId: created.resultId,
   };

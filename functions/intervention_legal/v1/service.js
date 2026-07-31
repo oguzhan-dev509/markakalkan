@@ -4,6 +4,7 @@ const {
   APPROVAL_TYPES,
   InterventionLegalContractError,
   assertLegalProfessionalCanApprove,
+  requiredString,
   assertSegregationOfDuties,
   parseApprovalDecisionCommand,
   parseCreateLegalMatterCommand,
@@ -39,6 +40,14 @@ const LAWYER_APPROVAL_TYPES = Object.freeze([
   "lawyer_legal_approval",
   "senior_legal_review",
 ]);
+
+function commandActorUid(command) {
+  return requiredString(
+    command.actorUid || command.decidedByUid,
+    "actorUid",
+    128,
+  );
+}
 
 function createServiceDependencies({store, clock}) {
   return Object.freeze({
@@ -109,6 +118,7 @@ function createReceipt({
     payloadFingerprint,
     resultType,
     resultId,
+    actorUid: commandActorUid(command),
     recordedAt,
   });
 }
@@ -131,6 +141,7 @@ function buildEvent({
     eventType,
     requestId: command.requestId,
     idempotencyKey: command.idempotencyKey,
+    actorUid: commandActorUid(command),
     eventData: Object.freeze({...eventData}),
     recordedAt,
   });
@@ -200,8 +211,10 @@ function buildCreateLegalMatterService(dependencies) {
       version: 1,
       createdAt: now,
       createdByRequestId: command.requestId,
+      createdByUid: command.actorUid,
       updatedAt: now,
       updatedByRequestId: command.requestId,
+      updatedByUid: command.actorUid,
     });
 
     const event = buildEvent({
@@ -284,8 +297,10 @@ function buildTransitionLegalMatterService(dependencies) {
       statusReasonCode: command.reasonCode,
       statusNote: command.note,
       statusChangedAt: now,
+      statusChangedByUid: command.actorUid,
       updatedAt: now,
       updatedByRequestId: command.requestId,
+      updatedByUid: command.actorUid,
     });
 
     const event = buildEvent({
@@ -486,6 +501,7 @@ function buildRecordApprovalDecisionService(dependencies) {
 module.exports = Object.freeze({
   CLIENT_APPROVAL_TYPES,
   LAWYER_APPROVAL_TYPES,
+  commandActorUid,
   createServiceDependencies,
   assertScopeMatches,
   resolveIdempotentReceipt,
