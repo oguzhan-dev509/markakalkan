@@ -13,6 +13,7 @@ const {
   InterventionLegalContractError,
 } = require("./contracts");
 const {
+  buildCreateApprovalRequestService,
   buildCreateLegalMatterService,
   buildRecordApprovalDecisionService,
   buildTransitionLegalMatterService,
@@ -30,6 +31,7 @@ const CALLABLE_OPTIONS = Object.freeze({
 const CALLABLE_NAMES = Object.freeze({
   CREATE_LEGAL_MATTER: "createInterventionLegalMatter",
   TRANSITION_LEGAL_MATTER: "transitionInterventionLegalMatter",
+  CREATE_APPROVAL_REQUEST: "createInterventionLegalApprovalRequest",
   RECORD_APPROVAL_DECISION: "recordInterventionLegalApprovalDecision",
 });
 
@@ -101,6 +103,7 @@ function injectAuthenticatedActor(data, actorField, uid) {
 
   const clientActorFields = [
     "actorUid",
+    "preparedByUid",
     "decidedByUid",
   ].filter((field) =>
     Object.prototype.hasOwnProperty.call(data, field));
@@ -133,6 +136,10 @@ function createInterventionLegalServiceBundle({
       store,
       clock,
     }),
+    createApprovalRequest: buildCreateApprovalRequestService({
+      store,
+      clock,
+    }),
     recordApprovalDecision: buildRecordApprovalDecisionService({
       store,
       clock,
@@ -156,6 +163,10 @@ function createInterventionLegalCallableHandlers({
     transitionLegalMatter: Object.freeze({
       service: services.transitionLegalMatter,
       actorField: "actorUid",
+    }),
+    createApprovalRequest: Object.freeze({
+      service: services.createApprovalRequest,
+      actorField: "preparedByUid",
     }),
     recordApprovalDecision: Object.freeze({
       service: services.recordApprovalDecision,
@@ -205,6 +216,7 @@ function createInterventionLegalCallableHandlers({
   return Object.freeze({
     createLegalMatter: buildHandler("createLegalMatter"),
     transitionLegalMatter: buildHandler("transitionLegalMatter"),
+    createApprovalRequest: buildHandler("createApprovalRequest"),
     recordApprovalDecision:
       buildHandler("recordApprovalDecision"),
   });
@@ -246,6 +258,16 @@ function buildTransitionInterventionLegalMatterCallable(
   );
 }
 
+function buildCreateInterventionLegalApprovalRequestCallable(
+    dependencies = {},
+) {
+  const resolved = resolveBuildDependencies(dependencies);
+  return resolved.onCallImpl(
+      CALLABLE_OPTIONS,
+      resolved.handlers.createApprovalRequest,
+  );
+}
+
 function buildRecordInterventionLegalApprovalDecisionCallable(
     dependencies = {},
 ) {
@@ -268,5 +290,6 @@ module.exports = Object.freeze({
   createInterventionLegalCallableHandlers,
   buildCreateInterventionLegalMatterCallable,
   buildTransitionInterventionLegalMatterCallable,
+  buildCreateInterventionLegalApprovalRequestCallable,
   buildRecordInterventionLegalApprovalDecisionCallable,
 });

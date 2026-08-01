@@ -466,6 +466,115 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
       });
     },
 
+    async createApprovalRequestAtomic({
+      matter,
+      approvalRequest,
+      event,
+      receipt,
+    }) {
+      objectRequired(matter, "matter");
+      objectRequired(approvalRequest, "approvalRequest");
+      objectRequired(event, "event");
+      objectRequired(receipt, "receipt");
+
+      if (
+        !Number.isSafeInteger(approvalRequest.requestSequence) ||
+        approvalRequest.requestSequence < 1 ||
+        approvalRequest.requestSequence !==
+          approvalRequest.legalMatterVersionAtRequest
+      ) {
+        fail("internal", "approval request sequence is invalid");
+      }
+      if (
+        approvalRequest.status !== "pending" ||
+        approvalRequest.version !== 1
+      ) {
+        fail("internal", "approval request initial state is invalid");
+      }
+
+      const matterRef = legalMatterRef(db, matter.legalMatterId);
+      const requestRef = approvalRequestRef(
+          db,
+          approvalRequest.approvalRequestId,
+      );
+      const eventRef = legalMatterEventRef(db, event.eventId);
+      const receiptRef = commandReceiptRef(db, {
+        scopeType: "legal_approval_request",
+        scopeId: matter.legalMatterId,
+        idempotencyKey: receipt.idempotencyKey,
+      });
+
+      return db.runTransaction(async (transaction) => {
+        const matterSnapshot = await transaction.get(matterRef);
+        const requestSnapshot = await transaction.get(requestRef);
+        const eventSnapshot = await transaction.get(eventRef);
+        const receiptSnapshot = await transaction.get(receiptRef);
+
+        const persistedMatter = snapshotData(matterSnapshot);
+        const existingRequest = snapshotData(requestSnapshot);
+        const existingEvent = snapshotData(eventSnapshot);
+        const existingReceipt = snapshotData(receiptSnapshot);
+
+        if (existingReceipt) {
+          assertReceiptReplay(existingReceipt, receipt);
+          if (!existingRequest) {
+            fail("internal", "receipt exists without approval request");
+          }
+          assertApprovalRequestMatches(
+              existingRequest,
+              approvalRequest,
+          );
+          return {
+            approvalRequest: existingRequest,
+            idempotentReplay: true,
+          };
+        }
+        if (!persistedMatter) {
+          fail("not-found", "legal matter was not found");
+        }
+        assertMatterScope(persistedMatter, matter);
+        if (
+          persistedMatter.version !==
+            approvalRequest.legalMatterVersionAtRequest
+        ) {
+          fail("aborted", "legal matter version conflict", {
+            expectedLegalMatterVersion:
+              approvalRequest.legalMatterVersionAtRequest,
+            actualLegalMatterVersion: persistedMatter.version,
+          });
+        }
+        if (existingRequest || existingEvent) {
+          fail(
+              "already-exists",
+              "partial or duplicate approval request bundle exists",
+          );
+        }
+
+        const scope = {
+          tenantId: persistedMatter.tenantId,
+          canonicalBrandId: persistedMatter.canonicalBrandId,
+          caseId: persistedMatter.caseId,
+        };
+        transaction.create(requestRef, approvalRequest);
+        transaction.create(
+            eventRef,
+            domainEventDocument(event, scope),
+        );
+        transaction.create(
+            receiptRef,
+            commandReceiptDocument({
+              scopeType: "legal_approval_request",
+              scopeId: matter.legalMatterId,
+              receipt,
+              ...scope,
+              legalMatterId: matter.legalMatterId,
+            }),
+        );
+
+        return {approvalRequest, idempotentReplay: false};
+      });
+    },
+
     async getApprovalRequestById({approvalRequestId}) {
       return snapshotData(
           await approvalRequestRef(db, approvalRequestId).get(),

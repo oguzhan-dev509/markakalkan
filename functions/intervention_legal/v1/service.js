@@ -8,6 +8,7 @@ const {
   requiredString,
   assertSegregationOfDuties,
   parseApprovalDecisionCommand,
+  parseCreateApprovalRequestCommand,
   parseCreateLegalMatterCommand,
   parseTransitionLegalMatterCommand,
 } = require("./contracts");
@@ -17,6 +18,7 @@ const {
 } = require("./canonical");
 const {
   buildApprovalDecisionId,
+  buildApprovalRequestId,
   buildLegalMatterId,
   buildLegalMatterKey,
   buildMatterEventId,
@@ -42,9 +44,30 @@ const LAWYER_APPROVAL_TYPES = Object.freeze([
   "senior_legal_review",
 ]);
 
+const APPROVAL_REQUEST_MATTER_STATUSES = Object.freeze({
+  client_action_authorization: Object.freeze([
+    "legal_review",
+    "awaiting_authorization",
+  ]),
+  client_budget_authorization: Object.freeze([
+    "legal_review",
+    "awaiting_authorization",
+  ]),
+  client_litigation_authorization: Object.freeze([
+    "legal_review",
+    "awaiting_authorization",
+  ]),
+  client_settlement_authorization: Object.freeze([
+    "legal_review",
+    "awaiting_authorization",
+  ]),
+  lawyer_legal_approval: Object.freeze(["legal_review"]),
+  senior_legal_review: Object.freeze(["legal_review"]),
+});
+
 function commandActorUid(command) {
   return requiredString(
-      command.actorUid || command.decidedByUid,
+      command.actorUid || command.preparedByUid || command.decidedByUid,
       "actorUid",
       128,
   );
@@ -71,7 +94,7 @@ async function assertLegalMatterCommandAuthority({
     );
   }
   const authority = await store.resolveLegalMatterAuthority({
-    uid: command.actorUid,
+    uid: commandActorUid(command),
     tenantId,
     canonicalBrandId,
     operationCode,
@@ -83,6 +106,18 @@ async function assertLegalMatterCommandAuthority({
     );
   }
   return authority;
+}
+
+function assertApprovalRequestMatterStatus({approvalType, matterStatus}) {
+  const allowed = APPROVAL_REQUEST_MATTER_STATUSES[approvalType];
+  if (!allowed || !allowed.includes(matterStatus)) {
+    throw new InterventionLegalContractError(
+        "failed-precondition",
+        "legal matter status does not allow this approval request",
+        {approvalType, matterStatus, allowedStatuses: allowed || []},
+    );
+  }
+  return true;
 }
 
 function assertScopeMatches(command, caseScope) {
@@ -381,6 +416,129 @@ function buildTransitionLegalMatterService(dependencies) {
   };
 }
 
+function buildCreateApprovalRequestService(dependencies) {
+  const {store, clock} = createServiceDependencies(dependencies);
+
+  return async function createApprovalRequest(raw) {
+    const command = parseCreateApprovalRequestCommand(raw);
+    const payloadFingerprint = canonicalPayloadFingerprint(command);
+
+    const receipt = await store.getCommandReceipt({
+      scopeType: "legal_approval_request",
+      scopeId: command.legalMatterId,
+      idempotencyKey: command.idempotencyKey,
+    });
+    const replay = resolveIdempotentReceipt(receipt, payloadFingerprint);
+    if (replay) return replay;
+
+    const matter = await store.getLegalMatterById({
+      legalMatterId: command.legalMatterId,
+    });
+    if (!matter) {
+      throw new InterventionLegalContractError(
+          "not-found",
+          "legal matter was not found",
+      );
+    }
+    if (!Number.isSafeInteger(matter.version) || matter.version < 1) {
+      throw new InterventionLegalContractError(
+          "internal",
+          "legal matter version is invalid",
+      );
+    }
+    if (matter.version !== command.expectedLegalMatterVersion) {
+      throw new InterventionLegalContractError(
+          "aborted",
+          "legal matter version conflict",
+          {
+            expectedLegalMatterVersion: command.expectedLegalMatterVersion,
+            actualLegalMatterVersion: matter.version,
+          },
+      );
+    }
+
+    assertApprovalRequestMatterStatus({
+      approvalType: command.approvalType,
+      matterStatus: matter.status,
+    });
+    await assertLegalMatterCommandAuthority({
+      store,
+      command,
+      tenantId: matter.tenantId,
+      canonicalBrandId: matter.canonicalBrandId,
+      operationCode: "create_approval_request",
+    });
+
+    const requestSequence = command.expectedLegalMatterVersion;
+    const approvalRequestId = buildApprovalRequestId({
+      legalMatterId: matter.legalMatterId,
+      approvalType: command.approvalType,
+      requestSequence,
+    });
+    const now = clock();
+    const approvalRequest = Object.freeze({
+      contractVersion: command.contractVersion,
+      approvalRequestId,
+      requestSequence,
+      legalMatterId: matter.legalMatterId,
+      legalMatterVersionAtRequest: matter.version,
+      tenantId: matter.tenantId,
+      canonicalBrandId: matter.canonicalBrandId,
+      caseId: matter.caseId,
+      jurisdictionCode: matter.jurisdictionCode,
+      approvalType: command.approvalType,
+      requestReasonCode: command.requestReasonCode,
+      requestNote: command.requestNote,
+      preparedByUid: command.preparedByUid,
+      status: "pending",
+      version: 1,
+      createdAt: now,
+      createdByRequestId: command.requestId,
+      createdByUid: command.preparedByUid,
+      updatedAt: now,
+      updatedByRequestId: command.requestId,
+      updatedByUid: command.preparedByUid,
+    });
+
+    const event = buildEvent({
+      legalMatterId: matter.legalMatterId,
+      command,
+      eventType: "legal_approval_requested",
+      eventData: {
+        approvalRequestId,
+        approvalType: command.approvalType,
+        requestReasonCode: command.requestReasonCode,
+        legalMatterVersionAtRequest: matter.version,
+        status: "pending",
+      },
+      recordedAt: now,
+    });
+
+    const result = await store.createApprovalRequestAtomic({
+      matter,
+      approvalRequest,
+      event,
+      receipt: createReceipt({
+        command,
+        payloadFingerprint,
+        resultType: "legal_approval_request",
+        resultId: approvalRequestId,
+        recordedAt: now,
+      }),
+    });
+
+    return Object.freeze({
+      idempotentReplay:
+        Boolean(result && result.idempotentReplay === true),
+      resultType: "legal_approval_request",
+      resultId: approvalRequestId,
+      approvalRequest: result && result.approvalRequest ?
+        result.approvalRequest :
+        approvalRequest,
+    });
+  };
+}
+
 function buildRecordApprovalDecisionService(dependencies) {
   const {store, clock} = createServiceDependencies(dependencies);
 
@@ -544,12 +702,15 @@ function buildRecordApprovalDecisionService(dependencies) {
 module.exports = Object.freeze({
   CLIENT_APPROVAL_TYPES,
   LAWYER_APPROVAL_TYPES,
+  APPROVAL_REQUEST_MATTER_STATUSES,
   commandActorUid,
   createServiceDependencies,
   assertLegalMatterCommandAuthority,
+  assertApprovalRequestMatterStatus,
   assertScopeMatches,
   resolveIdempotentReceipt,
   buildCreateLegalMatterService,
   buildTransitionLegalMatterService,
+  buildCreateApprovalRequestService,
   buildRecordApprovalDecisionService,
 });

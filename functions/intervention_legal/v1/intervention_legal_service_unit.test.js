@@ -12,6 +12,7 @@ const {
   assertStoragePort,
 } = require("./storage_contracts");
 const {
+  buildCreateApprovalRequestService,
   buildCreateLegalMatterService,
   buildRecordApprovalDecisionService,
   buildTransitionLegalMatterService,
@@ -88,6 +89,32 @@ function createFakeStore(overrides = {}) {
       }), receipt);
       return {matter: nextMatter, idempotentReplay: false};
     },
+    async createApprovalRequestAtomic({
+      approvalRequest,
+      event,
+      receipt,
+    }) {
+      atomicBundles.push({
+        operation: "approval_request",
+        approvalRequest,
+        event,
+        receipt,
+      });
+      if (approvals.has(approvalRequest.approvalRequestId)) {
+        throw new InterventionLegalContractError(
+            "already-exists",
+            "approval request already exists",
+        );
+      }
+      approvals.set(approvalRequest.approvalRequestId, approvalRequest);
+      receipts.set(receiptKey({
+        scopeType: "legal_approval_request",
+        scopeId: approvalRequest.legalMatterId,
+        idempotencyKey: receipt.idempotencyKey,
+      }), receipt);
+      return {approvalRequest, idempotentReplay: false};
+    },
+
     async getApprovalRequestById({approvalRequestId}) {
       return approvals.get(approvalRequestId) || null;
     },
@@ -167,7 +194,7 @@ function createCommand(overrides = {}) {
 }
 
 test("storage port lists all required methods", () => {
-  assert.equal(REQUIRED_STORAGE_METHODS.length, 11);
+  assert.equal(REQUIRED_STORAGE_METHODS.length, 12);
   assert.equal(REQUIRED_STORAGE_METHODS.includes("resolveCaseScope"), true);
   assert.equal(
       REQUIRED_STORAGE_METHODS.includes("resolveLegalMatterAuthority"),
@@ -175,6 +202,10 @@ test("storage port lists all required methods", () => {
   );
   assert.equal(
       REQUIRED_STORAGE_METHODS.includes("recordApprovalDecisionAtomic"),
+      true,
+  );
+  assert.equal(
+      REQUIRED_STORAGE_METHODS.includes("createApprovalRequestAtomic"),
       true,
   );
 });
@@ -921,4 +952,120 @@ test("approval service propagates transaction-level replay", async () => {
   });
 
   assert.equal(result.idempotentReplay, true);
+});
+
+
+function approvalRequestCommand(overrides = {}) {
+  return {
+    contractVersion: CONTRACT_VERSION,
+    requestId: "req-request-approval",
+    idempotencyKey: "idem-request-approval",
+    expectedLegalMatterVersion: 2,
+    legalMatterId: "lm_approval",
+    approvalType: "client_budget_authorization",
+    requestReasonCode: "budget_required",
+    preparedByUid: "owner-1",
+    ...overrides,
+  };
+}
+
+function seedApprovalMatter(store, overrides = {}) {
+  store.__seedMatter({
+    legalMatterId: "lm_approval",
+    legalMatterKey: "key-approval",
+    tenantId: "tenant-1",
+    canonicalBrandId: "brand-1",
+    caseId: "case-1",
+    jurisdictionCode: "tr.istanbul",
+    status: "legal_review",
+    version: 2,
+    ...overrides,
+  });
+}
+
+// eslint-disable-next-line max-len
+test("approval request service creates pending immutable audit bundle", async () => {
+  const store = createFakeStore();
+  seedApprovalMatter(store);
+  const createRequest = buildCreateApprovalRequestService({
+    store,
+    clock: () => NOW,
+  });
+
+  const result = await createRequest(approvalRequestCommand());
+
+  assert.equal(result.idempotentReplay, false);
+  assert.equal(result.approvalRequest.status, "pending");
+  assert.equal(result.approvalRequest.version, 1);
+  assert.equal(result.approvalRequest.requestSequence, 2);
+  assert.equal(result.approvalRequest.preparedByUid, "owner-1");
+  const bundle = store.__atomicBundles.at(-1);
+  assert.equal(bundle.operation, "approval_request");
+  assert.equal(bundle.event.eventType, "legal_approval_requested");
+  assert.equal(bundle.event.actorUid, "owner-1");
+  assert.equal(bundle.receipt.actorUid, "owner-1");
+});
+
+test("approval request service rejects unauthorized preparer", async () => {
+  const store = createFakeStore();
+  seedApprovalMatter(store);
+  const createRequest = buildCreateApprovalRequestService({
+    store,
+    clock: () => NOW,
+  });
+
+  await assert.rejects(
+      () => createRequest(approvalRequestCommand({
+        preparedByUid: "intruder-1",
+      })),
+      (error) => error.code === "permission-denied",
+  );
+  assert.equal(store.__atomicBundles.length, 0);
+});
+
+test("approval request service rejects stale matter version", async () => {
+  const store = createFakeStore();
+  seedApprovalMatter(store, {version: 3});
+  const createRequest = buildCreateApprovalRequestService({
+    store,
+    clock: () => NOW,
+  });
+
+  await assert.rejects(
+      () => createRequest(approvalRequestCommand()),
+      (error) =>
+        error.code === "aborted" &&
+        error.details.actualLegalMatterVersion === 3,
+  );
+});
+
+// eslint-disable-next-line max-len
+test("approval request service enforces exact matter-status matrix", async () => {
+  const store = createFakeStore();
+  seedApprovalMatter(store, {status: "strategy_preparation"});
+  const createRequest = buildCreateApprovalRequestService({
+    store,
+    clock: () => NOW,
+  });
+
+  await assert.rejects(
+      () => createRequest(approvalRequestCommand()),
+      (error) => error.code === "failed-precondition",
+  );
+});
+
+test("approval request service is idempotent", async () => {
+  const store = createFakeStore();
+  seedApprovalMatter(store);
+  const createRequest = buildCreateApprovalRequestService({
+    store,
+    clock: () => NOW,
+  });
+  const command = approvalRequestCommand();
+
+  const first = await createRequest(command);
+  const second = await createRequest(command);
+
+  assert.equal(first.resultId, second.resultId);
+  assert.equal(second.idempotentReplay, true);
 });

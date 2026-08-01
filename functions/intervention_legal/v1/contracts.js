@@ -107,6 +107,7 @@ const LAWYER_APPROVER_ROLES = Object.freeze([
 const LEGAL_MATTER_OPERATION_CODES = Object.freeze([
   "create_legal_matter",
   "transition_legal_matter",
+  "create_approval_request",
 ]);
 
 const APPROVAL_TYPES = Object.freeze([
@@ -406,6 +407,48 @@ function parseTransitionLegalMatterCommand(raw) {
   });
 }
 
+function parseCreateApprovalRequestCommand(raw) {
+  const base = baseCommand(
+      raw,
+      [
+        "expectedLegalMatterVersion",
+        "legalMatterId",
+        "approvalType",
+        "requestReasonCode",
+        "requestNote",
+        "preparedByUid",
+      ],
+      [
+        "expectedLegalMatterVersion",
+        "legalMatterId",
+        "approvalType",
+        "requestReasonCode",
+        "preparedByUid",
+      ],
+  );
+  if (
+    !Number.isSafeInteger(raw.expectedLegalMatterVersion) ||
+    raw.expectedLegalMatterVersion < 1
+  ) {
+    throw new InterventionLegalContractError(
+        "invalid-argument",
+        "expectedLegalMatterVersion must be a positive safe integer",
+    );
+  }
+  return Object.freeze({
+    ...base,
+    expectedLegalMatterVersion: raw.expectedLegalMatterVersion,
+    legalMatterId: requiredString(raw.legalMatterId, "legalMatterId", 128),
+    approvalType: enumValue(raw.approvalType, APPROVAL_TYPES, "approvalType"),
+    requestReasonCode: requiredCode(
+        raw.requestReasonCode,
+        "requestReasonCode",
+    ),
+    requestNote: optionalString(raw.requestNote, "requestNote", 2000),
+    preparedByUid: requiredString(raw.preparedByUid, "preparedByUid", 128),
+  });
+}
+
 function parseApprovalDecisionCommand(raw) {
   const base = baseCommand(
       raw,
@@ -593,6 +636,7 @@ module.exports = Object.freeze({
   optionalBoolean,
   parseCreateLegalMatterCommand,
   parseTransitionLegalMatterCommand,
+  parseCreateApprovalRequestCommand,
   parseApprovalDecisionCommand,
   assertSegregationOfDuties,
   assertLegalProfessionalCanApprove,

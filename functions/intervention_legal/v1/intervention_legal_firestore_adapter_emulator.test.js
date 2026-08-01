@@ -21,11 +21,13 @@ const {
 } = require("./contracts");
 const {
   buildApprovalDecisionId,
+  buildApprovalRequestId,
   buildLegalMatterId,
   buildLegalMatterKey,
   buildMatterEventId,
 } = require("./identifiers");
 const {
+  buildCreateApprovalRequestService,
   buildCreateLegalMatterService,
   buildRecordApprovalDecisionService,
   buildTransitionLegalMatterService,
@@ -145,6 +147,10 @@ function buildServices() {
       clock: () => NOW,
     }),
     transitionMatter: buildTransitionLegalMatterService({
+      store: adapter,
+      clock: () => NOW,
+    }),
+    createApprovalRequest: buildCreateApprovalRequestService({
       store: adapter,
       clock: () => NOW,
     }),
@@ -728,4 +734,114 @@ test("active covered lawyer can commit legal approval", async () => {
       ),
       1,
   );
+});
+
+
+async function createLegalReviewMatter() {
+  const created = await createMatter();
+  await buildServices().transitionMatter({
+    contractVersion: CONTRACT_VERSION,
+    requestId: "req-transition-for-approval",
+    idempotencyKey: "idem-transition-for-approval",
+    actorUid: "owner-1",
+    expectedVersion: 1,
+    legalMatterId: created.resultId,
+    nextStatus: "legal_review",
+    reasonCode: "intake_accepted",
+  });
+  return adapter.getLegalMatterById({
+    legalMatterId: created.resultId,
+  });
+}
+
+function approvalRequestCommand(matter, overrides = {}) {
+  return {
+    contractVersion: CONTRACT_VERSION,
+    requestId: "req-create-approval-request",
+    idempotencyKey: "idem-create-approval-request",
+    expectedLegalMatterVersion: matter.version,
+    legalMatterId: matter.legalMatterId,
+    approvalType: "client_budget_authorization",
+    requestReasonCode: "budget_required",
+    preparedByUid: "owner-1",
+    ...overrides,
+  };
+}
+
+test("owner creates one atomic approval request bundle", async () => {
+  const matter = await createLegalReviewMatter();
+  const result = await buildServices().createApprovalRequest(
+      approvalRequestCommand(matter),
+  );
+
+  assert.equal(result.idempotentReplay, false);
+  assert.equal(result.approvalRequest.status, "pending");
+  assert.equal(
+      await countCollection(
+          FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS,
+      ),
+      1,
+  );
+  assert.deepEqual(await eventCounts(), {
+    domainEvents: 3,
+    receipts: 3,
+  });
+});
+
+test("parallel exact approval request collapses to one winner", async () => {
+  const matter = await createLegalReviewMatter();
+  const createRequest = buildServices().createApprovalRequest;
+  const command = approvalRequestCommand(matter);
+
+  const results = await Promise.all([
+    createRequest(command),
+    createRequest(command),
+  ]);
+
+  assert.deepEqual(
+      results.map((item) => item.idempotentReplay).sort(),
+      [false, true],
+  );
+  assert.equal(
+      await countCollection(
+          FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS,
+      ),
+      1,
+  );
+  assert.deepEqual(await eventCounts(), {
+    domainEvents: 3,
+    receipts: 3,
+  });
+});
+
+test("unauthorized approval request leaves no genesis bundle", async () => {
+  const matter = await createLegalReviewMatter();
+  const requestId = buildApprovalRequestId({
+    legalMatterId: matter.legalMatterId,
+    approvalType: "client_budget_authorization",
+    requestSequence: matter.version,
+  });
+
+  await assert.rejects(
+      () => buildServices().createApprovalRequest(
+          approvalRequestCommand(matter, {
+            preparedByUid: "intruder-1",
+          }),
+      ),
+      (error) => error.code === "permission-denied",
+  );
+
+  assert.equal(
+      (
+        await db
+            .collection(FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS)
+            .doc(requestId)
+            .get()
+      ).exists,
+      false,
+  );
+  assert.deepEqual(await eventCounts(), {
+    domainEvents: 2,
+    receipts: 2,
+  });
 });

@@ -49,6 +49,7 @@ test("legal matter command operations are locked and language independent", () =
       [
         "create_legal_matter",
         "transition_legal_matter",
+        "create_approval_request",
       ],
   );
   assert.equal(
@@ -507,5 +508,74 @@ test("unknown lifecycle is rejected", () => {
   assert.throws(
       () => lifecycle.allowedTransitions("unknown", "draft"),
       /unknown lifecycle/,
+  );
+});
+
+
+test("approval request command supports all locked approval types", () => {
+  for (const approvalType of contracts.APPROVAL_TYPES) {
+    const parsed = contracts.parseCreateApprovalRequestCommand({
+      contractVersion: contracts.CONTRACT_VERSION,
+      requestId: `req-${approvalType}`,
+      idempotencyKey: `idem-${approvalType}`,
+      expectedLegalMatterVersion: 2,
+      legalMatterId: "lm_123",
+      approvalType,
+      requestReasonCode: "approval_required",
+      preparedByUid: "owner-1",
+    });
+    assert.equal(parsed.approvalType, approvalType);
+    assert.equal(parsed.expectedLegalMatterVersion, 2);
+    assert.equal(parsed.requestNote, null);
+  }
+});
+
+test("approval request command requires positive matter version", () => {
+  assert.throws(
+      () => contracts.parseCreateApprovalRequestCommand({
+        contractVersion: contracts.CONTRACT_VERSION,
+        requestId: "req-approval-request",
+        idempotencyKey: "idem-approval-request",
+        expectedLegalMatterVersion: 0,
+        legalMatterId: "lm_123",
+        approvalType: "client_budget_authorization",
+        requestReasonCode: "budget_required",
+        preparedByUid: "owner-1",
+      }),
+      /positive safe integer/,
+  );
+});
+
+test("approval request command rejects client identity fields", () => {
+  assert.throws(
+      () => contracts.parseCreateApprovalRequestCommand({
+        contractVersion: contracts.CONTRACT_VERSION,
+        requestId: "req-approval-request",
+        idempotencyKey: "idem-approval-request",
+        expectedLegalMatterVersion: 2,
+        legalMatterId: "lm_123",
+        approvalType: "client_budget_authorization",
+        requestReasonCode: "budget_required",
+        preparedByUid: "owner-1",
+        tenantId: "spoofed-tenant",
+      }),
+      /unsupported request fields/,
+  );
+});
+
+// eslint-disable-next-line max-len
+test("existing approval request identifier maps matter version to sequence", () => {
+  const input = {
+    legalMatterId: "lm_123",
+    approvalType: "client_budget_authorization",
+    requestSequence: 2,
+  };
+  const first = identifiers.buildApprovalRequestId(input);
+  const second = identifiers.buildApprovalRequestId({...input});
+  assert.equal(first, second);
+  assert.match(first, /^lar_[a-f0-9]{24}$/);
+  assert.notEqual(
+      first,
+      identifiers.buildApprovalRequestId({...input, requestSequence: 3}),
   );
 });

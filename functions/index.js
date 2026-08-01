@@ -400,6 +400,8 @@ const {
     mhlBuildCreateInterventionLegalMatterCallable,
   buildTransitionInterventionLegalMatterCallable:
     mhlBuildTransitionInterventionLegalMatterCallable,
+  buildCreateInterventionLegalApprovalRequestCallable:
+    mhlBuildCreateInterventionLegalApprovalRequestCallable,
   buildRecordInterventionLegalApprovalDecisionCallable:
     mhlBuildRecordInterventionLegalApprovalDecisionCallable,
 } = require("./intervention_legal/v1/callable");
@@ -408,6 +410,8 @@ exports.createInterventionLegalMatter =
   mhlBuildCreateInterventionLegalMatterCallable();
 exports.transitionInterventionLegalMatter =
   mhlBuildTransitionInterventionLegalMatterCallable();
+exports.createInterventionLegalApprovalRequest =
+  mhlBuildCreateInterventionLegalApprovalRequestCallable();
 exports.recordInterventionLegalApprovalDecision =
   mhlBuildRecordInterventionLegalApprovalDecisionCallable();
 // END MHL-1B-1D-P4 CALLABLE EXPORTS

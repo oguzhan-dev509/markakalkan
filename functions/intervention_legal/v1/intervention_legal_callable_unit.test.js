@@ -14,6 +14,7 @@ const {
   CALLABLE_NAMES,
   CALLABLE_OPTIONS,
   assertCallableRequest,
+  buildCreateInterventionLegalApprovalRequestCallable,
   buildCreateInterventionLegalMatterCallable,
   buildRecordInterventionLegalApprovalDecisionCallable,
   buildTransitionInterventionLegalMatterCallable,
@@ -40,6 +41,7 @@ function createServices(overrides = {}) {
   const calls = {
     create: [],
     transition: [],
+    requestApproval: [],
     approval: [],
   };
   return {
@@ -58,6 +60,14 @@ function createServices(overrides = {}) {
         return {
           resultType: "legal_matter",
           resultId: "lm-1",
+          idempotentReplay: false,
+        };
+      },
+      async createApprovalRequest(command) {
+        calls.requestApproval.push(command);
+        return {
+          resultType: "legal_approval_request",
+          resultId: "lar-1",
           idempotentReplay: false,
         };
       },
@@ -86,6 +96,7 @@ test("callable names and hardened options are stable", () => {
   assert.deepEqual(CALLABLE_NAMES, {
     CREATE_LEGAL_MATTER: "createInterventionLegalMatter",
     TRANSITION_LEGAL_MATTER: "transitionInterventionLegalMatter",
+    CREATE_APPROVAL_REQUEST: "createInterventionLegalApprovalRequest",
     RECORD_APPROVAL_DECISION:
       "recordInterventionLegalApprovalDecision",
   });
@@ -96,7 +107,7 @@ test("callable names and hardened options are stable", () => {
   });
 });
 
-test("three builders pass identical hardened options to onCall", () => {
+test("four builders pass identical hardened options to onCall", () => {
   const captures = [];
   const onCallImpl = (options, handler) => {
     captures.push({options, handler});
@@ -111,9 +122,10 @@ test("three builders pass identical hardened options to onCall", () => {
 
   buildCreateInterventionLegalMatterCallable(dependencies);
   buildTransitionInterventionLegalMatterCallable(dependencies);
+  buildCreateInterventionLegalApprovalRequestCallable(dependencies);
   buildRecordInterventionLegalApprovalDecisionCallable(dependencies);
 
-  assert.equal(captures.length, 3);
+  assert.equal(captures.length, 4);
   assert.equal(
       captures.every((item) => item.options === CALLABLE_OPTIONS),
       true,
@@ -124,7 +136,7 @@ test("three builders pass identical hardened options to onCall", () => {
   );
 });
 
-test("production service bundle binds adapter and three services", () => {
+test("production service bundle binds adapter and four services", () => {
   const db = {
     collection() {
       return {};
@@ -137,6 +149,7 @@ test("production service bundle binds adapter and three services", () => {
   });
   assert.equal(typeof bundle.createLegalMatter, "function");
   assert.equal(typeof bundle.transitionLegalMatter, "function");
+  assert.equal(typeof bundle.createApprovalRequest, "function");
   assert.equal(typeof bundle.recordApprovalDecision, "function");
 });
 
@@ -386,4 +399,40 @@ test("standalone guards enforce request and actor rules", () => {
         error instanceof HttpsError &&
       error.code === "invalid-argument",
   );
+});
+
+
+test("approval request handler injects authenticated uid as preparedByUid", async () => {
+  const harness = createServices();
+  const handlers = createInterventionLegalCallableHandlers({
+    services: harness.services,
+    log: createLog(),
+  });
+
+  await handlers.createApprovalRequest(request({
+    legalMatterId: "lm-1",
+  }));
+
+  assert.deepEqual(harness.calls.requestApproval[0], {
+    legalMatterId: "lm-1",
+    preparedByUid: "authenticated-user",
+  });
+});
+
+test("approval request handler rejects client preparer identity", async () => {
+  const harness = createServices();
+  const handlers = createInterventionLegalCallableHandlers({
+    services: harness.services,
+    log: createLog(),
+  });
+
+  await assert.rejects(
+      () => handlers.createApprovalRequest(request({
+        preparedByUid: "spoofed-user",
+      })),
+      (error) =>
+        error instanceof HttpsError &&
+        error.code === "invalid-argument",
+  );
+  assert.equal(harness.calls.requestApproval.length, 0);
 });

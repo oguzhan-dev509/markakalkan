@@ -13,6 +13,7 @@ const REQUIRED_STORAGE_METHODS = Object.freeze([
   "getLegalMatterById",
   "createLegalMatterAtomic",
   "transitionLegalMatterAtomic",
+  "createApprovalRequestAtomic",
   "getApprovalRequestById",
   "getLegalTeamProfileByUid",
   "resolveClientAuthority",

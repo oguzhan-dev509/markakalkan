@@ -10,6 +10,7 @@ const {
   buildLegalMatterId,
   buildLegalMatterKey,
   buildMatterEventId,
+  buildApprovalRequestId,
   buildApprovalDecisionId,
 } = require("./identifiers");
 const {
@@ -1076,5 +1077,199 @@ test("create receipt conflicts across changed matter payload in one tenant", asy
           second.legalMatterId,
       ),
       undefined,
+  );
+});
+
+
+function approvalRequestDocument(matter, overrides = {}) {
+  const requestSequence = matter.version;
+  const approvalType = "client_budget_authorization";
+  return {
+    contractVersion: "intervention-legal-core-v1",
+    approvalRequestId: buildApprovalRequestId({
+      legalMatterId: matter.legalMatterId,
+      approvalType,
+      requestSequence,
+    }),
+    requestSequence,
+    legalMatterId: matter.legalMatterId,
+    legalMatterVersionAtRequest: matter.version,
+    tenantId: matter.tenantId,
+    canonicalBrandId: matter.canonicalBrandId,
+    caseId: matter.caseId,
+    jurisdictionCode: matter.jurisdictionCode,
+    approvalType,
+    requestReasonCode: "budget_required",
+    requestNote: null,
+    preparedByUid: "owner-1",
+    status: "pending",
+    version: 1,
+    createdAt: "2026-07-31T09:02:00.000Z",
+    createdByRequestId: "req-request-approval",
+    createdByUid: "owner-1",
+    updatedAt: "2026-07-31T09:02:00.000Z",
+    updatedByRequestId: "req-request-approval",
+    updatedByUid: "owner-1",
+    ...overrides,
+  };
+}
+
+test("createApprovalRequestAtomic commits request event receipt", async () => {
+  const db = new FakeFirestore();
+  const matter = matterDocument({status: "legal_review", version: 2});
+  db.seed(
+      FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES,
+      matter.legalMatterId,
+      matter,
+  );
+  const approvalRequest = approvalRequestDocument(matter);
+  const event = eventDocument({
+    legalMatterId: matter.legalMatterId,
+    requestId: "req-request-approval",
+    eventType: "legal_approval_requested",
+  });
+  const receipt = receiptDocument({
+    requestId: "req-request-approval",
+    idempotencyKey: "idem-request-approval",
+    resultType: "legal_approval_request",
+    resultId: approvalRequest.approvalRequestId,
+  });
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+
+  const result = await adapter.createApprovalRequestAtomic({
+    matter,
+    approvalRequest,
+    event,
+    receipt,
+  });
+
+  assert.equal(result.idempotentReplay, false);
+  assert.equal(
+      db.read(
+          FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS,
+          approvalRequest.approvalRequestId,
+      ).status,
+      "pending",
+  );
+  assert.equal(
+      db.read(
+          FIRESTORE_COLLECTIONS.LEGAL_MATTER_EVENTS,
+          event.eventId,
+      ).actorUid,
+      "owner-1",
+  );
+  const receiptId = buildCommandReceiptId({
+    scopeType: "legal_approval_request",
+    scopeId: matter.legalMatterId,
+    idempotencyKey: receipt.idempotencyKey,
+  });
+  assert.equal(
+      db.read(
+          FIRESTORE_COLLECTIONS.LEGAL_MATTER_EVENTS,
+          receiptId,
+      ).resultType,
+      "legal_approval_request",
+  );
+});
+
+test("createApprovalRequestAtomic replays identical bundle", async () => {
+  const db = new FakeFirestore();
+  const matter = matterDocument({status: "legal_review", version: 2});
+  db.seed(
+      FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES,
+      matter.legalMatterId,
+      matter,
+  );
+  const approvalRequest = approvalRequestDocument(matter);
+  const event = eventDocument({
+    legalMatterId: matter.legalMatterId,
+    requestId: "req-request-approval",
+    eventType: "legal_approval_requested",
+  });
+  const receipt = receiptDocument({
+    requestId: "req-request-approval",
+    idempotencyKey: "idem-request-approval",
+    resultType: "legal_approval_request",
+    resultId: approvalRequest.approvalRequestId,
+  });
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+  await adapter.createApprovalRequestAtomic({
+    matter, approvalRequest, event, receipt,
+  });
+
+  const replay = await adapter.createApprovalRequestAtomic({
+    matter, approvalRequest, event, receipt,
+  });
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(
+      replay.approvalRequest.approvalRequestId,
+      approvalRequest.approvalRequestId,
+  );
+});
+
+test("createApprovalRequestAtomic rejects stale persisted matter", async () => {
+  const db = new FakeFirestore();
+  const matter = matterDocument({status: "legal_review", version: 2});
+  db.seed(
+      FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES,
+      matter.legalMatterId,
+      {...matter, version: 3},
+  );
+  const approvalRequest = approvalRequestDocument(matter);
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+
+  await assert.rejects(
+      () => adapter.createApprovalRequestAtomic({
+        matter,
+        approvalRequest,
+        event: eventDocument({
+          legalMatterId: matter.legalMatterId,
+          requestId: "req-request-approval",
+          eventType: "legal_approval_requested",
+        }),
+        receipt: receiptDocument({
+          requestId: "req-request-approval",
+          idempotencyKey: "idem-request-approval",
+          resultType: "legal_approval_request",
+          resultId: approvalRequest.approvalRequestId,
+        }),
+      }),
+      (error) => error.code === "aborted",
+  );
+});
+
+test("createApprovalRequestAtomic rejects partial bundle", async () => {
+  const db = new FakeFirestore();
+  const matter = matterDocument({status: "legal_review", version: 2});
+  const approvalRequest = approvalRequestDocument(matter);
+  db.seed(
+      FIRESTORE_COLLECTIONS.LEGAL_MATTER_FILES,
+      matter.legalMatterId,
+      matter,
+  );
+  db.seed(
+      FIRESTORE_COLLECTIONS.LEGAL_APPROVAL_REQUESTS,
+      approvalRequest.approvalRequestId,
+      approvalRequest,
+  );
+  const adapter = createInterventionLegalFirestoreAdapter(db);
+
+  await assert.rejects(
+      () => adapter.createApprovalRequestAtomic({
+        matter,
+        approvalRequest,
+        event: eventDocument({
+          legalMatterId: matter.legalMatterId,
+          requestId: "req-request-approval",
+          eventType: "legal_approval_requested",
+        }),
+        receipt: receiptDocument({
+          requestId: "req-request-approval",
+          idempotencyKey: "idem-request-approval",
+          resultType: "legal_approval_request",
+          resultId: approvalRequest.approvalRequestId,
+        }),
+      }),
+      /partial or duplicate/,
   );
 });
