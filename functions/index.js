@@ -421,3 +421,42 @@ exports.recordInterventionLegalApprovalDecision =
 exports.getInterventionLegalWorkspace =
   mhlBuildGetInterventionLegalWorkspaceCallable({db});
 // END MHL-1B-1D-P4 CALLABLE EXPORTS
+
+
+// BEGIN PHO-1C-4 CALLABLE EXPORTS
+const {
+  buildCreateProfessionalServiceRequestCallable:
+    phoBuildCreateProfessionalServiceRequestCallable,
+  buildTransitionProfessionalServiceRequestCallable:
+    phoBuildTransitionProfessionalServiceRequestCallable,
+  buildCreateProfessionalServiceEngagementCallable:
+    phoBuildCreateProfessionalServiceEngagementCallable,
+  buildCreateProfessionalServiceAssignmentCallable:
+    phoBuildCreateProfessionalServiceAssignmentCallable,
+  buildStartProfessionalAgentRunCallable:
+    phoBuildStartProfessionalAgentRunCallable,
+  buildRecordProfessionalAgentOutputCallable:
+    phoBuildRecordProfessionalAgentOutputCallable,
+  buildRecordProfessionalAgentReviewCallable:
+    phoBuildRecordProfessionalAgentReviewCallable,
+  buildPublishProfessionalAgentOutputCallable:
+    phoBuildPublishProfessionalAgentOutputCallable,
+} = require("./professional_services/v1/callable");
+
+exports.createProfessionalServiceRequest =
+  phoBuildCreateProfessionalServiceRequestCallable();
+exports.transitionProfessionalServiceRequest =
+  phoBuildTransitionProfessionalServiceRequestCallable();
+exports.createProfessionalServiceEngagement =
+  phoBuildCreateProfessionalServiceEngagementCallable();
+exports.createProfessionalServiceAssignment =
+  phoBuildCreateProfessionalServiceAssignmentCallable();
+exports.startProfessionalAgentRun =
+  phoBuildStartProfessionalAgentRunCallable();
+exports.recordProfessionalAgentOutput =
+  phoBuildRecordProfessionalAgentOutputCallable();
+exports.recordProfessionalAgentReview =
+  phoBuildRecordProfessionalAgentReviewCallable();
+exports.publishProfessionalAgentOutput =
+  phoBuildPublishProfessionalAgentOutputCallable();
+// END PHO-1C-4 CALLABLE EXPORTS
