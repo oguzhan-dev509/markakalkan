@@ -1,11 +1,26 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
+import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
 
+typedef InterventionLegalLoginOpener =
+    Future<bool?> Function(BuildContext context);
+
 class InterventionLegalHubPage extends StatefulWidget {
-  const InterventionLegalHubPage({super.key, this.repository});
+  const InterventionLegalHubPage({
+    super.key,
+    this.repository,
+    this.authenticationChanges,
+    this.loginOpener,
+  });
 
   final InterventionLegalWorkspaceRepository? repository;
+  final Stream<bool>? authenticationChanges;
+  final InterventionLegalLoginOpener? loginOpener;
 
   @override
   State<InterventionLegalHubPage> createState() =>
@@ -15,8 +30,11 @@ class InterventionLegalHubPage extends StatefulWidget {
 class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
   late final InterventionLegalWorkspaceRepository _repository;
 
+  StreamSubscription<bool>? _authenticationSubscription;
   InterventionLegalWorkspaceSnapshot? _snapshot;
   Object? _error;
+  bool _authenticationResolved = false;
+  bool _authenticationRequired = false;
   bool _loading = true;
 
   @override
@@ -24,7 +42,100 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
     super.initState();
     _repository =
         widget.repository ?? CallableInterventionLegalWorkspaceRepository();
-    _reload();
+
+    final injectedAuthenticationChanges = widget.authenticationChanges;
+    if (injectedAuthenticationChanges != null) {
+      _observeAuthentication(injectedAuthenticationChanges);
+      return;
+    }
+
+    if (widget.repository != null) {
+      _authenticationResolved = true;
+      _reload();
+      return;
+    }
+
+    _observeAuthentication(
+      FirebaseAuth.instance.idTokenChanges().map((user) => user != null),
+    );
+  }
+
+  void _observeAuthentication(Stream<bool> changes) {
+    _authenticationSubscription = changes.distinct().listen(
+      _handleAuthentication,
+      onError: _handleAuthenticationError,
+    );
+  }
+
+  void _handleAuthentication(bool authenticated) {
+    if (!mounted) {
+      return;
+    }
+
+    if (!authenticated) {
+      setState(() {
+        _authenticationResolved = true;
+        _authenticationRequired = true;
+        _snapshot = null;
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
+
+    final shouldReload =
+        !_authenticationResolved ||
+        _authenticationRequired ||
+        _snapshot == null;
+
+    setState(() {
+      _authenticationResolved = true;
+      _authenticationRequired = false;
+      _error = null;
+    });
+
+    if (shouldReload) {
+      unawaited(_reload());
+    }
+  }
+
+  void _handleAuthenticationError(Object error, StackTrace stackTrace) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _authenticationResolved = true;
+      _authenticationRequired = false;
+      _loading = false;
+      _error = error;
+    });
+  }
+
+  Future<void> _openLogin() async {
+    final opener = widget.loginOpener;
+    bool? result;
+
+    if (opener != null) {
+      result = await opener(context);
+    } else {
+      final navigator = Navigator.of(context);
+      result = await navigator.push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => const BrandLoginPage(
+            intent: MarkaKalkanAuthIntent.generalAccount,
+          ),
+        ),
+      );
+    }
+
+    if (!mounted || result != true) {
+      return;
+    }
+
+    if (widget.authenticationChanges == null && widget.repository != null) {
+      await _reload();
+    }
   }
 
   Future<void> _reload() async {
@@ -44,6 +155,7 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
         _snapshot = snapshot;
         _loading = false;
         _error = null;
+        _authenticationRequired = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -54,6 +166,17 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
         _error = error;
       });
     }
+  }
+
+  bool _isUnauthenticatedError(Object? error) {
+    return error is FirebaseFunctionsException &&
+        error.code == 'unauthenticated';
+  }
+
+  @override
+  void dispose() {
+    _authenticationSubscription?.cancel();
+    super.dispose();
   }
 
   String _errorMessage(Object error) {
@@ -80,6 +203,8 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
+    final authenticationRequired =
+        _authenticationRequired || _isUnauthenticatedError(_error);
 
     return Scaffold(
       appBar: AppBar(
@@ -88,13 +213,20 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
           IconButton(
             key: const ValueKey<String>('intervention-legal-refresh'),
             tooltip: 'Yenile',
-            onPressed: _loading ? null : _reload,
+            onPressed: _loading || authenticationRequired ? null : _reload,
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: SafeArea(
-        child: _loading && snapshot == null
+        child: !_authenticationResolved && snapshot == null
+            ? const Center(child: CircularProgressIndicator())
+            : authenticationRequired && snapshot == null
+            ? _AuthenticationRequiredPanel(
+                onLogin: _openLogin,
+                onRetry: _reload,
+              )
+            : _loading && snapshot == null
             ? const Center(child: CircularProgressIndicator())
             : _error != null && snapshot == null
             ? _ErrorPanel(message: _errorMessage(_error!), onRetry: _reload)
@@ -674,6 +806,74 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthenticationRequiredPanel extends StatelessWidget {
+  const _AuthenticationRequiredPanel({
+    required this.onLogin,
+    required this.onRetry,
+  });
+
+  final Future<void> Function() onLogin;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Card(
+        key: const ValueKey<String>('intervention-legal-auth-required'),
+        margin: const EdgeInsets.all(24),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_person_outlined, size: 46),
+                const SizedBox(height: 12),
+                const Text(
+                  'Müdahale ve Hukuk Merkezi için oturum açmanız gerekir.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Mevcut MarkaKalkan hesabınızla giriş yaptıktan sonra çalışma '
+                  'alanı otomatik olarak yeniden yüklenecektir.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    FilledButton.icon(
+                      key: const ValueKey<String>(
+                        'intervention-legal-login-action',
+                      ),
+                      onPressed: onLogin,
+                      icon: const Icon(Icons.login),
+                      label: const Text('Marka Girişi'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey<String>(
+                        'intervention-legal-auth-retry',
+                      ),
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Yeniden dene'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

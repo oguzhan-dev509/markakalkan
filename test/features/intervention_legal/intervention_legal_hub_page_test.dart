@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
@@ -78,6 +80,92 @@ void main() {
     expect(find.text('Henüz hukuki dosya bulunmuyor.'), findsOneWidget);
   });
 
+  testWidgets(
+    'hub waits for reactive authentication and follows sign-in and sign-out',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final authenticationChanges = StreamController<bool>.broadcast();
+      addTearDown(authenticationChanges.close);
+      final repository = _CountingWorkspaceRepository(_snapshot());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: repository,
+            authenticationChanges: authenticationChanges.stream,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(repository.callCount, 0);
+
+      authenticationChanges.add(false);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('intervention-legal-auth-required')),
+        findsOneWidget,
+      );
+      expect(find.text('Marka Girişi'), findsOneWidget);
+      expect(find.text('Yeniden dene'), findsOneWidget);
+      expect(repository.callCount, 0);
+
+      authenticationChanges.add(true);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Canlı hukuki dosya'), findsOneWidget);
+      expect(repository.callCount, 1);
+
+      authenticationChanges.add(false);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('intervention-legal-auth-required')),
+        findsOneWidget,
+      );
+      expect(find.text('Canlı hukuki dosya'), findsNothing);
+    },
+  );
+
+  testWidgets('Marka Girişi action reloads after reactive sign-in', (
+    tester,
+  ) async {
+    await _setDeterministicTestSurface(tester);
+    final authenticationChanges = StreamController<bool>.broadcast();
+    addTearDown(authenticationChanges.close);
+    final repository = _CountingWorkspaceRepository(_snapshot());
+    var loginCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: InterventionLegalHubPage(
+          repository: repository,
+          authenticationChanges: authenticationChanges.stream,
+          loginOpener: (_) async {
+            loginCalls += 1;
+            authenticationChanges.add(true);
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    authenticationChanges.add(false);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('intervention-legal-login-action')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(loginCalls, 1);
+    expect(repository.callCount, 1);
+    expect(find.text('Canlı hukuki dosya'), findsOneWidget);
+  });
+
   testWidgets('hub exposes retry after repository failure', (tester) async {
     await _setDeterministicTestSurface(tester);
     final repository = _RetryWorkspaceRepository(_snapshot());
@@ -118,6 +206,22 @@ final class _FakeWorkspaceRepository
   Future<InterventionLegalWorkspaceSnapshot> loadWorkspace({
     int limit = 20,
   }) async {
+    return snapshot;
+  }
+}
+
+final class _CountingWorkspaceRepository
+    implements InterventionLegalWorkspaceRepository {
+  _CountingWorkspaceRepository(this.snapshot);
+
+  final InterventionLegalWorkspaceSnapshot snapshot;
+  int callCount = 0;
+
+  @override
+  Future<InterventionLegalWorkspaceSnapshot> loadWorkspace({
+    int limit = 20,
+  }) async {
+    callCount += 1;
     return snapshot;
   }
 }
