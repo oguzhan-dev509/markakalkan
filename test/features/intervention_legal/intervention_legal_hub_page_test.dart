@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
@@ -148,6 +149,7 @@ void main() {
             authenticationChanges.add(true);
             return true;
           },
+          authenticationResolver: (_) async => true,
         ),
       ),
     );
@@ -165,6 +167,121 @@ void main() {
     expect(repository.callCount, 1);
     expect(find.text('Canlı hukuki dosya'), findsOneWidget);
   });
+
+  testWidgets(
+    'login completion reconciles auth when the stream misses the sign-in event',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final authenticationChanges = StreamController<bool>.broadcast();
+      addTearDown(authenticationChanges.close);
+      final repository = _CountingWorkspaceRepository(_snapshot());
+      var loginCalls = 0;
+      var resolverCalls = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: repository,
+            authenticationChanges: authenticationChanges.stream,
+            loginOpener: (_) async {
+              loginCalls += 1;
+              return true;
+            },
+            authenticationResolver: (forceRefresh) async {
+              resolverCalls += 1;
+              expect(forceRefresh, isTrue);
+              return true;
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      authenticationChanges.add(false);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('intervention-legal-login-action')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(loginCalls, 1);
+      expect(resolverCalls, 1);
+      expect(repository.callCount, 1);
+      expect(find.text('Canlı hukuki dosya'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'authenticated callable failure is not rendered as signed-out state',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final authenticationChanges = StreamController<bool>.broadcast();
+      addTearDown(authenticationChanges.close);
+      final repository = _UnauthenticatedWorkspaceRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: repository,
+            authenticationChanges: authenticationChanges.stream,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      authenticationChanges.add(true);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('intervention-legal-auth-required')),
+        findsNothing,
+      );
+      expect(
+        find.text(
+          'Oturum sunucu tarafından doğrulanamadı. '
+          'Marka Girişi ile oturumu yenileyin.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'auth retry reconciles current session before loading workspace',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final authenticationChanges = StreamController<bool>.broadcast();
+      addTearDown(authenticationChanges.close);
+      final repository = _CountingWorkspaceRepository(_snapshot());
+      var resolverCalls = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: repository,
+            authenticationChanges: authenticationChanges.stream,
+            authenticationResolver: (forceRefresh) async {
+              resolverCalls += 1;
+              expect(forceRefresh, isTrue);
+              return true;
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      authenticationChanges.add(false);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Yeniden dene'));
+      await tester.pumpAndSettle();
+
+      expect(resolverCalls, 1);
+      expect(repository.callCount, 1);
+      expect(find.text('Canlı hukuki dosya'), findsOneWidget);
+    },
+  );
 
   testWidgets('hub exposes retry after repository failure', (tester) async {
     await _setDeterministicTestSurface(tester);
@@ -223,6 +340,17 @@ final class _CountingWorkspaceRepository
   }) async {
     callCount += 1;
     return snapshot;
+  }
+}
+
+final class _UnauthenticatedWorkspaceRepository
+    implements InterventionLegalWorkspaceRepository {
+  @override
+  Future<InterventionLegalWorkspaceSnapshot> loadWorkspace({int limit = 20}) {
+    throw FirebaseFunctionsException(
+      code: 'unauthenticated',
+      message: 'test unauthenticated',
+    );
   }
 }
 

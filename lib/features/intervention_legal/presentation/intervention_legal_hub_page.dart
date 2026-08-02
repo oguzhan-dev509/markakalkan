@@ -9,6 +9,8 @@ import 'package:markakalkan/features/intervention_legal/data/intervention_legal_
 
 typedef InterventionLegalLoginOpener =
     Future<bool?> Function(BuildContext context);
+typedef InterventionLegalAuthenticationResolver =
+    Future<bool> Function(bool forceRefresh);
 
 class InterventionLegalHubPage extends StatefulWidget {
   const InterventionLegalHubPage({
@@ -16,11 +18,13 @@ class InterventionLegalHubPage extends StatefulWidget {
     this.repository,
     this.authenticationChanges,
     this.loginOpener,
+    this.authenticationResolver,
   });
 
   final InterventionLegalWorkspaceRepository? repository;
   final Stream<bool>? authenticationChanges;
   final InterventionLegalLoginOpener? loginOpener;
+  final InterventionLegalAuthenticationResolver? authenticationResolver;
 
   @override
   State<InterventionLegalHubPage> createState() =>
@@ -33,6 +37,7 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
   StreamSubscription<bool>? _authenticationSubscription;
   InterventionLegalWorkspaceSnapshot? _snapshot;
   Object? _error;
+  Future<void>? _reloadInFlight;
   bool _authenticationResolved = false;
   bool _authenticationRequired = false;
   bool _loading = true;
@@ -133,12 +138,91 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
       return;
     }
 
-    if (widget.authenticationChanges == null && widget.repository != null) {
-      await _reload();
+    await _reconcileAuthentication(forceRefresh: true);
+  }
+
+  Future<bool> _resolveFirebaseAuthentication(bool forceRefresh) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return false;
+    }
+
+    if (forceRefresh) {
+      await user.getIdToken(true);
+    }
+    return true;
+  }
+
+  Future<void> _reconcileAuthentication({required bool forceRefresh}) async {
+    final resolver =
+        widget.authenticationResolver ?? _resolveFirebaseAuthentication;
+
+    try {
+      final authenticated = await resolver(forceRefresh);
+      if (!mounted) {
+        return;
+      }
+
+      if (!authenticated) {
+        _handleAuthentication(false);
+        return;
+      }
+
+      final shouldReload = _snapshot == null || _authenticationRequired;
+      _handleAuthentication(true);
+      if (shouldReload) {
+        await _reload();
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _authenticationResolved = true;
+        _authenticationRequired = false;
+        _loading = false;
+        _error = error;
+      });
     }
   }
 
-  Future<void> _reload() async {
+  Future<InterventionLegalWorkspaceSnapshot>
+  _loadWorkspaceWithAuthRecovery() async {
+    try {
+      return await _repository.loadWorkspace();
+    } catch (error) {
+      final productionRepository =
+          widget.repository == null && widget.authenticationChanges == null;
+      if (!productionRepository || !_isUnauthenticatedError(error)) {
+        rethrow;
+      }
+
+      final authenticated = await _resolveFirebaseAuthentication(true);
+      if (!authenticated) {
+        rethrow;
+      }
+      return _repository.loadWorkspace();
+    }
+  }
+
+  Future<void> _reload() {
+    final activeRequest = _reloadInFlight;
+    if (activeRequest != null) {
+      return activeRequest;
+    }
+
+    late final Future<void> request;
+    request = _performReload().whenComplete(() {
+      if (identical(_reloadInFlight, request)) {
+        _reloadInFlight = null;
+      }
+    });
+    _reloadInFlight = request;
+    return request;
+  }
+
+  Future<void> _performReload() async {
     if (mounted) {
       setState(() {
         _loading = _snapshot == null;
@@ -147,7 +231,7 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
     }
 
     try {
-      final snapshot = await _repository.loadWorkspace();
+      final snapshot = await _loadWorkspaceWithAuthRecovery();
       if (!mounted) {
         return;
       }
@@ -183,7 +267,8 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
     if (error is FirebaseFunctionsException) {
       switch (error.code) {
         case 'unauthenticated':
-          return 'Müdahale ve Hukuk Merkezi için oturum açmanız gerekir.';
+          return 'Oturum sunucu tarafından doğrulanamadı. '
+              'Marka Girişi ile oturumu yenileyin.';
         case 'failed-precondition':
           return 'Uygulama doğrulaması tamamlanamadı. Sayfayı yenileyin.';
         case 'permission-denied':
@@ -203,8 +288,7 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
-    final authenticationRequired =
-        _authenticationRequired || _isUnauthenticatedError(_error);
+    final authenticationRequired = _authenticationRequired;
 
     return Scaffold(
       appBar: AppBar(
@@ -224,7 +308,7 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
             : authenticationRequired && snapshot == null
             ? _AuthenticationRequiredPanel(
                 onLogin: _openLogin,
-                onRetry: _reload,
+                onRetry: () => _reconcileAuthentication(forceRefresh: true),
               )
             : _loading && snapshot == null
             ? const Center(child: CircularProgressIndicator())
