@@ -38,7 +38,12 @@ void main() {
     final controller = ProfessionalServicesController(gateway: gateway);
 
     await tester.pumpWidget(
-      MaterialApp(home: ProfessionalServicesHubPage(controller: controller)),
+      MaterialApp(
+        home: ProfessionalServicesHubPage(
+          controller: controller,
+          locale: const Locale('tr'),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -78,7 +83,12 @@ void main() {
     final controller = ProfessionalServicesController(gateway: gateway);
 
     await tester.pumpWidget(
-      MaterialApp(home: ProfessionalServicesHubPage(controller: controller)),
+      MaterialApp(
+        home: ProfessionalServicesHubPage(
+          controller: controller,
+          locale: const Locale('tr'),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 

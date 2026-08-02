@@ -11,6 +11,8 @@ typedef CustomsSecurityRouteOpener =
     Future<void> Function(BuildContext context);
 typedef InterventionLegalRouteOpener =
     Future<void> Function(BuildContext context);
+typedef ProfessionalServicesRouteOpener =
+    Future<void> Function(BuildContext context);
 
 class CorporateHubPage extends StatefulWidget {
   const CorporateHubPage({
@@ -18,6 +20,7 @@ class CorporateHubPage extends StatefulWidget {
     this.riskOperationsRouteOpener,
     this.customsSecurityRouteOpener,
     this.interventionLegalRouteOpener,
+    this.professionalServicesRouteOpener,
     this.userEmailProvider,
     this.entryGateService,
     this.accessService,
@@ -26,6 +29,7 @@ class CorporateHubPage extends StatefulWidget {
   final RiskOperationsRouteOpener? riskOperationsRouteOpener;
   final CustomsSecurityRouteOpener? customsSecurityRouteOpener;
   final InterventionLegalRouteOpener? interventionLegalRouteOpener;
+  final ProfessionalServicesRouteOpener? professionalServicesRouteOpener;
   final String? Function()? userEmailProvider;
   final AdminEntryGateService? entryGateService;
   final PlatformAdminAccessService? accessService;
@@ -168,6 +172,16 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
           'resmî süreçleri takip edin.',
       icon: Icons.gavel_outlined,
       status: _ModuleStatus.active,
+    ),
+    _CorporateModule(
+      id: 'professional_services',
+      title: 'Profesyonel Hizmetler Merkezi',
+      description:
+          'Marka vekili, hukuk bürosu ve uzman danışmanlık taleplerini '
+          'yetki, görevlendirme, yapay zekâ desteği ve insan incelemesiyle '
+          'denetlenebilir bir hizmet zincirinde yönetin.',
+      icon: Icons.support_agent_outlined,
+      status: _ModuleStatus.pilot,
     ),
     _CorporateModule(
       id: 'reports',
@@ -522,6 +536,36 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                                             (widget
                                                 .interventionLegalRouteOpener ??
                                             AppRouter.openInterventionLegalHub)(
+                                              context,
+                                            ),
+                                        child: IgnorePointer(
+                                          child: _CorporateModuleCard(
+                                            module: module,
+                                            riskOperationsRouteOpener: widget
+                                                .riskOperationsRouteOpener,
+                                            customsSecurityRouteOpener: widget
+                                                .customsSecurityRouteOpener,
+                                            interventionLegalRouteOpener: widget
+                                                .interventionLegalRouteOpener,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : module.id == 'professional_services'
+                                  ? Semantics(
+                                      button: true,
+                                      label:
+                                          'Profesyonel Hizmetler Merkezini aç',
+                                      child: GestureDetector(
+                                        key: const ValueKey(
+                                          'professional-services-action',
+                                        ),
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () =>
+                                            (widget
+                                                .professionalServicesRouteOpener ??
+                                            AppRouter
+                                                .openProfessionalServicesHub)(
                                               context,
                                             ),
                                         child: IgnorePointer(
