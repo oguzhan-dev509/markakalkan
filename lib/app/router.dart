@@ -32,6 +32,7 @@ import 'package:markakalkan/features/customs_security/presentation/customs_autho
 import 'package:markakalkan/features/customs_security/presentation/customs_security_detail_page.dart';
 import 'package:markakalkan/features/customs_security/presentation/customs_security_hub_page.dart';
 import 'package:markakalkan/features/intervention_legal/presentation/intervention_legal_hub_page.dart';
+import 'package:markakalkan/features/professional_services/presentation/professional_services_hub_page.dart';
 import 'package:markakalkan/features/auth/presentation/brand_account_creation_page.dart';
 import 'package:markakalkan/features/dashboard/presentation/corporate_hub_page.dart';
 import 'package:markakalkan/features/detective/presentation/brand_detective_hub_page.dart';
@@ -434,6 +435,17 @@ abstract final class AppRouter {
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/intervention-legal'),
         builder: (_) => const InterventionLegalHubPage(),
+      ),
+    );
+  }
+
+  static Future<void> openProfessionalServicesHub(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(
+          name: ProfessionalServicesHubPage.routeName,
+        ),
+        builder: (_) => const ProfessionalServicesHubPage(),
       ),
     );
   }
