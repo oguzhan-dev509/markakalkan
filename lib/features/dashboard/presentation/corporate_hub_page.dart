@@ -9,12 +9,15 @@ import 'package:markakalkan/features/admin/data/platform_admin_access_service.da
 typedef RiskOperationsRouteOpener = Future<void> Function(BuildContext context);
 typedef CustomsSecurityRouteOpener =
     Future<void> Function(BuildContext context);
+typedef InterventionLegalRouteOpener =
+    Future<void> Function(BuildContext context);
 
 class CorporateHubPage extends StatefulWidget {
   const CorporateHubPage({
     super.key,
     this.riskOperationsRouteOpener,
     this.customsSecurityRouteOpener,
+    this.interventionLegalRouteOpener,
     this.userEmailProvider,
     this.entryGateService,
     this.accessService,
@@ -22,6 +25,7 @@ class CorporateHubPage extends StatefulWidget {
 
   final RiskOperationsRouteOpener? riskOperationsRouteOpener;
   final CustomsSecurityRouteOpener? customsSecurityRouteOpener;
+  final InterventionLegalRouteOpener? interventionLegalRouteOpener;
   final String? Function()? userEmailProvider;
   final AdminEntryGateService? entryGateService;
   final PlatformAdminAccessService? accessService;
@@ -163,7 +167,7 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
           'aktarın; platform şikâyetlerini, kaldırma taleplerini ve '
           'resmî süreçleri takip edin.',
       icon: Icons.gavel_outlined,
-      status: _ModuleStatus.soon,
+      status: _ModuleStatus.active,
     ),
     _CorporateModule(
       id: 'reports',
@@ -499,6 +503,36 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                                                 .riskOperationsRouteOpener,
                                             customsSecurityRouteOpener: widget
                                                 .customsSecurityRouteOpener,
+                                            interventionLegalRouteOpener: widget
+                                                .interventionLegalRouteOpener,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : module.id == 'legal'
+                                  ? Semantics(
+                                      button: true,
+                                      label: 'Müdahale ve Hukuk Merkezini aç',
+                                      child: GestureDetector(
+                                        key: const ValueKey(
+                                          'intervention-legal-action',
+                                        ),
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () =>
+                                            (widget
+                                                .interventionLegalRouteOpener ??
+                                            AppRouter.openInterventionLegalHub)(
+                                              context,
+                                            ),
+                                        child: IgnorePointer(
+                                          child: _CorporateModuleCard(
+                                            module: module,
+                                            riskOperationsRouteOpener: widget
+                                                .riskOperationsRouteOpener,
+                                            customsSecurityRouteOpener: widget
+                                                .customsSecurityRouteOpener,
+                                            interventionLegalRouteOpener: widget
+                                                .interventionLegalRouteOpener,
                                           ),
                                         ),
                                       ),
@@ -509,6 +543,8 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                                           widget.riskOperationsRouteOpener,
                                       customsSecurityRouteOpener:
                                           widget.customsSecurityRouteOpener,
+                                      interventionLegalRouteOpener:
+                                          widget.interventionLegalRouteOpener,
                                     ),
                             ),
                           )
@@ -617,11 +653,13 @@ class _CorporateModuleCard extends StatelessWidget {
     required this.module,
     this.riskOperationsRouteOpener,
     this.customsSecurityRouteOpener,
+    this.interventionLegalRouteOpener,
   });
 
   final _CorporateModule module;
   final RiskOperationsRouteOpener? riskOperationsRouteOpener;
   final CustomsSecurityRouteOpener? customsSecurityRouteOpener;
+  final InterventionLegalRouteOpener? interventionLegalRouteOpener;
 
   void _openModule(BuildContext context) {
     switch (module.id) {
@@ -662,6 +700,11 @@ class _CorporateModuleCard extends StatelessWidget {
         return;
       case 'customs_security':
         (customsSecurityRouteOpener ?? AppRouter.openCustomsSecurityHub)(
+          context,
+        );
+        return;
+      case 'legal':
+        (interventionLegalRouteOpener ?? AppRouter.openInterventionLegalHub)(
           context,
         );
         return;
