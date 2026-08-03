@@ -460,3 +460,13 @@ exports.recordProfessionalAgentReview =
 exports.publishProfessionalAgentOutput =
   phoBuildPublishProfessionalAgentOutputCallable();
 // END PHO-1C-4 CALLABLE EXPORTS
+
+// BEGIN HRT-SUB-1A SUBSCRIPTION REQUEST CALLABLE EXPORT
+const {
+  buildCreateSubscriptionServiceRequestCallable:
+    hrtSubBuildCreateSubscriptionServiceRequestCallable,
+} = require("./subscriptions/v1/callable");
+
+exports.createSubscriptionServiceRequest =
+  hrtSubBuildCreateSubscriptionServiceRequestCallable();
+// END HRT-SUB-1A SUBSCRIPTION REQUEST CALLABLE EXPORT

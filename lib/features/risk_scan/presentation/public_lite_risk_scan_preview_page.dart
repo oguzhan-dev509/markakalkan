@@ -1,8 +1,13 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
+import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/risk_scan/data/public_lite_risk_scan_repository.dart';
+import 'package:markakalkan/features/subscriptions/domain/subscription_request_models.dart';
+import 'package:markakalkan/features/subscriptions/presentation/broad_digital_scan_subscription_page.dart';
 import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_controller.dart';
 
 const Key publicLiteRiskScanBrandFieldKey = Key('publicLiteRiskScanBrandField');
@@ -32,6 +37,21 @@ const Key publicLiteRiskScanRestartButtonKey = Key(
 const Key publicLiteRiskScanResultFocusKey = Key(
   'publicLiteRiskScanResultFocus',
 );
+const Key publicLiteRiskScanSubscriptionCtaKey = Key(
+  'publicLiteRiskScanSubscriptionCta',
+);
+const Key publicLiteRiskScanSubscriptionButtonKey = Key(
+  'publicLiteRiskScanSubscriptionButton',
+);
+
+typedef PublicLiteRiskScanAuthenticationCheck = bool Function();
+typedef PublicLiteRiskScanLoginFlow =
+    Future<bool?> Function(BuildContext context);
+typedef PublicLiteRiskScanSubscriptionFlow =
+    Future<void> Function(
+      BuildContext context,
+      BroadDigitalScanSubscriptionSource source,
+    );
 
 final class PublicLiteRiskScanPreviewPage extends StatefulWidget {
   const PublicLiteRiskScanPreviewPage({
@@ -40,12 +60,18 @@ final class PublicLiteRiskScanPreviewPage extends StatefulWidget {
     this.controller,
     this.requestIdFactory,
     this.clientNonceFactory,
+    this.isAuthenticated,
+    this.openSubscriptionLogin,
+    this.openBroadDigitalScanSubscription,
   });
 
   final PublicLiteRiskScanRepository? repository;
   final PublicLiteRiskScanController? controller;
   final String Function()? requestIdFactory;
   final String Function()? clientNonceFactory;
+  final PublicLiteRiskScanAuthenticationCheck? isAuthenticated;
+  final PublicLiteRiskScanLoginFlow? openSubscriptionLogin;
+  final PublicLiteRiskScanSubscriptionFlow? openBroadDigitalScanSubscription;
 
   @override
   State<PublicLiteRiskScanPreviewPage> createState() =>
@@ -65,6 +91,7 @@ final class _PublicLiteRiskScanPreviewPageState
   late final String Function() _requestIdFactory;
   late final String Function() _clientNonceFactory;
   late PublicLiteRiskScanOperationState _lastOperationState;
+  bool _openingSubscription = false;
 
   @override
   void initState() {
@@ -143,6 +170,67 @@ final class _PublicLiteRiskScanPreviewPageState
       return;
     }
     await _operation.refreshNow();
+  }
+
+  Future<void> _openSubscription(
+    PublicLiteRiskScanProjection projection,
+    PublicLiteRiskScanReport report,
+  ) async {
+    if (_openingSubscription) {
+      return;
+    }
+
+    setState(() {
+      _openingSubscription = true;
+    });
+
+    try {
+      final isAuthenticated =
+          widget.isAuthenticated ??
+          () => FirebaseAuth.instance.currentUser != null;
+
+      if (!isAuthenticated()) {
+        final openLogin =
+            widget.openSubscriptionLogin ??
+            (context) => Navigator.of(context).push<bool>(
+              MaterialPageRoute<bool>(
+                builder: (_) => const BrandLoginPage(
+                  intent: MarkaKalkanAuthIntent.subscription,
+                ),
+              ),
+            );
+        final completed = await openLogin(context);
+        if (!mounted || completed != true) {
+          return;
+        }
+      }
+
+      final source = BroadDigitalScanSubscriptionSource(
+        scanRunId: projection.scanRunId,
+        reportId: report.reportId,
+        brandName: _brandController.text,
+        officialWebsiteUrl: _websiteController.text,
+      );
+
+      final openSubscription =
+          widget.openBroadDigitalScanSubscription ??
+          (context, source) => Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              settings: const RouteSettings(
+                name: BroadDigitalScanSubscriptionPage.routeName,
+              ),
+              builder: (_) => BroadDigitalScanSubscriptionPage(source: source),
+            ),
+          );
+
+      await openSubscription(context, source);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _openingSubscription = false;
+        });
+      }
+    }
   }
 
   @override
@@ -515,8 +603,64 @@ final class _PublicLiteRiskScanPreviewPageState
           if (report != null) ...[
             const SizedBox(height: 16),
             _ReportCard(report: report),
+            const SizedBox(height: 16),
+            _SubscriptionCtaCard(
+              key: publicLiteRiskScanSubscriptionCtaKey,
+              onPressed: _openingSubscription
+                  ? null
+                  : () => _openSubscription(projection, report),
+            ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+final class _SubscriptionCtaCard extends StatelessWidget {
+  const _SubscriptionCtaCard({super.key, required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 0,
+      color: colorScheme.secondaryContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Daha kapsamlı tarama yapın',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Daha fazla dijital kanalı taramak ve ayrıntılı rapor '
+              'almak için aboneliğinizi seçin.',
+            ),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                key: publicLiteRiskScanSubscriptionButtonKey,
+                onPressed: onPressed,
+                icon: const Icon(Icons.upgrade_outlined),
+                label: const Text('Geniş Kapsamlı Taramaya Geç'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

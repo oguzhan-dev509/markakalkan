@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/risk_scan/data/public_lite_risk_scan_repository.dart';
 import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_controller.dart';
 import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_preview_page.dart';
+import 'package:markakalkan/features/subscriptions/domain/subscription_request_models.dart';
 
 void main() {
   testWidgets('public page presents a focused scan form on mobile', (
@@ -136,6 +137,15 @@ void main() {
     );
     expect(find.text('Genel risk: Yüksek'), findsOneWidget);
     expect(find.text('Güven: Orta'), findsOneWidget);
+    expect(find.text('Daha kapsamlı tarama yapın'), findsOneWidget);
+    expect(
+      find.text(
+        'Daha fazla dijital kanalı taramak ve ayrıntılı rapor '
+        'almak için aboneliğinizi seçin.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(publicLiteRiskScanSubscriptionButtonKey), findsOneWidget);
 
     final focus = tester.widget<Focus>(
       find.byKey(publicLiteRiskScanResultFocusKey),
@@ -144,6 +154,43 @@ void main() {
 
     await _disposePreview(tester, controller);
   });
+
+  testWidgets(
+    'subscription CTA uses common login then opens real request flow',
+    (tester) async {
+      var loginCalls = 0;
+      BroadDigitalScanSubscriptionSource? openedSource;
+
+      final controller = await _pumpPreview(
+        tester,
+        repository: _FakeRepository(startProjection: _finalProjection()),
+        isAuthenticated: () => false,
+        openSubscriptionLogin: (_) async {
+          loginCalls += 1;
+          return true;
+        },
+        openBroadDigitalScanSubscription: (_, source) async {
+          openedSource = source;
+        },
+      );
+
+      await _submitValidScan(tester);
+      await tester.ensureVisible(
+        find.byKey(publicLiteRiskScanSubscriptionButtonKey),
+      );
+      await tester.tap(find.byKey(publicLiteRiskScanSubscriptionButtonKey));
+      await tester.pumpAndSettle();
+
+      expect(loginCalls, 1);
+      expect(openedSource, isNotNull);
+      expect(openedSource?.scanRunId, 'a' * 64);
+      expect(openedSource?.reportId, 'report-1');
+      expect(openedSource?.brandName, 'MarkaKalkan');
+      expect(openedSource?.officialWebsiteUrl, 'https://markakalkan.com');
+
+      await _disposePreview(tester, controller);
+    },
+  );
 
   testWidgets('terminal status is visible and offers a new scan', (
     tester,
@@ -231,6 +278,9 @@ Future<PublicLiteRiskScanController> _pumpPreview(
   WidgetTester tester, {
   required PublicLiteRiskScanRepository repository,
   Size? size,
+  PublicLiteRiskScanAuthenticationCheck? isAuthenticated,
+  PublicLiteRiskScanLoginFlow? openSubscriptionLogin,
+  PublicLiteRiskScanSubscriptionFlow? openBroadDigitalScanSubscription,
 }) async {
   if (size != null) {
     await tester.binding.setSurfaceSize(size);
@@ -249,6 +299,9 @@ Future<PublicLiteRiskScanController> _pumpPreview(
         controller: controller,
         requestIdFactory: () => '11111111-1111-4111-8111-111111111111',
         clientNonceFactory: () => 'nonce-1',
+        isAuthenticated: isAuthenticated,
+        openSubscriptionLogin: openSubscriptionLogin,
+        openBroadDigitalScanSubscription: openBroadDigitalScanSubscription,
       ),
     ),
   );
