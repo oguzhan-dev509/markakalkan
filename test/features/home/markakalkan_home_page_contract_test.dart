@@ -36,6 +36,18 @@ void main() {
     );
   });
 
+  test('HRT public acquisition section is visible after the radar', () {
+    expect(homeSource, contains('class _PublicRiskScanSection'));
+    expect(
+      homeSource,
+      contains('SliverToBoxAdapter(child: _PublicRiskScanSection())'),
+    );
+    expect(homeSource, contains('ÜCRETSİZ HIZLI RİSK TARAMASI'));
+    expect(homeSource, contains('Markamı Ücretsiz Tara'));
+    expect(homeSource, contains('AppRouter.openPublicLiteRiskScan(context)'));
+    expect(homeSource, isNot(contains('openPublicLiteRiskScanPreview')));
+  });
+
   test('public service cards use existing safe router methods', () {
     expect(
       homeSource,

@@ -624,10 +624,10 @@ abstract final class AppRouter {
     );
   }
 
-  static Future<void> openPublicLiteRiskScanPreview(BuildContext context) {
+  static Future<void> openPublicLiteRiskScan(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        settings: const RouteSettings(name: '/risk-scan/public-lite-preview'),
+        settings: const RouteSettings(name: '/risk-scan/public-lite'),
         builder: (_) => const PublicLiteRiskScanPreviewPage(),
       ),
     );

@@ -19,6 +19,7 @@ class MarkaKalkanHomePage extends StatelessWidget {
             SliverToBoxAdapter(child: _Header()),
             SliverToBoxAdapter(child: _HeroSection()),
             SliverToBoxAdapter(child: _PublicRadarSection()),
+            SliverToBoxAdapter(child: _PublicRiskScanSection()),
             SliverToBoxAdapter(child: _PublicServicesSection()),
             SliverToBoxAdapter(child: _AiFieldDetectivesShowcase()),
             SliverToBoxAdapter(child: _DefenseChainSection()),
@@ -620,6 +621,306 @@ class _PublicRadarSection extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PublicRiskScanSection extends StatelessWidget {
+  const _PublicRiskScanSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF071923), Color(0xFF0A2533), Color(0xFF123E4B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 80),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final content = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF173E4D),
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: const Color(0xFF2F6170)),
+                    ),
+                    child: const Text(
+                      'ÜCRETSİZ HIZLI RİSK TARAMASI',
+                      style: TextStyle(
+                        color: Color(0xFF9BE1DA),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Markanızı yazın,\nilk risk görünümünü alın.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 38,
+                      height: 1.14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Marka adınızı ve resmî internet adresinizi girin. '
+                    'MarkaKalkan; benzer alan adı, açık web ve sınırlı '
+                    'pazaryeri kanallarındaki ilk risk sinyallerini tarasın, '
+                    'sonuçları anlaşılır bir özet raporda sunsun.',
+                    style: TextStyle(
+                      color: Color(0xFFC9D8DE),
+                      fontSize: 16,
+                      height: 1.65,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  const Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _RiskScanBenefitChip(
+                        icon: Icons.person_off_outlined,
+                        label: 'Hesap gerektirmez',
+                      ),
+                      _RiskScanBenefitChip(
+                        icon: Icons.lock_outline,
+                        label: 'Sonuçlar kamuya yayımlanmaz',
+                      ),
+                      _RiskScanBenefitChip(
+                        icon: Icons.timer_outlined,
+                        label: 'Hızlı ilk görünüm',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  FilledButton.icon(
+                    key: const Key('publicRiskScanHomeButton'),
+                    onPressed: () {
+                      AppRouter.openPublicLiteRiskScan(context);
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MarkaKalkanTheme.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 18,
+                      ),
+                    ),
+                    icon: const Icon(Icons.radar_outlined),
+                    label: const Text('Markamı Ücretsiz Tara'),
+                  ),
+                ],
+              );
+
+              const visual = _RiskScanVisual();
+
+              if (constraints.maxWidth < 820) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [content, const SizedBox(height: 36), visual],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(flex: 6, child: content),
+                  const SizedBox(width: 48),
+                  const Expanded(flex: 4, child: visual),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiskScanBenefitChip extends StatelessWidget {
+  const _RiskScanBenefitChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFF102F3C),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: const Color(0xFF315563)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: const Color(0xFF9BE1DA), size: 17),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFFE5EFF2),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RiskScanVisual extends StatelessWidget {
+  const _RiskScanVisual();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 330),
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFC),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFB7D3DA)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x2A000000),
+            blurRadius: 30,
+            offset: Offset(0, 16),
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.shield_outlined,
+                color: MarkaKalkanTheme.teal,
+                size: 30,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'İlk risk görünümü',
+                  style: TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 24),
+          _RiskScanStep(
+            number: '1',
+            title: 'Markanızı girin',
+            body: 'Marka adı ve resmî internet adresi.',
+          ),
+          SizedBox(height: 14),
+          _RiskScanStep(
+            number: '2',
+            title: 'Tarama çalışsın',
+            body: 'Açık kaynak risk sinyalleri incelensin.',
+          ),
+          SizedBox(height: 14),
+          _RiskScanStep(
+            number: '3',
+            title: 'Sonucu görün',
+            body: 'Kapsam, bulgular ve önerilen sonraki adım.',
+          ),
+          SizedBox(height: 22),
+          Text(
+            'Ücretsiz tarama, kapsamı sınırlı bir ilk değerlendirmedir.',
+            style: TextStyle(
+              color: Color(0xFF65747D),
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RiskScanStep extends StatelessWidget {
+  const _RiskScanStep({
+    required this.number,
+    required this.title,
+    required this.body,
+  });
+
+  final String number;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: Color(0xFFE8F6F4),
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            number,
+            style: const TextStyle(
+              color: MarkaKalkanTheme.teal,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: MarkaKalkanTheme.navy,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                body,
+                style: const TextStyle(
+                  color: Color(0xFF667780),
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

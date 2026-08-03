@@ -5,7 +5,7 @@ import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_sca
 import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_preview_page.dart';
 
 void main() {
-  testWidgets('preview explains purpose, privacy, and starts on mobile', (
+  testWidgets('public page explains purpose, privacy, and starts on mobile', (
     tester,
   ) async {
     final repository = _FakeRepository();
@@ -15,11 +15,17 @@ void main() {
       size: const Size(390, 844),
     );
 
+    expect(find.text('Hızlı Risk Taraması'), findsOneWidget);
+    expect(find.textContaining('Önizleme'), findsNothing);
+    expect(find.textContaining('Firebase Rules UpdateRelease'), findsNothing);
     expect(find.text('Bu bölüm ne işe yarar?'), findsOneWidget);
     expect(find.text('Ne zaman kullanmalısınız?'), findsOneWidget);
     expect(find.text('Bu işlem için ne gerekir?'), findsOneWidget);
     expect(find.text('İşlem sonunda ne elde edersiniz?'), findsOneWidget);
-    expect(find.textContaining('İzole frontend önizlemesi'), findsOneWidget);
+    expect(
+      find.textContaining('kapsamı sınırlı bir özet rapor'),
+      findsOneWidget,
+    );
     expect(find.byKey(publicLiteRiskScanTrustNoticeKey), findsOneWidget);
     expect(find.text('Veri kullanımı ve gizlilik'), findsOneWidget);
     expect(
@@ -37,7 +43,10 @@ void main() {
     expect(repository.lastStartRequest?.brandName, 'MarkaKalkan');
     expect(find.text('Tarama oluşturuldu'), findsOneWidget);
     expect(find.textContaining('Tarama no:'), findsOneWidget);
-    expect(find.textContaining('controller belleğinde'), findsOneWidget);
+    expect(
+      find.textContaining('bu oturum boyunca güvenli biçimde'),
+      findsOneWidget,
+    );
     expect(find.text(_accessKey), findsNothing);
     expect(find.byKey(publicLiteRiskScanTimelineKey), findsOneWidget);
     expect(find.text('Tarama ilerlemesi'), findsOneWidget);
@@ -117,7 +126,7 @@ void main() {
 
     await _submitValidScan(tester);
 
-    expect(find.text('Public Lite risk raporu'), findsOneWidget);
+    expect(find.text('Hızlı risk taraması raporu'), findsOneWidget);
     expect(
       find.text('Rapor üretim zamanı: 30.07.2026 12:02 UTC'),
       findsOneWidget,

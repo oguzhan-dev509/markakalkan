@@ -156,7 +156,7 @@ final class _PublicLiteRiskScanPreviewPageState
         _scheduleFocusForTransition();
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Hızlı Risk Taraması — Önizleme')),
+          appBar: AppBar(title: const Text('Hızlı Risk Taraması')),
           body: SafeArea(
             child: SelectionArea(
               child: SingleChildScrollView(
@@ -167,7 +167,7 @@ final class _PublicLiteRiskScanPreviewPageState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const _PreviewNotice(),
+                        const _PublicRiskScanNotice(),
                         const SizedBox(height: 20),
                         const _PurposeGrid(),
                         const SizedBox(height: 16),
@@ -221,8 +221,8 @@ final class _PublicLiteRiskScanPreviewPageState
               ),
               const SizedBox(height: 8),
               const Text(
-                'Bu önizleme yalnız destek engeli çözülmeden önceki '
-                'frontend entegrasyonunu doğrulamak içindir.',
+                'Markanızın açık web, benzer alan adı ve sınırlı '
+                'pazaryeri kanallarındaki ilk risk görünümünü başlatın.',
               ),
               const SizedBox(height: 18),
               TextFormField(
@@ -400,8 +400,9 @@ final class _PublicLiteRiskScanPreviewPageState
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Erişim anahtarı yalnız controller belleğinde tutulur; '
-                    'ekranda gösterilmez ve kalıcı depoya yazılmaz.',
+                    'Tarama erişimi bu oturum boyunca güvenli biçimde '
+                    'korunur; anahtar ekranda gösterilmez veya kalıcı '
+                    'olarak saklanmaz.',
                   ),
                 ],
               ),
@@ -419,8 +420,8 @@ final class _PublicLiteRiskScanPreviewPageState
   }
 }
 
-final class _PreviewNotice extends StatelessWidget {
-  const _PreviewNotice();
+final class _PublicRiskScanNotice extends StatelessWidget {
+  const _PublicRiskScanNotice();
 
   @override
   Widget build(BuildContext context) {
@@ -431,13 +432,13 @@ final class _PreviewNotice extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.science_outlined),
+            Icon(Icons.radar_outlined),
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'İzole frontend önizlemesi: Firebase Rules UpdateRelease '
-                'destek engeli çözülene kadar bu ekran ana sayfa veya kamu '
-                'navigasyonunda yayımlanmayacaktır.',
+                'Marka adınızı ve resmî internet adresinizi girin. '
+                'MarkaKalkan kamuya açık kaynaklardaki ilk risk sinyallerini '
+                'tarasın ve kapsamı sınırlı bir özet rapor hazırlasın.',
               ),
             ),
           ],
@@ -471,12 +472,12 @@ final class _TrustNotice extends StatelessWidget {
                   ),
                   SizedBox(height: 6),
                   Text(
-                    'Bu Public Lite akışı hesap girişi veya kişisel profil '
-                    'bilgisi istemez. Marka adı ve resmî internet adresi '
-                    'yalnız taramanın oluşturulması, durumunun izlenmesi ve '
-                    'maskelenmiş raporun sunulması amacıyla işlenir. Erişim '
-                    'anahtarı cihazda kalıcı olarak saklanmaz ve bu ekran '
-                    'sonuçları kendiliğinden kamuya yayımlamaz.',
+                    'Bu ücretsiz hızlı tarama hesap girişi veya kişisel '
+                    'profil bilgisi istemez. Marka adı ve resmî internet '
+                    'adresi yalnız taramanın oluşturulması, durumunun '
+                    'izlenmesi ve özet raporun sunulması amacıyla işlenir. '
+                    'Erişim anahtarı cihazda kalıcı olarak saklanmaz ve '
+                    'MarkaKalkan sonuçları kendiliğinden kamuya yayımlamaz.',
                   ),
                 ],
               ),
@@ -509,14 +510,13 @@ final class _PurposeGrid extends StatelessWidget {
       _PurposeItem(
         Icons.fact_check_outlined,
         'Bu işlem için ne gerekir?',
-        'Marka adı, doğrulanabilir resmî HTTP(S) adresi ve geçerli App Check '
-            'güvenlik bağlamı.',
+        'Marka adı ve doğrulanabilir resmî HTTP(S) internet adresi.',
       ),
       _PurposeItem(
         Icons.summarize_outlined,
         'İşlem sonunda ne elde edersiniz?',
         'Kanal kapsamı, gözlem ve bulgu sayaçları ile hazır olduğunda '
-            'maskelenmiş Public Lite risk raporu.',
+            'kapsamı sınırlı hızlı risk taraması raporu.',
       ),
     ];
 
@@ -679,7 +679,7 @@ final class _ReportCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Public Lite risk raporu',
+              'Hızlı risk taraması raporu',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
