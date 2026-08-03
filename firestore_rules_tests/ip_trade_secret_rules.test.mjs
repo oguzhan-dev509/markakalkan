@@ -323,3 +323,66 @@ test('hukuki muhafaza bulunmayan kayıt tenant sahibi tarafından silinebilir', 
     deleteDoc(doc(db, 'ip_trade_secrets', secretId)),
   );
 });
+
+// FRC-1H five empty trade-secret detail collections remain server-only.
+const serverOnlyTradeSecretDetailCollections = [
+  'ip_trade_secret_risk_assessments',
+  'ip_trade_secret_resilience_profiles',
+  'ip_trade_secret_defensibility_records',
+  'ip_trade_secret_lifecycle_transitions',
+  'ip_trade_secret_alert_rules',
+];
+
+async function seedServerOnlyTradeSecretDetail(collectionName) {
+  await testEnvironment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), collectionName, 'record-1'),
+      {
+        tenantId: ownerUid,
+        value: 1,
+      },
+    );
+  });
+}
+
+for (const collectionName of serverOnlyTradeSecretDetailCollections) {
+  test(`${collectionName}: tüm client erişimi reddedilir`, async () => {
+    const unauthenticated = testEnvironment
+      .unauthenticatedContext()
+      .firestore();
+    const authenticated = testEnvironment
+      .authenticatedContext(ownerUid)
+      .firestore();
+
+    await assertFails(
+      setDoc(
+        doc(unauthenticated, collectionName, 'record-1'),
+        {tenantId: ownerUid, value: 1},
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(authenticated, collectionName, 'record-1'),
+        {tenantId: ownerUid, value: 1},
+      ),
+    );
+
+    await seedServerOnlyTradeSecretDetail(collectionName);
+
+    await assertFails(
+      getDoc(doc(authenticated, collectionName, 'record-1')),
+    );
+    await assertFails(
+      getDocs(collection(authenticated, collectionName)),
+    );
+    await assertFails(
+      updateDoc(
+        doc(authenticated, collectionName, 'record-1'),
+        {value: 2},
+      ),
+    );
+    await assertFails(
+      deleteDoc(doc(authenticated, collectionName, 'record-1')),
+    );
+  });
+}
