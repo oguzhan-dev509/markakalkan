@@ -5,7 +5,7 @@ import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_sca
 import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_preview_page.dart';
 
 void main() {
-  testWidgets('public page explains purpose, privacy, and starts on mobile', (
+  testWidgets('public page presents a focused scan form on mobile', (
     tester,
   ) async {
     final repository = _FakeRepository();
@@ -16,26 +16,19 @@ void main() {
     );
 
     expect(find.text('Hızlı Risk Taraması'), findsOneWidget);
-    expect(find.textContaining('Önizleme'), findsNothing);
-    expect(find.textContaining('Firebase Rules UpdateRelease'), findsNothing);
-    expect(find.text('Bu bölüm ne işe yarar?'), findsOneWidget);
-    expect(find.text('Ne zaman kullanmalısınız?'), findsOneWidget);
-    expect(find.text('Bu işlem için ne gerekir?'), findsOneWidget);
-    expect(find.text('İşlem sonunda ne elde edersiniz?'), findsOneWidget);
-    expect(
-      find.textContaining('kapsamı sınırlı bir özet rapor'),
-      findsOneWidget,
-    );
-    expect(find.byKey(publicLiteRiskScanTrustNoticeKey), findsOneWidget);
-    expect(find.text('Veri kullanımı ve gizlilik'), findsOneWidget);
-    expect(
-      find.textContaining('kişisel profil bilgisi istemez'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('kendiliğinden kamuya yayımlamaz'),
-      findsOneWidget,
-    );
+    expect(find.byKey(publicLiteRiskScanFormCardKey), findsOneWidget);
+    expect(find.text('Marka ve resmî kaynak'), findsOneWidget);
+    expect(find.textContaining('ilk risk görünümünü başlatın'), findsOneWidget);
+    expect(find.byKey(publicLiteRiskScanBrandFieldKey), findsOneWidget);
+    expect(find.byKey(publicLiteRiskScanWebsiteFieldKey), findsOneWidget);
+    expect(find.byKey(publicLiteRiskScanStartButtonKey), findsOneWidget);
+
+    expect(find.text('Bu bölüm ne işe yarar?'), findsNothing);
+    expect(find.text('Ne zaman kullanmalısınız?'), findsNothing);
+    expect(find.text('Bu işlem için ne gerekir?'), findsNothing);
+    expect(find.text('İşlem sonunda ne elde edersiniz?'), findsNothing);
+    expect(find.text('Veri kullanımı ve gizlilik'), findsNothing);
+    expect(find.textContaining('kapsamı sınırlı bir özet rapor'), findsNothing);
 
     await _submitValidScan(tester);
 

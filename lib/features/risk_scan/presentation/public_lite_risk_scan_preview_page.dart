@@ -12,6 +12,7 @@ const Key publicLiteRiskScanWebsiteFieldKey = Key(
 const Key publicLiteRiskScanStartButtonKey = Key(
   'publicLiteRiskScanStartButton',
 );
+const Key publicLiteRiskScanFormCardKey = Key('publicLiteRiskScanFormCard');
 const Key publicLiteRiskScanRefreshButtonKey = Key(
   'publicLiteRiskScanRefreshButton',
 );
@@ -22,9 +23,6 @@ const Key publicLiteRiskScanStatusRegionKey = Key(
   'publicLiteRiskScanStatusRegion',
 );
 const Key publicLiteRiskScanTimelineKey = Key('publicLiteRiskScanTimeline');
-const Key publicLiteRiskScanTrustNoticeKey = Key(
-  'publicLiteRiskScanTrustNotice',
-);
 const Key publicLiteRiskScanRetryButtonKey = Key(
   'publicLiteRiskScanRetryButton',
 );
@@ -167,12 +165,6 @@ final class _PublicLiteRiskScanPreviewPageState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const _PublicRiskScanNotice(),
-                        const SizedBox(height: 20),
-                        const _PurposeGrid(),
-                        const SizedBox(height: 16),
-                        const _TrustNotice(),
-                        const SizedBox(height: 24),
                         _buildForm(context),
                         Focus(
                           key: publicLiteRiskScanResultFocusKey,
@@ -207,84 +199,194 @@ final class _PublicLiteRiskScanPreviewPageState
   }
 
   Widget _buildForm(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Marka ve resmî kaynak',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Markanızın açık web, benzer alan adı ve sınırlı '
-                'pazaryeri kanallarındaki ilk risk görünümünü başlatın.',
-              ),
-              const SizedBox(height: 18),
-              TextFormField(
-                key: publicLiteRiskScanBrandFieldKey,
-                controller: _brandController,
-                enabled: !_operation.isBusy,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Marka adı',
-                  hintText: 'Örnek: MarkaKalkan',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Marka adı gereklidir.'
-                    : null,
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                key: publicLiteRiskScanWebsiteFieldKey,
-                controller: _websiteController,
-                enabled: !_operation.isBusy,
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(
-                  labelText: 'Resmî internet adresi',
-                  hintText: 'https://ornek.com',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  final uri = Uri.tryParse(value?.trim() ?? '');
-                  if (uri == null ||
-                      (uri.scheme != 'http' && uri.scheme != 'https') ||
-                      uri.host.isEmpty ||
-                      uri.userInfo.isNotEmpty) {
-                    return 'Geçerli bir HTTP(S) adresi girin.';
-                  }
-                  return null;
-                },
-                onFieldSubmitted: (_) {
-                  _start();
-                },
-              ),
-              const SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.icon(
-                  key: publicLiteRiskScanStartButtonKey,
-                  onPressed: _operation.isBusy ? null : _start,
-                  icon: _operation.isBusy
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.radar),
-                  label: Text(
-                    _operation.isBusy ? 'İşlem sürüyor' : 'Taramayı başlat',
-                  ),
-                ),
-              ),
-            ],
-          ),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    Widget buildBrandField() {
+      return TextFormField(
+        key: publicLiteRiskScanBrandFieldKey,
+        controller: _brandController,
+        enabled: !_operation.isBusy,
+        textInputAction: TextInputAction.next,
+        decoration: const InputDecoration(
+          labelText: 'Marka adı',
+          hintText: 'Örnek: MarkaKalkan',
+          prefixIcon: Icon(Icons.verified_outlined),
+          border: OutlineInputBorder(),
         ),
+        validator: (value) => value == null || value.trim().isEmpty
+            ? 'Marka adı gereklidir.'
+            : null,
+      );
+    }
+
+    Widget buildWebsiteField() {
+      return TextFormField(
+        key: publicLiteRiskScanWebsiteFieldKey,
+        controller: _websiteController,
+        enabled: !_operation.isBusy,
+        keyboardType: TextInputType.url,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(
+          labelText: 'Resmî internet adresi',
+          hintText: 'https://ornek.com',
+          prefixIcon: Icon(Icons.language_outlined),
+          border: OutlineInputBorder(),
+        ),
+        validator: (value) {
+          final uri = Uri.tryParse(value?.trim() ?? '');
+          if (uri == null ||
+              (uri.scheme != 'http' && uri.scheme != 'https') ||
+              uri.host.isEmpty ||
+              uri.userInfo.isNotEmpty) {
+            return 'Geçerli bir HTTP(S) adresi girin.';
+          }
+          return null;
+        },
+        onFieldSubmitted: (_) {
+          _start();
+        },
+      );
+    }
+
+    Widget buildStartButton({required bool expand}) {
+      final button = FilledButton.icon(
+        key: publicLiteRiskScanStartButtonKey,
+        onPressed: _operation.isBusy ? null : _start,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 52),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        ),
+        icon: _operation.isBusy
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.radar_outlined),
+        label: Text(_operation.isBusy ? 'İşlem sürüyor' : 'Taramayı başlat'),
+      );
+
+      return expand
+          ? SizedBox(width: double.infinity, child: button)
+          : Align(alignment: Alignment.centerRight, child: button);
+    }
+
+    return Card(
+      key: publicLiteRiskScanFormCardKey,
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 6,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [colorScheme.primary, colorScheme.tertiary],
+              ),
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [colorScheme.primaryContainer, colorScheme.surface],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            padding: const EdgeInsets.all(28),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: colorScheme.outlineVariant),
+                        ),
+                        child: Icon(
+                          Icons.shield_outlined,
+                          color: colorScheme.primary,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Marka ve resmî kaynak',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Markanızın açık web, benzer alan adı ve sınırlı '
+                              'pazaryeri kanallarındaki ilk risk görünümünü '
+                              'başlatın.',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 720;
+
+                      if (compact) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            buildBrandField(),
+                            const SizedBox(height: 16),
+                            buildWebsiteField(),
+                            const SizedBox(height: 20),
+                            buildStartButton(expand: true),
+                          ],
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: buildBrandField()),
+                              const SizedBox(width: 16),
+                              Expanded(child: buildWebsiteField()),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          buildStartButton(expand: false),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -418,160 +520,6 @@ final class _PublicLiteRiskScanPreviewPageState
       ),
     );
   }
-}
-
-final class _PublicRiskScanNotice extends StatelessWidget {
-  const _PublicRiskScanNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.secondaryContainer,
-      child: const Padding(
-        padding: EdgeInsets.all(18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.radar_outlined),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Marka adınızı ve resmî internet adresinizi girin. '
-                'MarkaKalkan kamuya açık kaynaklardaki ilk risk sinyallerini '
-                'tarasın ve kapsamı sınırlı bir özet rapor hazırlasın.',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _TrustNotice extends StatelessWidget {
-  const _TrustNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      key: publicLiteRiskScanTrustNoticeKey,
-      child: const Padding(
-        padding: EdgeInsets.all(18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.privacy_tip_outlined),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Veri kullanımı ve gizlilik',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Bu ücretsiz hızlı tarama hesap girişi veya kişisel '
-                    'profil bilgisi istemez. Marka adı ve resmî internet '
-                    'adresi yalnız taramanın oluşturulması, durumunun '
-                    'izlenmesi ve özet raporun sunulması amacıyla işlenir. '
-                    'Erişim anahtarı cihazda kalıcı olarak saklanmaz ve '
-                    'MarkaKalkan sonuçları kendiliğinden kamuya yayımlamaz.',
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _PurposeGrid extends StatelessWidget {
-  const _PurposeGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    const items = <_PurposeItem>[
-      _PurposeItem(
-        Icons.shield_outlined,
-        'Bu bölüm ne işe yarar?',
-        'Marka adı ve resmî internet kaynağı üzerinden hızlı kamu risk '
-            'taramasını başlatır.',
-      ),
-      _PurposeItem(
-        Icons.schedule_outlined,
-        'Ne zaman kullanmalısınız?',
-        'Markanızın açık web, benzer alan adı ve sınırlı pazaryeri '
-            'kanallarındaki ilk risk görünümünü görmek istediğinizde.',
-      ),
-      _PurposeItem(
-        Icons.fact_check_outlined,
-        'Bu işlem için ne gerekir?',
-        'Marka adı ve doğrulanabilir resmî HTTP(S) internet adresi.',
-      ),
-      _PurposeItem(
-        Icons.summarize_outlined,
-        'İşlem sonunda ne elde edersiniz?',
-        'Kanal kapsamı, gözlem ve bulgu sayaçları ile hazır olduğunda '
-            'kapsamı sınırlı hızlı risk taraması raporu.',
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth >= 760
-            ? (constraints.maxWidth - 16) / 2
-            : constraints.maxWidth;
-
-        return Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          children: [
-            for (final item in items)
-              SizedBox(
-                width: width,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(item.icon),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item.title,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(item.body),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-final class _PurposeItem {
-  const _PurposeItem(this.icon, this.title, this.body);
-
-  final IconData icon;
-  final String title;
-  final String body;
 }
 
 final class _ErrorCard extends StatelessWidget {
