@@ -1,0 +1,14 @@
+{
+  "name": "@markakalkan/public-lite-n8n-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MarkaKalkan Public Lite n8n gateway contracts and deterministic workflow generator.",
+  "scripts": {
+    "generate": "node tools/create_public_lite_gateway_workflow.js",
+    "check:generated": "node tools/create_public_lite_gateway_workflow.js --check",
+    "test": "node --test --test-reporter=tap tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

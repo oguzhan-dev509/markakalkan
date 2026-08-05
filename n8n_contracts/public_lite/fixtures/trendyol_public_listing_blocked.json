@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "url": "https://www.trendyol.com/sr?q=acme",
+  "headers": {
+    "content-type": "text/html; charset=utf-8"
+  },
+  "body": "<html><body>Robot olmadığınızı doğrulayın. Güvenlik kontrolü.</body></html>"
+}

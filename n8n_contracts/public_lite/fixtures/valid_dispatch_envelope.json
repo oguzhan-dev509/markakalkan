@@ -1,0 +1,26 @@
+{
+  "contractVersion": "risk-scan-public-lite-dispatch-envelope-v1",
+  "executionId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scanRunId": "scan-public-lite-example-001",
+  "scanMode": "quick",
+  "accessTier": "publicLite",
+  "identityMode": "anonymous",
+  "target": {
+    "brandNameNormalized": "trendyol",
+    "officialHost": "trendyol.com",
+    "officialWebsiteCanonicalUrl": "https://trendyol.com/",
+    "targetFingerprintSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "channelCodes": [
+    "similarDomains",
+    "openWeb",
+    "marketplaceLimited"
+  ],
+  "requestedAt": "2026-08-04T12:00:00.000Z",
+  "expiresAt": "2026-08-05T12:00:00.000Z",
+  "trace": {
+    "sourceEventId": "event-public-lite-example-001",
+    "requestId": "request-public-lite-example-001",
+    "requestFingerprintSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "url": "https://www.trendyol.com/sr?q=acme",
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "private, max-age=0",
+    "set-cookie": "must-not-be-recorded=1"
+  },
+  "body": "<!doctype html>\n<html>\n<head>\n  <title>Acme ürünleri</title>\n  <style>.hidden { display: none; }</style>\n  <script>window.secretLikeNoise = 'not-visible';</script>\n</head>\n<body>\n  <a href=\"/acme/original-product-p-1001\" title=\"Acme Original Product\">\n    Acme Original Product\n  </a>\n  <a href=\"https://www.trendyol.com/acme/second-product-p-1002?boutiqueId=1\"\n     aria-label=\"Acme Second Product\">İkinci ürün</a>\n  <a href=\"/acme/original-product-p-1001\">Duplicate</a>\n  <a href=\"/sr?q=acme\">Search link</a>\n  <a href=\"https://evil.example/acme-p-9\">External</a>\n</body>\n</html>"
+}
