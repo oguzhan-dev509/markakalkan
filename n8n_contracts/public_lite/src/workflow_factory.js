@@ -289,7 +289,13 @@ return [{
 }];`;
 }
 
-function acquisitionPlanCode() {
+function acquisitionPlanCode({
+  executionEnabled = false,
+} = {}) {
+  if (typeof executionEnabled !== "boolean") {
+    throw new TypeError(
+      "executionEnabled must be a boolean");
+  }
   return String.raw`const item = $input.first().json;
 const dispatch = item && item.dispatchEnvelope;
 if (!dispatch || typeof dispatch !== "object") {
@@ -322,7 +328,7 @@ return [{
         "risk-scan-public-lite-channel-adapter-result-v1",
       channelCode: "marketplaceLimited",
       adapterCode: "trendyol_public_listing_v1",
-      executionEnabled: false,
+      executionEnabled: ${JSON.stringify(executionEnabled)},
       request: {
         method: "GET",
         url: requestUrl,
@@ -684,11 +690,22 @@ function buildWorkflow({
   webhookCredentialName = "",
   resultCredentialId = "",
   resultCredentialName = "",
+  acquisitionExecutionEnabled = false,
+  resultCallbackEnabled = false,
 } = {}) {
   const webhookBound = Boolean(
     webhookCredentialId && webhookCredentialName);
   const resultBound = Boolean(
     resultCredentialId && resultCredentialName);
+
+  if (typeof acquisitionExecutionEnabled !== "boolean") {
+    throw new TypeError(
+      "acquisitionExecutionEnabled must be a boolean");
+  }
+  if (typeof resultCallbackEnabled !== "boolean") {
+    throw new TypeError(
+      "resultCallbackEnabled must be a boolean");
+  }
 
   if (Boolean(webhookCredentialId) !== Boolean(webhookCredentialName)) {
     throw new TypeError(
@@ -697,6 +714,10 @@ function buildWorkflow({
   if (Boolean(resultCredentialId) !== Boolean(resultCredentialName)) {
     throw new TypeError(
       "result credential id and name must be supplied together");
+  }
+  if (resultCallbackEnabled && !resultBound) {
+    throw new TypeError(
+      "result callback enable requires result credential binding");
   }
 
   const webhookNode = {
@@ -743,7 +764,7 @@ function buildWorkflow({
     type: "n8n-nodes-base.httpRequest",
     typeVersion: 4.2,
     position: [1280, 360],
-    disabled: true,
+    disabled: !resultCallbackEnabled,
   };
   if (resultBound) {
     resultTemplateNode.parameters.genericAuthType = "httpHeaderAuth";
@@ -833,7 +854,9 @@ function buildWorkflow({
       },
       {
         parameters: {
-          jsCode: acquisitionPlanCode(),
+          jsCode: acquisitionPlanCode({
+              executionEnabled: acquisitionExecutionEnabled,
+            }),
         },
         id: NODE_IDS.acquisitionPlan,
         name: "Build Marketplace Limited Acquisition Plan",
@@ -884,7 +907,7 @@ function buildWorkflow({
         type: "n8n-nodes-base.httpRequest",
         typeVersion: 4.2,
         position: [720, -120],
-        disabled: true,
+        disabled: !acquisitionExecutionEnabled,
       },
       {
         parameters: {
@@ -988,6 +1011,15 @@ function buildWorkflow({
           index: 0,
         }]],
       },
+      ...(resultCallbackEnabled ? {
+        "Assemble Canonical Provider Result": {
+          main: [[{
+            node: "Result Callback Template - Disabled",
+            type: "main",
+            index: 0,
+          }]],
+        },
+      } : {}),
     },
     active: false,
     settings: {

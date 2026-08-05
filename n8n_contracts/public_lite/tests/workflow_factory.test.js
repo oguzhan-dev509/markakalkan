@@ -725,3 +725,121 @@ test("integration workflow contains no tenant, auth, cookie, or API key fields",
   assert.doesNotMatch(serialized, /"x-api-key"/);
   assert.match(serialized, /captch[a-z-]*.*false/);
 });
+
+test("explicit activation capabilities remain opt-in and workflow-inactive", () => {
+  const workflow = buildWorkflow();
+  const acquisition = findNode(
+    workflow,
+    "Trendyol Public Listing Acquisition - Disabled",
+  );
+  const callback = findNode(
+    workflow,
+    "Result Callback Template - Disabled",
+  );
+  const plan = findNode(
+    workflow,
+    "Build Marketplace Limited Acquisition Plan",
+  );
+
+  assert.equal(workflow.active, false);
+  assert.equal(acquisition.disabled, true);
+  assert.equal(callback.disabled, true);
+  assert.equal(
+    workflow.connections["Assemble Canonical Provider Result"],
+    undefined,
+  );
+  assert.match(
+    plan.parameters.jsCode,
+    /executionEnabled:\s*false/u,
+  );
+});
+
+test("acquisition can be explicitly enabled without activating workflow", () => {
+  const workflow = buildWorkflow({
+    acquisitionExecutionEnabled: true,
+  });
+  const acquisition = findNode(
+    workflow,
+    "Trendyol Public Listing Acquisition - Disabled",
+  );
+  const plan = findNode(
+    workflow,
+    "Build Marketplace Limited Acquisition Plan",
+  );
+
+  assert.equal(workflow.active, false);
+  assert.equal(acquisition.disabled, false);
+  assert.match(
+    plan.parameters.jsCode,
+    /executionEnabled:\s*true/u,
+  );
+});
+
+test("result callback enable requires bound result credential", () => {
+  assert.throws(
+    () => buildWorkflow({
+      resultCallbackEnabled: true,
+    }),
+    /requires result credential binding/u,
+  );
+});
+
+test("result callback can be explicitly enabled and connected", () => {
+  const workflow = buildWorkflow({
+    resultCredentialId: "credential-result-activation-1",
+    resultCredentialName: "Public Lite Result Header Auth",
+    resultCallbackEnabled: true,
+  });
+  const callback = findNode(
+    workflow,
+    "Result Callback Template - Disabled",
+  );
+
+  assert.equal(workflow.active, false);
+  assert.equal(callback.disabled, false);
+  assert.equal(
+    callback.parameters.authentication,
+    "genericCredentialType",
+  );
+  assert.equal(
+    callback.parameters.genericAuthType,
+    "httpHeaderAuth",
+  );
+  assert.deepEqual(callback.credentials, {
+    httpHeaderAuth: {
+      id: "credential-result-activation-1",
+      name: "Public Lite Result Header Auth",
+    },
+  });
+  assert.deepEqual(
+    workflow.connections["Assemble Canonical Provider Result"],
+    {
+      main: [[{
+        node: "Result Callback Template - Disabled",
+        type: "main",
+        index: 0,
+      }]],
+    },
+  );
+});
+
+test("activation capability flags must be booleans", () => {
+  assert.throws(
+    () => buildWorkflow({
+      acquisitionExecutionEnabled: "true",
+    }),
+    /acquisitionExecutionEnabled must be a boolean/u,
+  );
+  assert.throws(
+    () => buildWorkflow({
+      resultCallbackEnabled: 1,
+    }),
+    /resultCallbackEnabled must be a boolean/u,
+  );
+  assert.throws(
+    () => acquisitionPlanCode({
+      executionEnabled: "true",
+    }),
+    /executionEnabled must be a boolean/u,
+  );
+});
