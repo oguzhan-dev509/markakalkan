@@ -261,17 +261,33 @@ test("execution lifecycle rejects terminal replay", () => {
       "terminalFailure", "dispatching"));
 });
 
-test("receipt normalizes provider metadata", () => {
+test("receipt normalizes scoped provider metadata", () => {
+  const executionId = command().executionId;
   assert.deepEqual(contract.normalizeDispatchReceipt({
-    providerCode: "n8n_public_lite",
-    externalExecutionId: "execution-1",
-    acceptedAt: later,
-  }), {
     contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
     providerCode: "n8n_public_lite",
+    executionId,
+    externalExecutionId: "execution-1",
+    acceptedAt: later,
+  }, {expectedExecutionId: executionId}), {
+    contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+    providerCode: "n8n_public_lite",
+    executionId,
     externalExecutionId: "execution-1",
     acceptedAt: later,
   });
+});
+
+test("receipt rejects a mismatched execution scope", () => {
+  assert.throws(
+      () => contract.normalizeDispatchReceipt({
+        contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+        providerCode: "n8n_public_lite",
+        executionId: "a".repeat(64),
+        externalExecutionId: "execution-1",
+        acceptedAt: later,
+      }, {expectedExecutionId: "b".repeat(64)}),
+      (error) => error.code === "failed-precondition");
 });
 
 // Orchestration core.
@@ -308,8 +324,10 @@ test("successful dispatch is stored once", async () => {
     ownerId: "worker-1",
     port,
     dispatcher: {
-      dispatch: async () => ({
+      dispatch: async (envelope) => ({
+        contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
         providerCode: "n8n_public_lite",
+        executionId: envelope.executionId,
         externalExecutionId: "execution-1",
         acceptedAt: later,
       }),
@@ -453,8 +471,10 @@ test("orchestration prepares then dispatches", async () => {
     ownerId: "worker-1",
     port,
     dispatcher: {
-      dispatch: async () => ({
+      dispatch: async (envelope) => ({
+        contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
         providerCode: "n8n_public_lite",
+        executionId: envelope.executionId,
         externalExecutionId: "execution-1",
         acceptedAt: later,
       }),

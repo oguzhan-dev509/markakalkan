@@ -72,6 +72,50 @@ function buildCommand(overrides = {}) {
   });
 }
 
+const PUBLIC_LITE_EMULATOR_RETRY_MAX_ATTEMPTS = 3;
+const PUBLIC_LITE_EMULATOR_RETRY_DELAYS_MS =
+  Object.freeze([25, 50]);
+
+function isRetryableClosedTransactionError(error) {
+  if (!error || error.code !== 3) return false;
+  const expected =
+    "transaction is invalid or closed.";
+  const details =
+    typeof error.details === "string" ?
+      error.details.trim().toLowerCase() :
+      "";
+  const message =
+    typeof error.message === "string" ?
+      error.message.trim().toLowerCase() :
+      "";
+  return details === expected ||
+    message === expected ||
+    message === `3 invalid_argument: ${expected}`;
+}
+
+function waitForPublicLiteEmulatorRetry(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+async function retryPublicLiteStartForEmulator(operation, attempt = 1) {
+  if (typeof operation !== "function") {
+    throw new TypeError("operation is required");
+  }
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isRetryableClosedTransactionError(error) ||
+        attempt >= PUBLIC_LITE_EMULATOR_RETRY_MAX_ATTEMPTS) {
+      throw error;
+    }
+    await waitForPublicLiteEmulatorRetry(
+        PUBLIC_LITE_EMULATOR_RETRY_DELAYS_MS[attempt - 1]);
+    return retryPublicLiteStartForEmulator(operation, attempt + 1);
+  }
+}
+
 async function advanceToReporting(command) {
   const scanRunId = command.run.scanRunId;
   const times = [
@@ -218,8 +262,10 @@ test(
 test("parallel exact start collapses without double rate charge", async () => {
   const command = buildCommand();
   const results = await Promise.all([
-    publicPort.createPublicLiteRun(db, command),
-    publicPort.createPublicLiteRun(db, command),
+    retryPublicLiteStartForEmulator(
+        () => publicPort.createPublicLiteRun(db, command)),
+    retryPublicLiteStartForEmulator(
+        () => publicPort.createPublicLiteRun(db, command)),
   ]);
   assert.deepEqual(
       results.map((item) => item.outcome).sort(),

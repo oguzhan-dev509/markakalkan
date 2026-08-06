@@ -264,17 +264,30 @@ return [{json: {dispatchEnvelope: envelope}}];`;
 
 function receiptCode() {
   return String.raw`const item = $input.first().json;
-const executionId = String($execution.id || "").trim();
-if (!executionId) {
+const n8nExecutionId = String($execution.id || "").trim();
+if (!n8nExecutionId) {
   throw new Error("PUBLIC_LITE_RECEIPT_REJECTED: n8n execution id missing");
 }
+const dispatch = item && item.dispatchEnvelope;
+const dispatchExecutionId = String(
+  dispatch && dispatch.executionId || "",
+).trim().toLowerCase();
+if (!/^[0-9a-f]{64}$/u.test(dispatchExecutionId)) {
+  throw new Error(
+    "PUBLIC_LITE_RECEIPT_REJECTED: dispatch execution id invalid",
+  );
+}
 const acceptedAt = new Date().toISOString();
-const externalExecutionId = ("n8n:" + executionId).slice(0, 256);
+const externalExecutionId =
+  ("n8n:" + n8nExecutionId).slice(0, 256);
 return [{
   json: {
-    dispatchEnvelope: item.dispatchEnvelope,
+    dispatchEnvelope: dispatch,
     receipt: {
+      contractVersion:
+        "risk-scan-public-lite-dispatch-receipt-v1",
       providerCode: "n8n_public_lite",
+      executionId: dispatchExecutionId,
       externalExecutionId,
       acceptedAt,
     },

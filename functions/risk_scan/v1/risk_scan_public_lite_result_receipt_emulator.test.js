@@ -121,6 +121,8 @@ async function createDispatchedExecution() {
     ownerId: "event-worker",
     attemptCount: 1,
     receipt: {
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      executionId: command.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-1",
       acceptedAt: dispatchedAt,

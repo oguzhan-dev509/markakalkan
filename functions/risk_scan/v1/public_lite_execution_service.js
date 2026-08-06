@@ -211,7 +211,9 @@ async function dispatchPreparedPublicLiteExecution({
 
   let receipt;
   try {
-    receipt = normalizeDispatchReceipt(rawReceipt);
+    receipt = normalizeDispatchReceipt(rawReceipt, {
+      expectedExecutionId: command.executionId,
+    });
   } catch {
     const failure = Object.freeze({
       code: "invalid_dispatch_receipt",

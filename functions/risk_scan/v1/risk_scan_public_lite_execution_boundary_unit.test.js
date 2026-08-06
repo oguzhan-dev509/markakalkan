@@ -206,9 +206,12 @@ test("n8n dispatcher sends the exact token and JSON envelope", async () => {
       calls.push({url, options});
       return {
         ok: true,
-        status: 200,
+        status: 202,
         text: async () => JSON.stringify({
+          contractVersion:
+            "risk-scan-public-lite-dispatch-receipt-v1",
           providerCode: "n8n_public_lite",
+          executionId,
           externalExecutionId: "n8n-execution-1",
           acceptedAt: "2026-08-04T10:05:00.000Z",
         }),
@@ -222,7 +225,10 @@ test("n8n dispatcher sends the exact token and JSON envelope", async () => {
       calls[0].options.headers[boundary.PUBLIC_LITE_WEBHOOK_TOKEN_HEADER],
       "dispatch-secret");
   assert.deepEqual(JSON.parse(calls[0].options.body), {executionId});
+  assert.equal(receipt.contractVersion,
+      "risk-scan-public-lite-dispatch-receipt-v1");
   assert.equal(receipt.providerCode, "n8n_public_lite");
+  assert.equal(receipt.executionId, executionId);
 });
 
 test("n8n dispatcher rejects an empty webhook token", async () => {
@@ -250,12 +256,56 @@ test("n8n dispatcher classifies HTTP 429 as retryable", async () => {
       (error) => error.statusCode === 429 && error.retryable === true);
 });
 
-test("n8n dispatcher rejects invalid success JSON", async () => {
+test("n8n dispatcher rejects a non-202 successful response", async () => {
   const dispatcher = boundary.createPublicLiteN8nDispatcher({
     webhookToken: {value: () => "secret"},
     fetchImpl: async () => ({
       ok: true,
       status: 200,
+      text: async () => JSON.stringify({
+        contractVersion:
+          "risk-scan-public-lite-dispatch-receipt-v1",
+        providerCode: "n8n_public_lite",
+        executionId,
+        externalExecutionId: "n8n-execution-1",
+        acceptedAt: "2026-08-04T10:05:00.000Z",
+      }),
+    }),
+  });
+  await assert.rejects(
+      dispatcher.dispatch({executionId}),
+      (error) => error.code === "unexpected_dispatch_status" &&
+        error.statusCode === 200 &&
+        error.retryable === false);
+});
+
+test("n8n dispatcher rejects a mismatched receipt execution id", async () => {
+  const dispatcher = boundary.createPublicLiteN8nDispatcher({
+    webhookToken: {value: () => "secret"},
+    fetchImpl: async () => ({
+      ok: true,
+      status: 202,
+      text: async () => JSON.stringify({
+        contractVersion:
+          "risk-scan-public-lite-dispatch-receipt-v1",
+        providerCode: "n8n_public_lite",
+        executionId: "b".repeat(64),
+        externalExecutionId: "n8n-execution-1",
+        acceptedAt: "2026-08-04T10:05:00.000Z",
+      }),
+    }),
+  });
+  await assert.rejects(
+      dispatcher.dispatch({executionId}),
+      (error) => error.code === "failed-precondition");
+});
+
+test("n8n dispatcher rejects invalid success JSON", async () => {
+  const dispatcher = boundary.createPublicLiteN8nDispatcher({
+    webhookToken: {value: () => "secret"},
+    fetchImpl: async () => ({
+      ok: true,
+      status: 202,
       text: async () => "not-json",
     }),
   });

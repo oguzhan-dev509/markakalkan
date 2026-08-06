@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const {defineSecret} = require("firebase-functions/params");
 const {channelCodes} = require("./contracts");
 const {
+  PublicLiteExecutionContractError,
   normalizeDispatchReceipt,
 } = require("./public_lite_execution_contract");
 const {
@@ -101,7 +102,10 @@ function retryableHttpStatus(statusCode) {
     statusCode === 429 || statusCode >= 500;
 }
 
-function parseDispatchReceiptText(text) {
+function parseDispatchReceiptText(
+    text,
+    expectedExecutionId,
+) {
   const normalized = safeResponseText(text);
   if (!normalized) {
     throw new PublicLiteDispatchHttpError(
@@ -116,7 +120,7 @@ function parseDispatchReceiptText(text) {
         "invalid_dispatch_response",
         "Dispatch provider returned invalid JSON.");
   }
-  return normalizeDispatchReceipt(parsed);
+  return normalizeDispatchReceipt(parsed, {expectedExecutionId});
 }
 
 function createPublicLiteN8nDispatcher({
@@ -171,9 +175,20 @@ function createPublicLiteN8nDispatcher({
                 retryable: retryableHttpStatus(response.status),
               });
         }
-        return parseDispatchReceiptText(text);
+        if (response.status !== 202) {
+          throw new PublicLiteDispatchHttpError(
+              "unexpected_dispatch_status",
+              `Dispatch provider must return HTTP 202; received ${
+                response.status
+              }.`,
+              {statusCode: response.status, retryable: false});
+        }
+        return parseDispatchReceiptText(text, envelope.executionId);
       } catch (error) {
-        if (error instanceof PublicLiteDispatchHttpError) throw error;
+        if (error instanceof PublicLiteDispatchHttpError ||
+            error instanceof PublicLiteExecutionContractError) {
+          throw error;
+        }
         if (error && error.name === "AbortError") {
           throw new PublicLiteDispatchHttpError(
               "dispatch_timeout",

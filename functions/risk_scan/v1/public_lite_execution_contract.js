@@ -359,12 +359,33 @@ function normalizeDispatchOwnerId(value) {
   return assertNonEmptyString(value, "ownerId", 256);
 }
 
-function normalizeDispatchReceipt(raw) {
+function normalizeDispatchReceipt(raw, {
+  expectedExecutionId,
+} = {}) {
   assertPlainObject(raw, "receipt");
+  if (raw.contractVersion !== PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V1) {
+    fail("invalid-argument", "receipt.contractVersion is unsupported");
+  }
+  const providerCode = assertNonEmptyString(
+      raw.providerCode, "receipt.providerCode", 80);
+  if (providerCode !== "n8n_public_lite") {
+    fail("invalid-argument", "receipt.providerCode is unsupported");
+  }
+  const executionId = assertSha256Hex(
+      raw.executionId, "receipt.executionId");
+  if (expectedExecutionId !== undefined) {
+    const expected = assertSha256Hex(
+        expectedExecutionId, "expectedExecutionId");
+    if (executionId !== expected) {
+      fail(
+          "failed-precondition",
+          "receipt.executionId does not match dispatch envelope");
+    }
+  }
   return Object.freeze({
-    contractVersion: PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V1,
-    providerCode: assertNonEmptyString(
-        raw.providerCode, "receipt.providerCode", 80),
+    contractVersion: raw.contractVersion,
+    providerCode,
+    executionId,
     externalExecutionId: assertNonEmptyString(
         raw.externalExecutionId,
         "receipt.externalExecutionId",

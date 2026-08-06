@@ -205,6 +205,8 @@ test("dispatch success advances run and every channel atomically", async () => {
     ownerId: "worker-1",
     attemptCount: 1,
     receipt: {
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      executionId: command.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-1",
       acceptedAt: dispatchedAt,
@@ -301,7 +303,10 @@ test("orchestration dispatches once and stores provider receipt", async () => {
         dispatchCount += 1;
         assert.equal(envelope.identityMode, "anonymous");
         return {
+          contractVersion:
+            "risk-scan-public-lite-dispatch-receipt-v1",
           providerCode: "n8n_public_lite",
+          executionId: envelope.executionId,
           externalExecutionId: "n8n-execution-1",
           acceptedAt: dispatchedAt,
         };
