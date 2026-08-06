@@ -136,6 +136,12 @@ const {
   buildReceivePublicLiteRiskScanResult,
 } = require("./risk_scan/v1/public_lite_execution_boundary");
 const {
+  buildAcceptPublicLiteRiskScanHandoff,
+} = require("./risk_scan/v1/public_lite_provider_handoff_boundary");
+const {
+  buildDispatchPublicLiteRiskScanAcquisition,
+} = require("./risk_scan/v1/public_lite_provider_handoff_trigger");
+const {
   buildCleanupExpiredRiskScanRuns,
 } = require("./risk_scan/v1/scheduled_cleanup");
 const {
@@ -319,6 +325,18 @@ exports.receivePublicLiteRiskScanResult =
     buildReceivePublicLiteRiskScanResult({
       db,
       onRequest,
+      logger,
+    });
+exports.acceptPublicLiteRiskScanHandoff =
+    buildAcceptPublicLiteRiskScanHandoff({
+      db,
+      onRequest,
+      logger,
+    });
+exports.dispatchPublicLiteRiskScanAcquisition =
+    buildDispatchPublicLiteRiskScanAcquisition({
+      db,
+      onDocumentCreated,
       logger,
     });
 exports.cleanupExpiredRiskScanRuns =

@@ -368,16 +368,20 @@ test("dispatch success atomically starts run and all channels", async () => {
     ownerId: "worker-1",
     attemptCount: 1,
     receipt: {
-      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
       executionId: value.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-1",
+      handoffId: "d".repeat(64),
       acceptedAt: dispatchedAt,
     },
     dispatchedAt,
   });
   assert.equal(result.outcome, "dispatched");
   assert.equal(stored(db, executionPath(value)).status, "dispatched");
+  assert.equal(
+      stored(db, executionPath(value)).handoffId,
+      "d".repeat(64));
   assert.equal(stored(db, `risk_scan_runs/${digestA}`).status, "acquiring");
   for (const code of [
     "similarDomains", "openWeb", "marketplaceLimited",
@@ -409,10 +413,11 @@ test("dispatch success replay verifies the same receipt", async () => {
     ownerId: "worker-1",
     attemptCount: 1,
     receipt: {
-      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
       executionId: value.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-1",
+      handoffId: "d".repeat(64),
       acceptedAt: dispatchedAt,
     },
     dispatchedAt,
@@ -446,23 +451,89 @@ test("conflicting dispatch receipt is rejected", async () => {
   await port.markDispatchSucceeded({
     ...base,
     receipt: {
-      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
       executionId: value.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-1",
+      handoffId: "d".repeat(64),
       acceptedAt: dispatchedAt,
     },
   });
   await assert.rejects(() => port.markDispatchSucceeded({
     ...base,
     receipt: {
-      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
       executionId: value.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-2",
+      handoffId: "d".repeat(64),
       acceptedAt: dispatchedAt,
     },
   }), (error) => error.code === "conflict");
+});
+
+test("dispatch replay rejects a different handoff id", async () => {
+  const {port, command: value} = await preparedPort();
+  await port.queueExecution({
+    executionId: value.executionId,
+    scanRunId: value.scanRunId,
+    updatedAt: queuedAt,
+  });
+  await port.claimDispatch({
+    executionId: value.executionId,
+    scanRunId: value.scanRunId,
+    ownerId: "worker-1",
+    now: queuedAt,
+    maxAttempts: 5,
+  });
+  const base = {
+    executionId: value.executionId,
+    scanRunId: value.scanRunId,
+    ownerId: "worker-1",
+    attemptCount: 1,
+    dispatchedAt,
+  };
+  await port.markDispatchSucceeded({
+    ...base,
+    receipt: {
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
+      executionId: value.executionId,
+      providerCode: "n8n_public_lite",
+      externalExecutionId: "n8n-execution-1",
+      handoffId: "d".repeat(64),
+      acceptedAt: dispatchedAt,
+    },
+  });
+  await assert.rejects(() => port.markDispatchSucceeded({
+    ...base,
+    receipt: {
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
+      executionId: value.executionId,
+      providerCode: "n8n_public_lite",
+      externalExecutionId: "n8n-execution-1",
+      handoffId: "e".repeat(64),
+      acceptedAt: dispatchedAt,
+    },
+  }), (error) => error.code === "conflict");
+});
+
+test("dispatch success rejects a receipt for another execution", async () => {
+  const {port, command: value} = await preparedPort();
+  await assert.rejects(() => port.markDispatchSucceeded({
+    executionId: value.executionId,
+    scanRunId: value.scanRunId,
+    ownerId: "worker-1",
+    attemptCount: 1,
+    receipt: {
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
+      executionId: "f".repeat(64),
+      providerCode: "n8n_public_lite",
+      externalExecutionId: "n8n-execution-1",
+      handoffId: "d".repeat(64),
+      acceptedAt: dispatchedAt,
+    },
+    dispatchedAt,
+  }), (error) => error.code === "failed-precondition");
 });
 
 test("retryable dispatch failure marks complete retry bundle", async () => {
@@ -617,10 +688,11 @@ test("dispatched execution can be completed idempotently", async () => {
     ownerId: "worker-1",
     attemptCount: 1,
     receipt: {
-      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
       executionId: value.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-1",
+      handoffId: "d".repeat(64),
       acceptedAt: dispatchedAt,
     },
     dispatchedAt,
@@ -649,10 +721,11 @@ test("orchestration service works against the Firestore port", async () => {
     port,
     dispatcher: {
       dispatch: async (envelope) => ({
-        contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+        contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
         providerCode: "n8n_public_lite",
         executionId: envelope.executionId,
         externalExecutionId: "n8n-execution-1",
+        handoffId: "d".repeat(64),
         acceptedAt: dispatchedAt,
       }),
     },

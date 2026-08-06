@@ -14,6 +14,14 @@ const {
   assertExecutionStorageDocument,
   canonicalize,
 } = require("./public_lite_execution_firestore_port");
+const {
+  PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION,
+  assertPublicLiteProviderHandoffRecord,
+  completePublicLiteProviderHandoffRecord,
+} = require("./public_lite_provider_handoff_contract");
+const {
+  providerHandoffRef,
+} = require("./public_lite_provider_handoff_firestore_port");
 
 const PUBLIC_LITE_RESULT_ENVELOPE_VERSION_V1 =
   "risk-scan-public-lite-result-envelope-v1";
@@ -34,6 +42,7 @@ const PUBLIC_LITE_RESULT_MAX_STRING_BYTES = 32768;
 const PUBLIC_LITE_RESULT_COLLECTIONS = Object.freeze({
   receipts: "risk_scan_public_lite_result_receipts",
   executions: PUBLIC_LITE_EXECUTION_COLLECTIONS.executions,
+  handoffs: PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION,
 });
 
 const RESULT_ENVELOPE_KEYS = Object.freeze([
@@ -309,6 +318,29 @@ function assertReceiptReplay(existing, expected) {
   return existing;
 }
 
+function assertResultHandoffScope(execution, handoff, receipt) {
+  const storedExecution = assertExecutionStorageDocument(execution);
+  const storedHandoff = assertPublicLiteProviderHandoffRecord(handoff);
+  if (storedExecution.scanRunId !== receipt.scanRunId ||
+      storedExecution.providerCode !== receipt.providerCode ||
+      storedExecution.handoffId !== storedHandoff.handoffId ||
+      storedHandoff.executionId !== receipt.executionId ||
+      storedHandoff.scanRunId !== receipt.scanRunId ||
+      storedHandoff.providerCode !== receipt.providerCode) {
+    fail("conflict", "result receipt does not match provider handoff scope");
+  }
+  if (!["child_dispatching", "child_dispatched", "completed"]
+      .includes(storedHandoff.state)) {
+    fail("failed-precondition", "provider handoff is not result-ready");
+  }
+  if (storedHandoff.childExternalExecutionId !== null &&
+      storedHandoff.childExternalExecutionId !==
+        receipt.externalExecutionId) {
+    fail("conflict", "result receipt external execution conflicts");
+  }
+  return {execution: storedExecution, handoff: storedHandoff};
+}
+
 async function persistPublicLiteResultReceipt(db, {
   envelope,
   receivedAt,
@@ -320,44 +352,49 @@ async function persistPublicLiteResultReceipt(db, {
   });
   const targetExecutionRef = executionRef(db, receipt.executionId);
   const targetReceiptRef = resultReceiptRef(db, receipt.receiptId);
+  const targetHandoffRef = providerHandoffRef(db, receipt.executionId);
 
   return db.runTransaction(async (transaction) => {
     const executionSnapshot = await transaction.get(targetExecutionRef);
     const receiptSnapshot = await transaction.get(targetReceiptRef);
+    const handoffSnapshot = await transaction.get(targetHandoffRef);
     const execution = assertExecutionStorageDocument(
         snapshotData(executionSnapshot, "execution"));
-
-    if (receiptSnapshot.exists) {
-      if (execution.scanRunId !== receipt.scanRunId ||
-          execution.providerCode !== receipt.providerCode ||
-          execution.externalExecutionId !== receipt.externalExecutionId) {
-        fail("conflict", "result receipt does not match dispatch scope");
-      }
-      assertReceiptReplay(receiptSnapshot.data(), receipt);
-      return {
-        outcome: "idempotent_success",
-        duplicate: true,
-        receiptId: receipt.receiptId,
-      };
-    }
-
-    if (execution.status !== "dispatched") {
+    const handoff = snapshotData(handoffSnapshot, "providerHandoff");
+    if (!receiptSnapshot.exists && execution.status !== "dispatched") {
       fail(
           "failed-precondition",
           "new result receipt requires a dispatched execution");
     }
+    const scope = assertResultHandoffScope(execution, handoff, receipt);
+    const completedHandoff = completePublicLiteProviderHandoffRecord(
+        scope.handoff,
+        {
+          externalExecutionId: receipt.externalExecutionId,
+          completedAt: receipt.providerCompletedAt,
+          updatedAt: receipt.receivedAt,
+        });
 
-    if (execution.scanRunId !== receipt.scanRunId ||
-        execution.providerCode !== receipt.providerCode ||
-        execution.externalExecutionId !== receipt.externalExecutionId) {
-      fail("conflict", "result receipt does not match dispatch scope");
+    if (receiptSnapshot.exists) {
+      assertReceiptReplay(receiptSnapshot.data(), receipt);
+      if (scope.handoff.state !== "completed") {
+        transaction.update(targetHandoffRef, completedHandoff);
+      }
+      return {
+        outcome: "idempotent_success",
+        duplicate: true,
+        receiptId: receipt.receiptId,
+        handoffId: completedHandoff.handoffId,
+      };
     }
 
     transaction.create(targetReceiptRef, receipt);
+    transaction.update(targetHandoffRef, completedHandoff);
     return {
       outcome: "created",
       duplicate: false,
       receiptId: receipt.receiptId,
+      handoffId: completedHandoff.handoffId,
     };
   });
 }
@@ -379,6 +416,7 @@ module.exports = Object.freeze({
   PUBLIC_LITE_RESULT_RECEIPT_VERSION_V1,
   PublicLiteResultReceiptError,
   assertPublicLiteResultReceiptDocument,
+  assertResultHandoffScope,
   buildPublicLiteResultReceiptDocument,
   canonicalJson,
   derivePublicLiteResultReceiptId,

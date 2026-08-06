@@ -124,6 +124,9 @@ test("execution contract versions are fixed", () => {
   assert.equal(
       contract.PUBLIC_LITE_DISPATCH_MAX_ATTEMPTS,
       5);
+  assert.equal(
+      contract.PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V2,
+      "risk-scan-public-lite-dispatch-receipt-v2");
 });
 
 test("execution id is deterministic", () => {
@@ -264,16 +267,18 @@ test("execution lifecycle rejects terminal replay", () => {
 test("receipt normalizes scoped provider metadata", () => {
   const executionId = command().executionId;
   assert.deepEqual(contract.normalizeDispatchReceipt({
-    contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+    contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
     providerCode: "n8n_public_lite",
     executionId,
     externalExecutionId: "execution-1",
+    handoffId: "d".repeat(64),
     acceptedAt: later,
   }, {expectedExecutionId: executionId}), {
-    contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+    contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
     providerCode: "n8n_public_lite",
     executionId,
     externalExecutionId: "execution-1",
+    handoffId: "d".repeat(64),
     acceptedAt: later,
   });
 });
@@ -281,10 +286,11 @@ test("receipt normalizes scoped provider metadata", () => {
 test("receipt rejects a mismatched execution scope", () => {
   assert.throws(
       () => contract.normalizeDispatchReceipt({
-        contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+        contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
         providerCode: "n8n_public_lite",
         executionId: "a".repeat(64),
         externalExecutionId: "execution-1",
+        handoffId: "d".repeat(64),
         acceptedAt: later,
       }, {expectedExecutionId: "b".repeat(64)}),
       (error) => error.code === "failed-precondition");
@@ -325,10 +331,11 @@ test("successful dispatch is stored once", async () => {
     port,
     dispatcher: {
       dispatch: async (envelope) => ({
-        contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+        contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
         providerCode: "n8n_public_lite",
         executionId: envelope.executionId,
         externalExecutionId: "execution-1",
+        handoffId: "d".repeat(64),
         acceptedAt: later,
       }),
     },
@@ -336,6 +343,7 @@ test("successful dispatch is stored once", async () => {
   });
   assert.equal(result.outcome, "dispatched");
   assert.equal(result.attemptCount, 1);
+  assert.equal(result.handoffId, "d".repeat(64));
   assert.equal(
       port.calls.at(-1)[0],
       "markDispatchSucceeded");
@@ -472,10 +480,11 @@ test("orchestration prepares then dispatches", async () => {
     port,
     dispatcher: {
       dispatch: async (envelope) => ({
-        contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+        contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
         providerCode: "n8n_public_lite",
         executionId: envelope.executionId,
         externalExecutionId: "execution-1",
+        handoffId: "d".repeat(64),
         acceptedAt: later,
       }),
     },

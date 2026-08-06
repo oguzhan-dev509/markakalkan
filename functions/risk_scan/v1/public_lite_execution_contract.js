@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const {
   assertDocumentId,
   assertEnum,
+  assertExactKeys,
   assertIsoTimestamp,
   assertNonEmptyString,
   assertPlainObject,
@@ -21,12 +22,50 @@ const PUBLIC_LITE_DISPATCH_ENVELOPE_VERSION_V1 =
   "risk-scan-public-lite-dispatch-envelope-v1";
 const PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V1 =
   "risk-scan-public-lite-dispatch-receipt-v1";
+const PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V2 =
+  "risk-scan-public-lite-dispatch-receipt-v2";
 const PUBLIC_LITE_EXECUTION_EVENT_TYPE_V1 =
   "risk_scan_run_created";
 const PUBLIC_LITE_EXECUTION_ID_NAMESPACE_V1 =
   "risk-scan-public-lite-execution-id-v1";
 const PUBLIC_LITE_DISPATCH_MAX_ATTEMPTS = 5;
 const PUBLIC_LITE_DISPATCH_LEASE_MS = 5 * 60 * 1000;
+
+const DISPATCH_ENVELOPE_KEYS = Object.freeze([
+  "contractVersion",
+  "executionId",
+  "scanRunId",
+  "scanMode",
+  "accessTier",
+  "identityMode",
+  "target",
+  "channelCodes",
+  "requestedAt",
+  "expiresAt",
+  "trace",
+]);
+
+const DISPATCH_TARGET_KEYS = Object.freeze([
+  "brandNameNormalized",
+  "officialHost",
+  "officialWebsiteCanonicalUrl",
+  "targetFingerprintSha256",
+]);
+
+const DISPATCH_TRACE_KEYS = Object.freeze([
+  "sourceEventId",
+  "requestId",
+  "requestFingerprintSha256",
+]);
+
+const DISPATCH_RECEIPT_V2_KEYS = Object.freeze([
+  "contractVersion",
+  "providerCode",
+  "executionId",
+  "externalExecutionId",
+  "handoffId",
+  "acceptedAt",
+]);
 
 const PUBLIC_LITE_EXECUTION_STATUSES = Object.freeze([
   "prepared",
@@ -261,6 +300,7 @@ function buildPublicLiteExecutionRecord(command) {
     leaseExpiresAt: null,
     externalExecutionId: null,
     providerCode: null,
+    handoffId: null,
     lastFailureCode: null,
     lastFailureMessage: null,
     preparedAt: command.eventTime,
@@ -328,6 +368,76 @@ function buildPublicLiteDispatchEnvelope(command) {
   });
 }
 
+function normalizePublicLiteDispatchEnvelope(raw, {
+  expectedExecutionId,
+  expectedScanRunId,
+} = {}) {
+  assertExactKeys(raw, DISPATCH_ENVELOPE_KEYS, "dispatchEnvelope");
+  if (raw.contractVersion !== PUBLIC_LITE_DISPATCH_ENVELOPE_VERSION_V1) {
+    fail("invalid-argument", "dispatch envelope contract is unsupported");
+  }
+  const executionId = assertSha256Hex(
+      raw.executionId, "dispatchEnvelope.executionId");
+  const scanRunId = assertDocumentId(
+      raw.scanRunId, "dispatchEnvelope.scanRunId");
+  if (expectedExecutionId !== undefined &&
+      executionId !== assertSha256Hex(
+          expectedExecutionId, "expectedExecutionId")) {
+    fail(
+        "failed-precondition",
+        "dispatch envelope executionId does not match scope");
+  }
+  if (expectedScanRunId !== undefined &&
+      scanRunId !== assertDocumentId(
+          expectedScanRunId, "expectedScanRunId")) {
+    fail(
+        "failed-precondition",
+        "dispatch envelope scanRunId does not match scope");
+  }
+  if (raw.scanMode !== "quick" ||
+      raw.accessTier !== "publicLite" ||
+      raw.identityMode !== "anonymous") {
+    fail("invalid-argument", "dispatch envelope mode is unsupported");
+  }
+  if (!Array.isArray(raw.channelCodes) ||
+      raw.channelCodes.length !== channelCodes.length ||
+      raw.channelCodes.some(
+          (code, index) => code !== channelCodes[index])) {
+    fail("invalid-argument", "dispatch envelope channels are invalid");
+  }
+  assertExactKeys(
+      raw.target, DISPATCH_TARGET_KEYS, "dispatchEnvelope.target");
+  assertExactKeys(raw.trace, DISPATCH_TRACE_KEYS, "dispatchEnvelope.trace");
+  const trace = Object.freeze({
+    sourceEventId: assertNonEmptyString(
+        raw.trace.sourceEventId,
+        "dispatchEnvelope.trace.sourceEventId",
+        512),
+    requestId: assertNonEmptyString(
+        raw.trace.requestId,
+        "dispatchEnvelope.trace.requestId",
+        180),
+    requestFingerprintSha256: assertSha256Hex(
+        raw.trace.requestFingerprintSha256,
+        "dispatchEnvelope.trace.requestFingerprintSha256"),
+  });
+  return Object.freeze({
+    contractVersion: PUBLIC_LITE_DISPATCH_ENVELOPE_VERSION_V1,
+    executionId,
+    scanRunId,
+    scanMode: "quick",
+    accessTier: "publicLite",
+    identityMode: "anonymous",
+    target: normalizeTarget(raw.target),
+    channelCodes: Object.freeze([...channelCodes]),
+    requestedAt: assertIsoTimestamp(
+        raw.requestedAt, "dispatchEnvelope.requestedAt"),
+    expiresAt: assertIsoTimestamp(
+        raw.expiresAt, "dispatchEnvelope.expiresAt"),
+    trace,
+  });
+}
+
 function buildDispatchLease({
   executionId,
   ownerId,
@@ -362,8 +472,8 @@ function normalizeDispatchOwnerId(value) {
 function normalizeDispatchReceipt(raw, {
   expectedExecutionId,
 } = {}) {
-  assertPlainObject(raw, "receipt");
-  if (raw.contractVersion !== PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V1) {
+  assertExactKeys(raw, DISPATCH_RECEIPT_V2_KEYS, "receipt");
+  if (raw.contractVersion !== PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V2) {
     fail("invalid-argument", "receipt.contractVersion is unsupported");
   }
   const providerCode = assertNonEmptyString(
@@ -383,13 +493,14 @@ function normalizeDispatchReceipt(raw, {
     }
   }
   return Object.freeze({
-    contractVersion: raw.contractVersion,
+    contractVersion: PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V2,
     providerCode,
     executionId,
     externalExecutionId: assertNonEmptyString(
         raw.externalExecutionId,
         "receipt.externalExecutionId",
         256),
+    handoffId: assertSha256Hex(raw.handoffId, "receipt.handoffId"),
     acceptedAt: assertIsoTimestamp(
         raw.acceptedAt, "receipt.acceptedAt"),
   });
@@ -412,6 +523,7 @@ module.exports = Object.freeze({
   PUBLIC_LITE_DISPATCH_LEASE_MS,
   PUBLIC_LITE_DISPATCH_MAX_ATTEMPTS,
   PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V1,
+  PUBLIC_LITE_DISPATCH_RECEIPT_VERSION_V2,
   PUBLIC_LITE_EXECUTION_COMMAND_VERSION_V1,
   PUBLIC_LITE_EXECUTION_EVENT_TYPE_V1,
   PUBLIC_LITE_EXECUTION_RECORD_VERSION_V1,
@@ -426,4 +538,5 @@ module.exports = Object.freeze({
   deriveExecutionId,
   normalizeDispatchOwnerId,
   normalizeDispatchReceipt,
+  normalizePublicLiteDispatchEnvelope,
 });

@@ -58,6 +58,14 @@ const pathSpecs = [
     documentPath: ['risk_scan_rate_limits', 'bucket-1'],
     collectionPath: ['risk_scan_rate_limits'],
   },
+  {
+    label: 'risk_scan_public_lite_provider_handoffs',
+    documentPath: [
+      'risk_scan_public_lite_provider_handoffs',
+      'a'.repeat(64),
+    ],
+    collectionPath: ['risk_scan_public_lite_provider_handoffs'],
+  },
 ];
 
 let environment;
@@ -95,6 +103,23 @@ before(async () => {
 
 beforeEach(async () => environment.clearFirestore());
 after(async () => environment.cleanup());
+
+test(
+  'provider handoff collection remains protected by global default deny',
+  () => {
+    assert.equal(
+      occurrenceCount(
+        rules,
+        'match /risk_scan_public_lite_provider_handoffs/',
+      ),
+      0,
+    );
+    assert.equal(
+      occurrenceCount(rules, 'match /{document=**} {') > 0,
+      true,
+    );
+  },
+);
 
 test('HRT collections have exact explicit server-only Rules boundaries', () => {
   const runNeedle = 'match /risk_scan_runs/{runId} {';

@@ -116,6 +116,7 @@ function buildResultHandler({
     persistReceipt: persistReceipt || (async () => ({
       duplicate: false,
       receiptId: "b".repeat(64),
+      handoffId: "d".repeat(64),
     })),
   });
   assert.equal(built, handler);
@@ -209,10 +210,11 @@ test("n8n dispatcher sends the exact token and JSON envelope", async () => {
         status: 202,
         text: async () => JSON.stringify({
           contractVersion:
-            "risk-scan-public-lite-dispatch-receipt-v1",
+            "risk-scan-public-lite-dispatch-receipt-v2",
           providerCode: "n8n_public_lite",
           executionId,
           externalExecutionId: "n8n-execution-1",
+          handoffId: "d".repeat(64),
           acceptedAt: "2026-08-04T10:05:00.000Z",
         }),
       };
@@ -226,9 +228,10 @@ test("n8n dispatcher sends the exact token and JSON envelope", async () => {
       "dispatch-secret");
   assert.deepEqual(JSON.parse(calls[0].options.body), {executionId});
   assert.equal(receipt.contractVersion,
-      "risk-scan-public-lite-dispatch-receipt-v1");
+      "risk-scan-public-lite-dispatch-receipt-v2");
   assert.equal(receipt.providerCode, "n8n_public_lite");
   assert.equal(receipt.executionId, executionId);
+  assert.equal(receipt.handoffId, "d".repeat(64));
 });
 
 test("n8n dispatcher rejects an empty webhook token", async () => {
@@ -264,10 +267,11 @@ test("n8n dispatcher rejects a non-202 successful response", async () => {
       status: 200,
       text: async () => JSON.stringify({
         contractVersion:
-          "risk-scan-public-lite-dispatch-receipt-v1",
+          "risk-scan-public-lite-dispatch-receipt-v2",
         providerCode: "n8n_public_lite",
         executionId,
         externalExecutionId: "n8n-execution-1",
+        handoffId: "d".repeat(64),
         acceptedAt: "2026-08-04T10:05:00.000Z",
       }),
     }),
@@ -287,10 +291,11 @@ test("n8n dispatcher rejects a mismatched receipt execution id", async () => {
       status: 202,
       text: async () => JSON.stringify({
         contractVersion:
-          "risk-scan-public-lite-dispatch-receipt-v1",
+          "risk-scan-public-lite-dispatch-receipt-v2",
         providerCode: "n8n_public_lite",
         executionId: "b".repeat(64),
         externalExecutionId: "n8n-execution-1",
+        handoffId: "d".repeat(64),
         acceptedAt: "2026-08-04T10:05:00.000Z",
       }),
     }),
@@ -511,7 +516,11 @@ test("result callback accepts a new immutable receipt", async () => {
   const {handler, options} = buildResultHandler({
     persistReceipt: async (_db, value) => {
       received = value;
-      return {duplicate: false, receiptId: "b".repeat(64)};
+      return {
+        duplicate: false,
+        receiptId: "b".repeat(64),
+        handoffId: "d".repeat(64),
+      };
     },
   });
   const response = makeResponse();
@@ -526,6 +535,7 @@ test("result callback accepts a new immutable receipt", async () => {
   assert.equal(options.secrets.length, 1);
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.duplicate, false);
+  assert.equal(response.body.handoffId, "d".repeat(64));
   assert.equal(received.envelope.executionId, executionId);
   assert.equal(received.receivedAt, "2026-08-04T10:16:00.000Z");
 });
@@ -535,6 +545,7 @@ test("result callback reports an idempotent duplicate", async () => {
     persistReceipt: async () => ({
       duplicate: true,
       receiptId: "c".repeat(64),
+      handoffId: "d".repeat(64),
     }),
   });
   const response = makeResponse();

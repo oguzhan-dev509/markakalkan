@@ -441,7 +441,9 @@ function createPublicLiteExecutionFirestorePort(db) {
   }) {
     const targetExecutionRef = executionRef(db, executionId);
     const targetRunRef = runRef(db, scanRunId);
-    const normalizedReceipt = normalizeDispatchReceipt(receipt);
+    const normalizedReceipt = normalizeDispatchReceipt(receipt, {
+      expectedExecutionId: executionId,
+    });
     const normalizedAt = assertIsoTimestamp(dispatchedAt, "dispatchedAt");
 
     return db.runTransaction(async (transaction) => {
@@ -454,7 +456,8 @@ function createPublicLiteExecutionFirestorePort(db) {
       if (execution.status === "dispatched") {
         if (execution.externalExecutionId !==
               normalizedReceipt.externalExecutionId ||
-            execution.providerCode !== normalizedReceipt.providerCode) {
+            execution.providerCode !== normalizedReceipt.providerCode ||
+            execution.handoffId !== normalizedReceipt.handoffId) {
           fail("conflict", "dispatch receipt conflicts with stored receipt");
         }
         return {outcome: "idempotent_success"};
@@ -472,6 +475,7 @@ function createPublicLiteExecutionFirestorePort(db) {
             leaseExpiresAt: null,
             providerCode: normalizedReceipt.providerCode,
             externalExecutionId: normalizedReceipt.externalExecutionId,
+            handoffId: normalizedReceipt.handoffId,
             dispatchedAt: normalizedAt,
             updatedAt: normalizedAt,
           }));

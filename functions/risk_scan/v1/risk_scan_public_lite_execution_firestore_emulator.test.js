@@ -205,10 +205,11 @@ test("dispatch success advances run and every channel atomically", async () => {
     ownerId: "worker-1",
     attemptCount: 1,
     receipt: {
-      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
       executionId: command.executionId,
       providerCode: "n8n_public_lite",
       externalExecutionId: "n8n-execution-1",
+      handoffId: "d".repeat(64),
       acceptedAt: dispatchedAt,
     },
     dispatchedAt,
@@ -222,6 +223,9 @@ test("dispatch success advances run and every channel atomically", async () => {
       rootRef.collection("channels").get(),
     ]);
   assert.equal(executionSnapshot.data().status, "dispatched");
+  assert.equal(
+      executionSnapshot.data().handoffId,
+      "d".repeat(64));
   assert.equal(runSnapshot.data().status, "acquiring");
   assert.equal(
       channelsSnapshot.docs.every(
@@ -304,10 +308,11 @@ test("orchestration dispatches once and stores provider receipt", async () => {
         assert.equal(envelope.identityMode, "anonymous");
         return {
           contractVersion:
-            "risk-scan-public-lite-dispatch-receipt-v1",
+            "risk-scan-public-lite-dispatch-receipt-v2",
           providerCode: "n8n_public_lite",
           executionId: envelope.executionId,
           externalExecutionId: "n8n-execution-1",
+          handoffId: "d".repeat(64),
           acceptedAt: dispatchedAt,
         };
       },

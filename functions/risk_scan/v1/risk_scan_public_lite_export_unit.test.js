@@ -19,7 +19,11 @@ const EXPECTED_EXPORTS = Object.freeze([
   "startPublicLiteRiskScan",
   "getPublicLiteRiskScanStatus",
   "getPublicLiteRiskScanReport",
+  "acceptPublicLiteRiskScanHandoff",
+  "dispatchPublicLiteRiskScanAcquisition",
 ]);
+const EXPECTED_CALLABLE_EXPORTS = Object.freeze(
+    EXPECTED_EXPORTS.slice(0, 3));
 
 function occurrenceCount(text, needle) {
   return text.split(needle).length - 1;
@@ -66,7 +70,7 @@ function loadRuntimeProbe() {
 test("public callable function names are stable", () => {
   assert.deepEqual(
       Object.values(PUBLIC_LITE_FUNCTION_NAMES),
-      EXPECTED_EXPORTS,
+      EXPECTED_CALLABLE_EXPORTS,
   );
 });
 
@@ -91,14 +95,20 @@ test("report callable options enforce App Check without a secret", () => {
   assert.equal(Object.hasOwn(options, "secrets"), false);
 });
 
-test("index requires the Public Lite callable module exactly once", () => {
-  assert.equal(
-      occurrenceCount(
-          INDEX_SOURCE,
-          "require(\"./risk_scan/v1/public_lite_callable\")",
-      ),
-      1,
-  );
+test("index requires each Public Lite boundary module exactly once", () => {
+  for (const modulePath of [
+    "./risk_scan/v1/public_lite_callable",
+    "./risk_scan/v1/public_lite_provider_handoff_boundary",
+    "./risk_scan/v1/public_lite_provider_handoff_trigger",
+  ]) {
+    assert.equal(
+        occurrenceCount(
+            INDEX_SOURCE,
+            `require("${modulePath}")`,
+        ),
+        1,
+    );
+  }
 });
 
 test("index imports each Public Lite builder exactly once", () => {
@@ -106,6 +116,8 @@ test("index imports each Public Lite builder exactly once", () => {
     "buildStartPublicLiteRiskScan",
     "buildGetPublicLiteRiskScanStatus",
     "buildGetPublicLiteRiskScanReport",
+    "buildAcceptPublicLiteRiskScanHandoff",
+    "buildDispatchPublicLiteRiskScanAcquisition",
   ]) {
     assert.equal(occurrenceCount(INDEX_SOURCE, builder), 2);
   }
@@ -136,11 +148,13 @@ test("functions index loads successfully in an isolated process", () => {
   assert.deepEqual(Object.keys(probe), EXPECTED_EXPORTS);
 });
 
-test("runtime index exports all three Public Lite callables", () => {
+test("runtime index exports all Public Lite functions", () => {
   const probe = loadRuntimeProbe();
   assert.deepEqual(probe, {
     startPublicLiteRiskScan: "function",
     getPublicLiteRiskScanStatus: "function",
     getPublicLiteRiskScanReport: "function",
+    acceptPublicLiteRiskScanHandoff: "function",
+    dispatchPublicLiteRiskScanAcquisition: "function",
   });
 });

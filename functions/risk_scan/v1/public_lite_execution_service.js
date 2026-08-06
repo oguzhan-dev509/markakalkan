@@ -260,6 +260,7 @@ async function dispatchPreparedPublicLiteExecution({
     attemptCount: claim.attemptCount,
     lease,
     receipt,
+    handoffId: receipt.handoffId,
     storageOutcome: marked.outcome,
   });
 }

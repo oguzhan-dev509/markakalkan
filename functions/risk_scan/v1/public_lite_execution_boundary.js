@@ -297,6 +297,7 @@ function buildDispatchPublicLiteRiskScan({
           executionId: result.executionId || null,
           outcome: result.outcome,
           attemptCount: result.attemptCount || null,
+          handoffId: result.handoffId || null,
         });
         if (result.outcome === "retryable_failure") {
           const error = new Error("Public Lite dispatch will be retried");
@@ -384,11 +385,13 @@ function buildReceivePublicLiteRiskScanResult({
             providerEventId: envelope.providerEventId,
             duplicate: result.duplicate,
             receiptId: result.receiptId,
+            handoffId: result.handoffId || null,
           });
           sendJson(response, 200, {
             ok: true,
             duplicate: result.duplicate,
             receiptId: result.receiptId,
+            handoffId: result.handoffId || null,
             executionId: envelope.executionId,
             scanRunId: envelope.scanRunId,
           });

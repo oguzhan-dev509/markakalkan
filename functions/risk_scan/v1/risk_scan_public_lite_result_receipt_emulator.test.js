@@ -20,6 +20,14 @@ const {
   PUBLIC_LITE_RESULT_ENVELOPE_VERSION_V1,
   persistPublicLiteResultReceipt,
 } = require("./public_lite_result_receipt_firestore_port");
+const {
+  PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+  PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION,
+  PUBLIC_LITE_PROVIDER_HANDOFF_REQUEST_VERSION_V1,
+} = require("./public_lite_provider_handoff_contract");
+const {
+  createPublicLiteProviderHandoffFirestorePort,
+} = require("./public_lite_provider_handoff_firestore_port");
 
 const PROJECT_ID = "demo-markakalkan-hrt-exec-1c2";
 const secretKey = "s".repeat(48);
@@ -32,6 +40,7 @@ let sequence = 0;
 let app;
 let db;
 let executionPort;
+let handoffPort;
 
 function assertEmulatorGuard() {
   const host = process.env.FIRESTORE_EMULATOR_HOST || "";
@@ -106,6 +115,24 @@ async function createExecutionCommand() {
   return command;
 }
 
+async function acceptHandoffForCommand(command, {
+  gatewayExecutionId = "n8n-gateway-1",
+} = {}) {
+  return handoffPort.acceptHandoff({
+    request: {
+      contractVersion: PUBLIC_LITE_PROVIDER_HANDOFF_REQUEST_VERSION_V1,
+      providerCode: "n8n_public_lite",
+      executionId: command.executionId,
+      scanRunId: command.scanRunId,
+      gatewayExecutionId,
+      dispatchEnvelope:
+        executionContract.buildPublicLiteDispatchEnvelope(command),
+    },
+    acceptedAt: dispatchedAt,
+    purgeAtTimestamp: new Date("2026-09-04T10:02:00.000Z"),
+  });
+}
+
 async function createDispatchedExecution() {
   const command = await createExecutionCommand();
   await executionPort.claimDispatch({
@@ -115,19 +142,43 @@ async function createDispatchedExecution() {
     now: queuedAt,
     maxAttempts: 5,
   });
+  const accepted = await acceptHandoffForCommand(command);
   await executionPort.markDispatchSucceeded({
     executionId: command.executionId,
     scanRunId: command.scanRunId,
     ownerId: "event-worker",
     attemptCount: 1,
     receipt: {
-      contractVersion: "risk-scan-public-lite-dispatch-receipt-v1",
+      contractVersion: "risk-scan-public-lite-dispatch-receipt-v2",
       executionId: command.executionId,
       providerCode: "n8n_public_lite",
-      externalExecutionId: "n8n-execution-1",
+      externalExecutionId: "n8n-gateway-1",
+      handoffId: accepted.record.handoffId,
       acceptedAt: dispatchedAt,
     },
     dispatchedAt,
+  });
+  const claim = await handoffPort.claimChildDispatch({
+    executionId: command.executionId,
+    ownerId: "child-dispatch-worker",
+    now: "2026-08-04T10:03:00.000Z",
+    maxAttempts: 5,
+  });
+  await handoffPort.markChildDispatchSucceeded({
+    executionId: command.executionId,
+    ownerId: "child-dispatch-worker",
+    attemptCount: claim.attemptCount,
+    leaseToken: claim.leaseToken,
+    receipt: {
+      contractVersion:
+        PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+      providerCode: "n8n_public_lite",
+      handoffId: accepted.record.handoffId,
+      executionId: command.executionId,
+      externalExecutionId: "n8n-acquisition-1",
+      acceptedAt: "2026-08-04T10:04:00.000Z",
+    },
+    dispatchedAt: "2026-08-04T10:04:00.000Z",
   });
   return command;
 }
@@ -136,7 +187,7 @@ function resultEnvelope(command, overrides = {}) {
   return {
     contractVersion: PUBLIC_LITE_RESULT_ENVELOPE_VERSION_V1,
     providerCode: "n8n_public_lite",
-    externalExecutionId: "n8n-execution-1",
+    externalExecutionId: "n8n-acquisition-1",
     providerEventId: "provider-event-1",
     executionId: command.executionId,
     scanRunId: command.scanRunId,
@@ -154,6 +205,7 @@ before(async () => {
   app = initializeApp({projectId: PROJECT_ID}, "hrt-exec-1c2");
   db = getFirestore(app);
   executionPort = createPublicLiteExecutionFirestorePort(db);
+  handoffPort = createPublicLiteProviderHandoffFirestorePort(db);
 });
 
 beforeEach(async () => {
@@ -190,6 +242,15 @@ test(
       assert.equal(stored.processingStatus, "received");
       assert.equal(stored.immutable, true);
       assert.equal(stored.resultPayload.token, undefined);
+      const handoffSnapshot = await db.collection(
+          PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION)
+          .doc(command.executionId)
+          .get();
+      assert.equal(handoffSnapshot.data().state, "completed");
+      assert.equal(handoffSnapshot.data().completedAt, completedAt);
+      assert.equal(
+          handoffSnapshot.data().childExternalExecutionId,
+          "n8n-acquisition-1");
     });
 
 test("an exact provider replay is idempotent", async () => {
@@ -240,6 +301,14 @@ test(
     "an undispatched execution cannot accept a new result receipt",
     async () => {
       const command = await createExecutionCommand();
+      await executionPort.claimDispatch({
+        executionId: command.executionId,
+        scanRunId: command.scanRunId,
+        ownerId: "event-worker",
+        now: queuedAt,
+        maxAttempts: 5,
+      });
+      await acceptHandoffForCommand(command);
       await assert.rejects(
           persistPublicLiteResultReceipt(db, {
             envelope: resultEnvelope(command),
