@@ -23,6 +23,16 @@ const {
 
 const validDispatch = require("../fixtures/valid_dispatch_envelope.json");
 
+const {
+  ACQUISITION_COMMAND_VERSION,
+  ACQUISITION_RECEIPT_VERSION,
+  DISPATCH_RECEIPT_VERSION_V2,
+  HANDOFF_RECEIPT_VERSION,
+  HANDOFF_REQUEST_VERSION,
+  buildAcquisitionWorkflow,
+  buildWorkflow,
+} = require("../src/workflow_factory");
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -354,4 +364,50 @@ test("normalizes one canonical channel result directly", () => {
   assert.equal(result.channelCode, "marketplaceLimited");
   assert.equal(result.status, "completed");
   assert.equal(Object.isFrozen(result), true);
+});
+
+
+test("gateway v2 durable handoff versions are stable", () => {
+  assert.equal(
+    HANDOFF_REQUEST_VERSION,
+    "risk-scan-public-lite-provider-handoff-request-v1",
+  );
+  assert.equal(
+    HANDOFF_RECEIPT_VERSION,
+    "risk-scan-public-lite-provider-handoff-receipt-v1",
+  );
+  assert.equal(
+    DISPATCH_RECEIPT_VERSION_V2,
+    "risk-scan-public-lite-dispatch-receipt-v2",
+  );
+});
+
+test("child acquisition command and receipt versions are stable", () => {
+  assert.equal(
+    ACQUISITION_COMMAND_VERSION,
+    "risk-scan-public-lite-acquisition-command-v1",
+  );
+  assert.equal(
+    ACQUISITION_RECEIPT_VERSION,
+    "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+  );
+});
+
+test("parent and child workflows expose separate contract surfaces", () => {
+  const parent = buildWorkflow();
+  const child = buildAcquisitionWorkflow();
+  assert.equal(
+    parent.meta.dispatchReceiptContractVersion,
+    DISPATCH_RECEIPT_VERSION_V2,
+  );
+  assert.equal(
+    child.meta.acquisitionCommandContractVersion,
+    ACQUISITION_COMMAND_VERSION,
+  );
+  assert.equal(
+    child.meta.acquisitionReceiptContractVersion,
+    ACQUISITION_RECEIPT_VERSION,
+  );
+  assert.equal(parent.meta.outboundAcquisition, false);
+  assert.equal(parent.meta.resultCallback, false);
 });

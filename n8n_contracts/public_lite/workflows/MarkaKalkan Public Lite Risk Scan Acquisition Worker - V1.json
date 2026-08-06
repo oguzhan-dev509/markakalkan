@@ -1,0 +1,333 @@
+{
+  "name": "MarkaKalkan Public Lite Risk Scan Acquisition Worker - V1",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## HRT-MKT-TR-1D-3D-B4-B5 — INACTIVE ACQUISITION WORKER\n\nThis child workflow acknowledges a validated acquisition command with HTTP 202 before the long marketplace path. Acquisition execution and result callback remain disabled. Do not activate until inactive import, credential binding, backend deployment, reconciliation/redrive, index/TTL operationalization, and controlled live validation complete.",
+        "height": 340,
+        "width": 560,
+        "color": 5
+      },
+      "id": "e4d069d3-342e-506b-82e0-e87003578c23",
+      "name": "Acquisition Worker Deployment Safety Gate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -760,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "markakalkan/public-lite-risk-scan/acquisition",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "eb2b2e81-8259-5ca5-84c9-29130bb0c476",
+      "name": "Acquisition Handoff Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -680,
+        20
+      ],
+      "webhookId": "6d61578c-2a87-5b1d-a203-451bcf443c0e",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const COMMAND_KEYS = [\n  \"attempt\",\n  \"contractVersion\",\n  \"dispatchEnvelope\",\n  \"executionId\",\n  \"handoffId\",\n  \"leaseToken\",\n  \"scanRunId\",\n].sort();\nconst DISPATCH_KEYS = [\n  \"accessTier\",\n  \"channelCodes\",\n  \"contractVersion\",\n  \"executionId\",\n  \"expiresAt\",\n  \"identityMode\",\n  \"requestedAt\",\n  \"scanMode\",\n  \"scanRunId\",\n  \"target\",\n  \"trace\",\n].sort();\nconst TARGET_KEYS = [\n  \"brandNameNormalized\",\n  \"officialHost\",\n  \"officialWebsiteCanonicalUrl\",\n  \"targetFingerprintSha256\",\n].sort();\nconst TRACE_KEYS = [\n  \"requestFingerprintSha256\",\n  \"requestId\",\n  \"sourceEventId\",\n].sort();\nconst CHANNELS = [\n  \"similarDomains\",\n  \"openWeb\",\n  \"marketplaceLimited\",\n];\nconst FORBIDDEN = new Set([\n  \"__proto__\",\n  \"prototype\",\n  \"constructor\",\n  \"authorization\",\n  \"cookie\",\n  \"set-cookie\",\n  \"accesskey\",\n  \"access_key\",\n  \"access-key\",\n  \"accesstoken\",\n  \"access_token\",\n  \"access-token\",\n  \"secret\",\n  \"token\",\n  \"password\",\n  \"passwd\",\n]);\n\nfunction fail(message) {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_COMMAND_REJECTED: \" + message,\n  );\n}\n\nfunction plain(value) {\n  if (value === null || typeof value !== \"object\") return false;\n  const prototype = Object.getPrototypeOf(value);\n  return prototype === Object.prototype || prototype === null;\n}\n\nfunction exactKeys(value, expected, label) {\n  if (!plain(value)) fail(label + \" must be an object\");\n  const actual = Object.keys(value).sort();\n  if (actual.length !== expected.length ||\n      actual.some((key, index) => key !== expected[index])) {\n    fail(label + \" keys are invalid\");\n  }\n}\n\nfunction text(value, label, maximum) {\n  if (typeof value !== \"string\") fail(label + \" must be a string\");\n  const normalized = value.trim();\n  if (!normalized ||\n      Buffer.byteLength(normalized, \"utf8\") > maximum) {\n    fail(label + \" is empty or too long\");\n  }\n  return normalized;\n}\n\nfunction sha(value, label) {\n  const normalized = text(value, label, 64).toLowerCase();\n  if (!/^[a-f0-9]{64}$/u.test(normalized)) {\n    fail(label + \" must be SHA-256 hex\");\n  }\n  return normalized;\n}\n\nfunction iso(value, label) {\n  const normalized = text(value, label, 64);\n  const timestamp = Date.parse(normalized);\n  if (!Number.isFinite(timestamp) ||\n      new Date(timestamp).toISOString() !== normalized) {\n    fail(label + \" must be canonical ISO-8601\");\n  }\n  return normalized;\n}\n\nfunction safe(value, label, depth) {\n  if (depth > 8) fail(label + \" is too deeply nested\");\n  if (value === null || typeof value === \"boolean\") return value;\n  if (typeof value === \"number\") {\n    if (!Number.isFinite(value)) fail(label + \" has non-finite number\");\n    return value;\n  }\n  if (typeof value === \"string\") {\n    if (Buffer.byteLength(value, \"utf8\") > 32768) {\n      fail(label + \" has oversized string\");\n    }\n    return value;\n  }\n  if (Array.isArray(value)) {\n    if (value.length > 500) fail(label + \" has oversized array\");\n    return value.map((item, index) =>\n      safe(item, label + \"[\" + index + \"]\", depth + 1));\n  }\n  if (!plain(value)) fail(label + \" has unsafe value\");\n  const keys = Object.keys(value);\n  if (keys.length > 500) fail(label + \" has too many keys\");\n  const output = {};\n  for (const key of keys.sort()) {\n    const normalizedKey = text(key, label + \".key\", 180);\n    if (FORBIDDEN.has(normalizedKey.toLowerCase())) {\n      fail(label + \" contains forbidden key\");\n    }\n    output[normalizedKey] =\n      safe(value[key], label + \".\" + normalizedKey, depth + 1);\n  }\n  return output;\n}\n\nconst incoming = $input.first().json;\nconst raw = incoming && plain(incoming.body) ?\n  incoming.body : incoming;\nexactKeys(raw, COMMAND_KEYS, \"acquisitionCommand\");\nif (raw.contractVersion !==\n    \"risk-scan-public-lite-acquisition-command-v1\") {\n  fail(\"unsupported acquisition command\");\n}\nconst handoffId = sha(raw.handoffId, \"handoffId\");\nconst executionId = sha(raw.executionId, \"executionId\");\nconst scanRunId = text(raw.scanRunId, \"scanRunId\", 180);\nif (scanRunId.includes(\"/\") ||\n    scanRunId === \".\" || scanRunId === \"..\") {\n  fail(\"scanRunId is invalid\");\n}\nif (!Number.isInteger(raw.attempt) ||\n    raw.attempt < 1 || raw.attempt > 5) {\n  fail(\"attempt is outside child dispatch policy\");\n}\nconst leaseToken = sha(raw.leaseToken, \"leaseToken\");\nconst dispatchRaw = raw.dispatchEnvelope;\nexactKeys(dispatchRaw, DISPATCH_KEYS, \"dispatchEnvelope\");\nif (dispatchRaw.contractVersion !==\n    \"risk-scan-public-lite-dispatch-envelope-v1\" ||\n    dispatchRaw.scanMode !== \"quick\" ||\n    dispatchRaw.accessTier !== \"publicLite\" ||\n    dispatchRaw.identityMode !== \"anonymous\") {\n  fail(\"unsupported dispatch mode\");\n}\nexactKeys(dispatchRaw.target, TARGET_KEYS, \"target\");\nexactKeys(dispatchRaw.trace, TRACE_KEYS, \"trace\");\nconst dispatchExecutionId = sha(\n  dispatchRaw.executionId,\n  \"dispatchEnvelope.executionId\",\n);\nconst dispatchScanRunId = text(\n  dispatchRaw.scanRunId,\n  \"dispatchEnvelope.scanRunId\",\n  180,\n);\nif (dispatchExecutionId !== executionId ||\n    dispatchScanRunId !== scanRunId) {\n  fail(\"dispatch scope does not match acquisition command\");\n}\nconst officialHost = text(\n  dispatchRaw.target.officialHost,\n  \"target.officialHost\",\n  512,\n).toLowerCase().replace(/\\.$/u, \"\");\nconst officialUrl = new URL(text(\n  dispatchRaw.target.officialWebsiteCanonicalUrl,\n  \"target.officialWebsiteCanonicalUrl\",\n  4096,\n));\nif (![\"http:\", \"https:\"].includes(officialUrl.protocol) ||\n    officialUrl.username || officialUrl.password ||\n    officialUrl.pathname !== \"/\" ||\n    officialUrl.search || officialUrl.hash ||\n    officialUrl.hostname.toLowerCase().replace(/\\.$/u, \"\") !==\n      officialHost) {\n  fail(\"target official URL is invalid\");\n}\nif (!Array.isArray(dispatchRaw.channelCodes) ||\n    dispatchRaw.channelCodes.length !== CHANNELS.length ||\n    dispatchRaw.channelCodes.some(\n      (value, index) => value !== CHANNELS[index])) {\n  fail(\"canonical channel set is required\");\n}\nconst requestedAt = iso(dispatchRaw.requestedAt, \"requestedAt\");\nconst expiresAt = iso(dispatchRaw.expiresAt, \"expiresAt\");\nif (Date.parse(expiresAt) <= Date.parse(requestedAt)) {\n  fail(\"dispatch is expired\");\n}\nconst dispatchEnvelope = safe({\n  contractVersion:\n    \"risk-scan-public-lite-dispatch-envelope-v1\",\n  executionId,\n  scanRunId,\n  scanMode: \"quick\",\n  accessTier: \"publicLite\",\n  identityMode: \"anonymous\",\n  target: {\n    brandNameNormalized: text(\n      dispatchRaw.target.brandNameNormalized,\n      \"target.brandNameNormalized\",\n      300,\n    ),\n    officialHost,\n    officialWebsiteCanonicalUrl: officialUrl.toString(),\n    targetFingerprintSha256: sha(\n      dispatchRaw.target.targetFingerprintSha256,\n      \"target.targetFingerprintSha256\",\n    ),\n  },\n  channelCodes: [...CHANNELS],\n  requestedAt,\n  expiresAt,\n  trace: {\n    sourceEventId: text(\n      dispatchRaw.trace.sourceEventId,\n      \"trace.sourceEventId\",\n      512,\n    ),\n    requestId: text(\n      dispatchRaw.trace.requestId,\n      \"trace.requestId\",\n      180,\n    ),\n    requestFingerprintSha256: sha(\n      dispatchRaw.trace.requestFingerprintSha256,\n      \"trace.requestFingerprintSha256\",\n    ),\n  },\n}, \"dispatchEnvelope\", 0);\nreturn [{\n  json: {\n    acquisitionCommand: {\n      contractVersion:\n        \"risk-scan-public-lite-acquisition-command-v1\",\n      handoffId,\n      executionId,\n      scanRunId,\n      dispatchEnvelope,\n      attempt: raw.attempt,\n      leaseToken,\n    },\n    dispatchEnvelope,\n  },\n}];"
+      },
+      "id": "bd68e13f-0c8e-577e-80a7-a7e827fa2c66",
+      "name": "Validate Acquisition Handoff Command",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst command = item && item.acquisitionCommand;\nif (!command || typeof command !== \"object\") {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: command missing\",\n  );\n}\nconst n8nExecutionId = String($execution.id || \"\").trim();\nif (!n8nExecutionId) {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: n8n execution id missing\",\n  );\n}\nconst externalExecutionId =\n  (\"n8n:\" + n8nExecutionId).slice(0, 256);\nconst acceptedAt = new Date().toISOString();\nreturn [{\n  json: {\n    acquisitionCommand: command,\n    dispatchEnvelope: command.dispatchEnvelope,\n    receipt: {\n      contractVersion:\n        \"risk-scan-public-lite-acquisition-dispatch-receipt-v1\",\n      providerCode: \"n8n_public_lite\",\n      handoffId: command.handoffId,\n      executionId: command.executionId,\n      externalExecutionId,\n      acceptedAt,\n    },\n    workerState: {\n      contractVersion:\n        \"risk-scan-public-lite-acquisition-dispatch-receipt-v1\",\n      acquisitionInstalled: true,\n      acquisitionExecutionEnabled: false,\n      resultCallbackEnabled: false,\n      activationAllowed: false,\n    },\n  },\n}];"
+      },
+      "id": "39d32f33-c605-5950-a3ff-ef1e950ef508",
+      "name": "Build Acquisition Dispatch Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.receipt }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "078a52aa-1e5d-5a75-9690-c9ab51255e60",
+      "name": "Return 202 Acquisition Dispatch Receipt",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        160,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## marketplaceLimited execution — disabled\n\nAdapter: trendyol_public_listing_v1\n\nChannel adapter result: risk-scan-public-lite-channel-adapter-result-v1\n\nPublic pages only. No authentication, cookies, API keys, CAPTCHA solving, or anti-bot bypass. The execution guard is false and the HTTP Request node is disabled.",
+        "height": 320,
+        "width": 520,
+        "color": 5
+      },
+      "id": "8c91b8c8-2dc6-5519-b4bf-bef8bf2691f8",
+      "name": "Marketplace Limited Safety Gate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -120,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst dispatch = item && item.dispatchEnvelope;\nif (!dispatch || typeof dispatch !== \"object\") {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_PLAN_REJECTED: dispatchEnvelope missing\",\n  );\n}\nconst queryText = String(\n  dispatch.target && dispatch.target.brandNameNormalized || \"\",\n).replace(/\\s+/gu, \" \").trim();\nif (!queryText || queryText.length > 240) {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_PLAN_REJECTED: queryText invalid\",\n  );\n}\nconst encodedQuery = encodeURIComponent(queryText)\n  .replace(/[!'()~]/gu, (character) =>\n    \"%\" + character.charCodeAt(0).toString(16).toUpperCase(),\n  )\n  .replace(/%20/gu, \"+\");\nconst requestUrl =\n  \"https://www.trendyol.com/sr?q=\" + encodedQuery;\nreturn [{\n  json: {\n    ...item,\n    acquisitionPlan: {\n      contractVersion:\n        \"risk-scan-public-lite-marketplace-acquisition-plan-v1\",\n      channelAdapterResultContractVersion:\n        \"risk-scan-public-lite-channel-adapter-result-v1\",\n      channelCode: \"marketplaceLimited\",\n      adapterCode: \"trendyol_public_listing_v1\",\n      executionEnabled: false,\n      request: {\n        method: \"GET\",\n        url: requestUrl,\n        headers: {\n          Accept: \"text/html,application/xhtml+xml\",\n          \"User-Agent\": \"MarkaKalkan-Public-Lite/1.0\",\n        },\n        credentials: \"omit\",\n        timeoutMs: 15000,\n        maxResponseBytes: 1048576,\n        maxVisibleTextCharacters: 120000,\n        maxCandidates: 20,\n      },\n    },\n  },\n}];"
+      },
+      "id": "0ed42462-55d9-55e8-8362-c1ef8d1d3db3",
+      "name": "Build Marketplace Limited Acquisition Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item || !item.acquisitionPlan) {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_GATE_REJECTED: acquisitionPlan missing\",\n  );\n}\nif (item.acquisitionPlan.executionEnabled !== true) {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_DISABLED: \" +\n    \"HRT-MKT-TR-1B integration is installed but execution is disabled\",\n  );\n}\nreturn [{json: item}];"
+      },
+      "id": "1b24eb51-8b6b-52d5-bc9d-14bd20fb949a",
+      "name": "Assert Marketplace Acquisition Enabled",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.acquisitionPlan.request.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml"
+            },
+            {
+              "name": "User-Agent",
+              "value": "MarkaKalkan-Public-Lite/1.0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "02a12928-7363-582c-b330-1c07df71596e",
+      "name": "Trendyol Public Listing Acquisition - Disabled",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -120
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst context = $(\"Build Marketplace Limited Acquisition Plan\")\n  .first().json;\nconst plan = context && context.acquisitionPlan;\nconst dispatch = context && context.dispatchEnvelope;\nif (!plan || !dispatch) {\n  throw new Error(\n    \"PUBLIC_LITE_MARKETPLACE_RESULT_REJECTED: context missing\",\n  );\n}\nif (plan.executionEnabled !== true) {\n  throw new Error(\n    \"PUBLIC_LITE_MARKETPLACE_RESULT_REJECTED: acquisition disabled\",\n  );\n}\nconst bodyValue = typeof response.data === \"string\" ?\n  response.data :\n  (typeof response.body === \"string\" ? response.body : \"\");\nconst bodyBytes = Buffer.byteLength(bodyValue, \"utf8\");\nif (bodyBytes > plan.request.maxResponseBytes) {\n  throw new Error(\n    \"PUBLIC_LITE_MARKETPLACE_RESULT_REJECTED: response too large\",\n  );\n}\nconst statusCode = Number.isInteger(response.statusCode) ?\n  response.statusCode :\n  (Number.isInteger(response.status) ? response.status : null);\nconst acquiredAt = new Date().toISOString();\nconst finalUrl = String(\n  response.url ||\n  (response.request && response.request.res &&\n    response.request.res.responseUrl) ||\n  plan.request.url,\n);\nasync function sha256Hex(value) {\n  const bytes = new TextEncoder().encode(String(value));\n  const digest = await crypto.subtle.digest(\"SHA-256\", bytes);\n  return Array.from(new Uint8Array(digest))\n    .map((part) => part.toString(16).padStart(2, \"0\"))\n    .join(\"\");\n}\nfunction stripTags(value) {\n  return String(value || \"\")\n    .replace(/<[^>]+>/gu, \" \")\n    .replace(/&nbsp;/giu, \" \")\n    .replace(/&amp;/giu, \"&\")\n    .replace(/&quot;/giu, \"\\\\\\\"\")\n    .replace(/&#39;/giu, \"'\")\n    .replace(/\\s+/gu, \" \")\n    .trim();\n}\nfunction normalizeUrl(value) {\n  let parsed;\n  try {\n    parsed = new URL(value, finalUrl);\n  } catch {\n    return null;\n  }\n  const host = parsed.hostname.toLowerCase();\n  if (parsed.protocol !== \"https:\" ||\n      !(host === \"trendyol.com\" || host.endsWith(\".trendyol.com\")) ||\n      parsed.username || parsed.password) {\n    return null;\n  }\n  const path = parsed.pathname.toLowerCase();\n  if (path === \"/\" || path.startsWith(\"/sr\") ||\n      path.startsWith(\"/login\") || path.startsWith(\"/hesabim\") ||\n      path.startsWith(\"/sepet\") || path.startsWith(\"/yardim\") ||\n      !(path.includes(\"-p-\") || /\\/p-\\d+(?:\\/|$)/u.test(path))) {\n    return null;\n  }\n  parsed.hash = \"\";\n  parsed.hostname = host;\n  if (parsed.port === \"443\") parsed.port = \"\";\n  return parsed.toString();\n}\nfunction classification(status, body) {\n  const normalized = String(body || \"\").toLocaleLowerCase(\"tr-TR\");\n  const blocked = [\n    \"access denied\",\n    \"captcha\",\n    \"robot olmadığınızı doğrulayın\",\n    \"güvenlik kontrolü\",\n    \"too many requests\",\n    \"erişim engellendi\",\n  ].some((marker) => normalized.includes(marker));\n  if (status === 401 || status === 403 || blocked) {\n    return {status: \"dataUnavailable\", outcomeCode: \"access_policy_blocked\", retryable: false};\n  }\n  if (status === 429) {\n    return {status: \"dataUnavailable\", outcomeCode: \"rate_limited\", retryable: true};\n  }\n  if (status === null || status >= 500) {\n    return {status: \"failed\", outcomeCode: \"upstream_unavailable\", retryable: true};\n  }\n  if (status < 200 || status >= 400) {\n    return {status: \"dataUnavailable\", outcomeCode: \"http_status_unavailable\", retryable: false};\n  }\n  return {status: \"completed\", outcomeCode: \"public_search_completed\", retryable: false};\n}\nconst evidenceSha256 = await sha256Hex(bodyValue);\nconst classed = classification(statusCode, bodyValue);\nconst observations = [];\nif (classed.status === \"completed\") {\n  const seen = new Set();\n  const anchorPattern =\n    /<a\\b([^>]*?)href\\s*=\\s*(?:\"([^\"]+)\"|'([^']+)'|([^\\s>]+))([^>]*)>([\\s\\S]*?)<\\/a\\s*>/giu;\n  let match;\n  while (observations.length < plan.request.maxCandidates &&\n      (match = anchorPattern.exec(bodyValue)) !== null) {\n    const canonicalUrl = normalizeUrl(match[2] || match[3] || match[4]);\n    if (!canonicalUrl || seen.has(canonicalUrl)) continue;\n    const attributes = String(match[1] || \"\") + \" \" + String(match[5] || \"\");\n    const titleMatch = attributes.match(\n      /\\b(?:title|aria-label)\\s*=\\s*(?:\"([^\"]+)\"|'([^']+)')/iu,\n    );\n    const parsed = new URL(canonicalUrl);\n    const title = stripTags(\n      titleMatch && (titleMatch[1] || titleMatch[2]) ||\n      match[6] || parsed.pathname,\n    );\n    if (!title) continue;\n    seen.add(canonicalUrl);\n    const observationId = await sha256Hex([\n      dispatch.executionId,\n      dispatch.scanRunId,\n      dispatch.target.targetFingerprintSha256,\n      canonicalUrl,\n    ].join(\"\\\\u001f\"));\n    observations.push({\n      observationId,\n      observedAt: acquiredAt,\n      sourceUrl: canonicalUrl,\n      sourceHost: parsed.hostname.toLowerCase(),\n      sourceType: \"marketplace_public_listing\",\n      title: title.slice(0, 500),\n      snippet: title.slice(0, 500),\n      imageUrls: [],\n      signals: {\n        adapterCode: plan.adapterCode,\n        rank: observations.length + 1,\n        targetFingerprintSha256:\n          dispatch.target.targetFingerprintSha256,\n      },\n      evidence: {\n        sha256: evidenceSha256,\n        acquisitionOutcomeCode: observations.length === 0 &&\n          bodyValue.length === 0 ?\n          \"public_search_completed_no_candidates\" :\n          classed.outcomeCode,\n        responseBytes: bodyBytes,\n      },\n    });\n  }\n}\nconst completedAt = new Date().toISOString();\nconst outcomeCode = classed.status === \"completed\" && observations.length === 0 ?\n  \"public_search_completed_no_candidates\" : classed.outcomeCode;\nreturn [{\n  json: {\n    ...context,\n    marketplaceLimitedAdapterResult: {\n      contractVersion:\n        \"risk-scan-public-lite-channel-adapter-result-v1\",\n      channelCode: \"marketplaceLimited\",\n      adapterCode: plan.adapterCode,\n      executionId: dispatch.executionId,\n      scanRunId: dispatch.scanRunId,\n      targetFingerprintSha256:\n        dispatch.target.targetFingerprintSha256,\n      idempotencyKey: await sha256Hex([\n        dispatch.executionId,\n        dispatch.scanRunId,\n        dispatch.target.targetFingerprintSha256,\n        plan.adapterCode,\n      ].join(\"\\\\u001f\")),\n      status: classed.status,\n      acquisition: {\n        attemptedUrl: plan.request.url,\n        finalUrl,\n        httpStatus: statusCode,\n        acquiredAt,\n        outcomeCode,\n        evidenceSha256,\n        responseBytes: bodyBytes,\n        retryable: classed.retryable,\n      },\n      observations: observations.map((item, index) => ({\n        observationId: item.observationId,\n        rank: index + 1,\n        title: item.title,\n        canonicalUrl: item.sourceUrl,\n        sourceHost: item.sourceHost,\n        evidenceSha256,\n      })),\n      summary: {\n        candidateCount: observations.length,\n        errorCount: classed.status === \"failed\" ? 1 : 0,\n      },\n      errors: classed.status === \"failed\" ? [{\n        code: outcomeCode,\n        message: outcomeCode,\n        retryable: classed.retryable,\n      }] : [],\n    },\n    marketplaceLimitedChannel: {\n      channelCode: \"marketplaceLimited\",\n      status: classed.status,\n      startedAt: acquiredAt,\n      completedAt,\n      observations,\n      diagnostics: {\n        channelAdapterContractVersion:\n          \"risk-scan-public-lite-channel-adapter-result-v1\",\n        adapterCode: plan.adapterCode,\n        executionId: dispatch.executionId,\n        scanRunId: dispatch.scanRunId,\n        targetFingerprintSha256:\n          dispatch.target.targetFingerprintSha256,\n        attemptedUrl: plan.request.url,\n        finalUrl,\n        httpStatus: statusCode,\n        acquisitionOutcomeCode: outcomeCode,\n        acquisitionEvidenceSha256: evidenceSha256,\n        responseBytes: bodyBytes,\n        retryable: classed.retryable,\n        candidateCount: observations.length,\n      },\n    },\n  },\n}];"
+      },
+      "id": "96f75ff7-86d0-57b4-9c2f-fb1f04abe7bc",
+      "name": "Normalize Marketplace Limited Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst dispatch = item.dispatchEnvelope;\nconst receipt = item.receipt;\nconst marketplace = item.marketplaceLimitedChannel;\nif (!dispatch || !receipt || !marketplace) {\n  throw new Error(\n    \"PUBLIC_LITE_PROVIDER_RESULT_REJECTED: required input missing\",\n  );\n}\nconst now = new Date().toISOString();\nfunction unavailable(channelCode) {\n  return {\n    channelCode,\n    status: \"dataUnavailable\",\n    startedAt: now,\n    completedAt: now,\n    observations: [],\n    diagnostics: {\n      reason: \"channel_not_installed_in_hrt_mkt_tr_1b\",\n      syntheticResult: false,\n    },\n  };\n}\nconst channels = [\n  unavailable(\"similarDomains\"),\n  unavailable(\"openWeb\"),\n  marketplace,\n];\nconst summary = {\n  completedChannelCount:\n    channels.filter((channel) => channel.status === \"completed\").length,\n  dataUnavailableChannelCount:\n    channels.filter((channel) => channel.status === \"dataUnavailable\").length,\n  failedChannelCount:\n    channels.filter((channel) => channel.status === \"failed\").length,\n  observationCount:\n    channels.reduce((total, channel) =>\n      total + channel.observations.length, 0),\n};\nconst executionStatus = summary.failedChannelCount > 0 ?\n  \"partial\" :\n  (summary.completedChannelCount === 3 ? \"completed\" : \"partial\");\nasync function sha256Hex(value) {\n  const bytes = new TextEncoder().encode(String(value));\n  const digest = await crypto.subtle.digest(\"SHA-256\", bytes);\n  return Array.from(new Uint8Array(digest))\n    .map((part) => part.toString(16).padStart(2, \"0\"))\n    .join(\"\");\n}\nconst providerEventId = await sha256Hex([\n  dispatch.executionId,\n  receipt.externalExecutionId,\n  marketplace.completedAt,\n  String(summary.observationCount),\n].join(\"\\\\u001f\"));\nconst resultPayload = {\n  contractVersion: \"risk-scan-public-lite-provider-result-v1\",\n  executionStatus,\n  channels,\n  summary,\n  engine: {\n    engineCode: \"public_lite_marketplace_limited_v1\",\n    engineVersion: \"1.0.0\",\n  },\n};\nreturn [{\n  json: {\n    ...item,\n    resultPayload,\n    resultEnvelope: {\n      contractVersion: \"risk-scan-public-lite-result-envelope-v1\",\n      providerCode: \"n8n_public_lite\",\n      externalExecutionId: receipt.externalExecutionId,\n      providerEventId,\n      executionId: dispatch.executionId,\n      scanRunId: dispatch.scanRunId,\n      completedAt: now,\n      resultPayload,\n    },\n  },\n}];"
+      },
+      "id": "22d9183a-d752-52fc-967a-cf8d1062de08",
+      "name": "Assemble Canonical Provider Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Result callback — disabled\n\nContract: risk-scan-public-lite-result-envelope-v1\n\nProvider result: risk-scan-public-lite-provider-result-v1\n\nCallback: https://europe-west3-markakalkan-app.cloudfunctions.net/receivePublicLiteRiskScanResult\n\nHeader: X-MarkaKalkan-Public-Lite-Result-Token\n\nOnly the assembled resultEnvelope may be sent after controlled live validation. No synthetic result or placeholder evidence may be sent.",
+        "height": 300,
+        "width": 500,
+        "color": 3
+      },
+      "id": "f2ddd589-9d4a-5212-a5b8-bf2a14a954f2",
+      "name": "Result Contract Safety Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -180,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://europe-west3-markakalkan-app.cloudfunctions.net/receivePublicLiteRiskScanResult",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.resultEnvelope) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "bac5267f-d055-55a5-bd03-e39a1e3c2365",
+      "name": "Result Callback Template - Disabled",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        360
+      ],
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Acquisition Handoff Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Acquisition Handoff Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Acquisition Handoff Command": {
+      "main": [
+        [
+          {
+            "node": "Build Acquisition Dispatch Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Acquisition Dispatch Receipt": {
+      "main": [
+        [
+          {
+            "node": "Return 202 Acquisition Dispatch Receipt",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Marketplace Limited Acquisition Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Marketplace Limited Acquisition Plan": {
+      "main": [
+        [
+          {
+            "node": "Assert Marketplace Acquisition Enabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Marketplace Acquisition Enabled": {
+      "main": [
+        [
+          {
+            "node": "Trendyol Public Listing Acquisition - Disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trendyol Public Listing Acquisition - Disabled": {
+      "main": [
+        [
+          {
+            "node": "Normalize Marketplace Limited Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Marketplace Limited Result": {
+      "main": [
+        [
+          {
+            "node": "Assemble Canonical Provider Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "24501e82-58b3-5cd1-8ed3-00eb5d7581a7",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "hrtPhase": "HRT-MKT-TR-1D-3D-B4-B5",
+    "acquisitionCommandContractVersion": "risk-scan-public-lite-acquisition-command-v1",
+    "acquisitionReceiptContractVersion": "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+    "providerCode": "n8n_public_lite",
+    "acquisitionInstalled": true,
+    "acquisitionExecutionEnabled": false,
+    "resultCallbackEnabled": false,
+    "acquisitionHeader": "X-MarkaKalkan-Public-Lite-Acquisition-Token",
+    "resultHeader": "X-MarkaKalkan-Public-Lite-Result-Token",
+    "activationAllowed": false
+  },
+  "tags": []
+}

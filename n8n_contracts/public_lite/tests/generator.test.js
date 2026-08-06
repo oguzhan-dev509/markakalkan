@@ -12,8 +12,11 @@ const {
   workflowOptions,
 } = require("../tools/create_public_lite_gateway_workflow");
 const {
+  ACQUISITION_WORKFLOW_NAME,
+  buildAcquisitionWorkflow,
   buildWorkflow,
   serializeWorkflow,
+  writeAcquisitionWorkflow,
   writeWorkflow,
 } = require("../src/workflow_factory");
 
@@ -97,7 +100,7 @@ test("writeWorkflow creates deterministic import JSON", () => {
   }
 });
 
-test("credential-bound generator output contains ids but no values", () => {
+test("parent generator binds ingress and excludes legacy result metadata", () => {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "public-lite-workflow-bound-"),
   );
@@ -106,13 +109,13 @@ test("credential-bound generator output contains ids but no values", () => {
     writeWorkflow(output, {
       webhookCredentialId: "webhook-id",
       webhookCredentialName: "Webhook Credential",
-      resultCredentialId: "result-id",
-      resultCredentialName: "Result Credential",
+      resultCredentialId: "legacy-result-id",
+      resultCredentialName: "Legacy Result Credential",
     });
     const actual = fs.readFileSync(output, "utf8");
     assert.match(actual, /"id": "webhook-id"/);
-    assert.match(actual, /"id": "result-id"/);
-    assert.doesNotMatch(actual, /secret-value/);
+    assert.doesNotMatch(actual, /legacy-result-id/u);
+    assert.doesNotMatch(actual, /secret-value/u);
     assert.equal(JSON.parse(actual).active, false);
   } finally {
     fs.rmSync(directory, {recursive: true, force: true});
@@ -122,4 +125,37 @@ test("credential-bound generator output contains ids but no values", () => {
 test("committed generated workflow equals factory output", () => {
   const actual = fs.readFileSync(DEFAULT_OUTPUT, "utf8");
   assert.equal(actual, serializeWorkflow(buildWorkflow()));
+});
+
+
+test("writeAcquisitionWorkflow creates deterministic child import JSON", () => {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "public-lite-acquisition-workflow-"),
+  );
+  const output = path.join(directory, "acquisition.json");
+  try {
+    const workflow = writeAcquisitionWorkflow(output);
+    const actual = fs.readFileSync(output, "utf8");
+    assert.equal(actual, serializeWorkflow(workflow));
+    assert.deepEqual(
+      JSON.parse(actual),
+      buildAcquisitionWorkflow(),
+    );
+    assert.equal(workflow.name, ACQUISITION_WORKFLOW_NAME);
+    assert.equal(workflow.active, false);
+  } finally {
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
+
+test("committed acquisition workflow equals factory output", () => {
+  const output = path.join(
+    path.dirname(DEFAULT_OUTPUT),
+    "MarkaKalkan Public Lite Risk Scan Acquisition Worker - V1.json",
+  );
+  const actual = fs.readFileSync(output, "utf8");
+  assert.equal(
+    actual,
+    serializeWorkflow(buildAcquisitionWorkflow()),
+  );
 });

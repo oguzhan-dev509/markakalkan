@@ -20,34 +20,72 @@ const {
 
 const WORKFLOW_NAME =
   "MarkaKalkan Public Lite Risk Scan Gateway - V1";
+const ACQUISITION_WORKFLOW_NAME =
+  "MarkaKalkan Public Lite Risk Scan Acquisition Worker - V1";
 const WEBHOOK_PATH =
   "markakalkan/public-lite-risk-scan/run-created";
+const ACQUISITION_WEBHOOK_PATH =
+  "markakalkan/public-lite-risk-scan/acquisition";
+const HANDOFF_URL =
+  "https://europe-west3-markakalkan-app.cloudfunctions.net/" +
+  "acceptPublicLiteRiskScanHandoff";
 const CALLBACK_URL =
   "https://europe-west3-markakalkan-app.cloudfunctions.net/" +
   "receivePublicLiteRiskScanResult";
 const WEBHOOK_HEADER = "X-MarkaKalkan-Token";
+const HANDOFF_HEADER =
+  "X-MarkaKalkan-Public-Lite-Handoff-Token";
+const ACQUISITION_HEADER =
+  "X-MarkaKalkan-Public-Lite-Acquisition-Token";
 const RESULT_HEADER =
   "X-MarkaKalkan-Public-Lite-Result-Token";
+
+const HANDOFF_REQUEST_VERSION =
+  "risk-scan-public-lite-provider-handoff-request-v1";
+const HANDOFF_RECEIPT_VERSION =
+  "risk-scan-public-lite-provider-handoff-receipt-v1";
+const DISPATCH_RECEIPT_VERSION_V2 =
+  "risk-scan-public-lite-dispatch-receipt-v2";
+const ACQUISITION_COMMAND_VERSION =
+  "risk-scan-public-lite-acquisition-command-v1";
+const ACQUISITION_RECEIPT_VERSION =
+  "risk-scan-public-lite-acquisition-dispatch-receipt-v1";
 
 const NODE_IDS = Object.freeze({
   note: "bb432ce7-90ff-5d1d-af35-341997c07219",
   webhook: "c7728da0-2240-5ca5-a4dc-b69bb8a2f839",
   validate: "5e8b7957-73a4-53e6-995b-7b5f61f129ca",
-  receipt: "2410b42e-4c74-50e7-a8d4-04344bf4b2aa",
+  handoffNote: "1bbc46ba-da32-502b-b99a-c6cbf523d493",
+  handoffRequest: "bd52a7a3-eb5a-5dca-9d63-f23fed191b29",
+  handoffHttp: "10fcc82f-b734-5967-adc4-4a26fddd4d81",
+  receipt: "11de7dd7-0d2e-5ab1-885c-53068764e03f",
   respond: "90b2d358-0a64-56af-9a0f-fd1f4695e4f5",
-  resultTemplateNote: "67ca64b2-90fc-57e6-bb69-b70dfdd92ff0",
-  resultTemplate: "f8f88e33-e7cb-5d14-b53b-3df26402053f",
-  acquisitionNote: "f28e745c-5ada-5797-be75-3485888e58be",
-  acquisitionPlan: "992ddc46-ca2f-538d-92c7-f80f165ea71a",
-  acquisitionGuard: "bca187f7-53d2-5029-876f-5e8c1391c7a7",
-  acquisitionHttp: "1e0a46dd-1f4b-565d-9328-983104d683b0",
-  normalizeMarketplace: "64b52842-44d8-544b-8535-7b1affcbe1a6",
-  assembleProvider: "1730e571-1bc1-5c67-8ad9-d613853dd841",
 });
+
+const ACQUISITION_NODE_IDS = Object.freeze({
+  note: "e4d069d3-342e-506b-82e0-e87003578c23",
+  webhook: "eb2b2e81-8259-5ca5-84c9-29130bb0c476",
+  validate: "bd68e13f-0c8e-577e-80a7-a7e827fa2c66",
+  receipt: "39d32f33-c605-5950-a3ff-ef1e950ef508",
+  respond: "078a52aa-1e5d-5a75-9690-c9ab51255e60",
+  acquisitionNote: "8c91b8c8-2dc6-5519-b4bf-bef8bf2691f8",
+  acquisitionPlan: "0ed42462-55d9-55e8-8362-c1ef8d1d3db3",
+  acquisitionGuard: "1b24eb51-8b6b-52d5-bc9d-14bd20fb949a",
+  acquisitionHttp: "02a12928-7363-582c-b330-1c07df71596e",
+  normalizeMarketplace: "96f75ff7-86d0-57b4-9c2f-fb1f04abe7bc",
+  assembleProvider: "22d9183a-d752-52fc-967a-cf8d1062de08",
+  resultTemplateNote: "f2ddd589-9d4a-5212-a5b8-bf2a14a954f2",
+  resultTemplate: "bac5267f-d055-55a5-bd03-e39a1e3c2365",
+});
+
 const WORKFLOW_VERSION_ID =
-  "7fe6860d-8f63-5c16-94e1-ef7a8245b7cb";
+  "8fcca337-2349-590e-a27b-fa9ab52e49c3";
+const ACQUISITION_WORKFLOW_VERSION_ID =
+  "24501e82-58b3-5cd1-8ed3-00eb5d7581a7";
 const WEBHOOK_ID =
   "9996c454-a741-5af2-9467-7ec6754e7bee";
+const ACQUISITION_WEBHOOK_ID =
+  "6d61578c-2a87-5b1d-a203-451bcf443c0e";
 
 function validatorCode() {
   return String.raw`const EXPECTED_KEYS = [
@@ -262,46 +300,509 @@ const envelope = safe({
 return [{json: {dispatchEnvelope: envelope}}];`;
 }
 
-function receiptCode() {
+
+function handoffRequestCode() {
   return String.raw`const item = $input.first().json;
-const n8nExecutionId = String($execution.id || "").trim();
-if (!n8nExecutionId) {
-  throw new Error("PUBLIC_LITE_RECEIPT_REJECTED: n8n execution id missing");
-}
 const dispatch = item && item.dispatchEnvelope;
-const dispatchExecutionId = String(
-  dispatch && dispatch.executionId || "",
-).trim().toLowerCase();
-if (!/^[0-9a-f]{64}$/u.test(dispatchExecutionId)) {
+if (!dispatch || typeof dispatch !== "object") {
   throw new Error(
-    "PUBLIC_LITE_RECEIPT_REJECTED: dispatch execution id invalid",
+    "PUBLIC_LITE_HANDOFF_REQUEST_REJECTED: dispatchEnvelope missing",
   );
 }
-const acceptedAt = new Date().toISOString();
-const externalExecutionId =
+const n8nExecutionId = String($execution.id || "").trim();
+if (!n8nExecutionId) {
+  throw new Error(
+    "PUBLIC_LITE_HANDOFF_REQUEST_REJECTED: n8n execution id missing",
+  );
+}
+const gatewayExecutionId =
   ("n8n:" + n8nExecutionId).slice(0, 256);
 return [{
   json: {
     dispatchEnvelope: dispatch,
+    handoffRequest: {
+      contractVersion:
+        "risk-scan-public-lite-provider-handoff-request-v1",
+      providerCode: "n8n_public_lite",
+      executionId: dispatch.executionId,
+      scanRunId: dispatch.scanRunId,
+      gatewayExecutionId,
+      dispatchEnvelope: dispatch,
+    },
+  },
+}];`;
+}
+
+function receiptCode() {
+  return String.raw`const RESPONSE_KEYS = [
+  "acceptedAt",
+  "contractVersion",
+  "executionId",
+  "gatewayExecutionId",
+  "handoffId",
+  "providerCode",
+  "replayed",
+  "scanRunId",
+  "state",
+].sort();
+
+function fail(message) {
+  throw new Error(
+    "PUBLIC_LITE_DURABLE_RECEIPT_REJECTED: " + message,
+  );
+}
+
+function plain(value) {
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function exactKeys(value, expected, label) {
+  if (!plain(value)) fail(label + " must be an object");
+  const actual = Object.keys(value).sort();
+  if (actual.length !== expected.length ||
+      actual.some((key, index) => key !== expected[index])) {
+    fail(label + " keys are invalid");
+  }
+}
+
+function text(value, label, maximum) {
+  if (typeof value !== "string") {
+    fail(label + " must be a string");
+  }
+  const normalized = value.trim();
+  if (!normalized ||
+      Buffer.byteLength(normalized, "utf8") > maximum) {
+    fail(label + " is empty or too long");
+  }
+  return normalized;
+}
+
+function sha(value, label) {
+  const normalized = text(value, label, 64).toLowerCase();
+  if (!/^[a-f0-9]{64}$/u.test(normalized)) {
+    fail(label + " must be SHA-256 hex");
+  }
+  return normalized;
+}
+
+function iso(value, label) {
+  const normalized = text(value, label, 64);
+  const timestamp = Date.parse(normalized);
+  if (!Number.isFinite(timestamp) ||
+      new Date(timestamp).toISOString() !== normalized) {
+    fail(label + " must be canonical ISO-8601");
+  }
+  return normalized;
+}
+
+function parseBody(value) {
+  if (plain(value)) return value;
+  if (typeof value !== "string") {
+    fail("handoff response body is invalid");
+  }
+  try {
+    const parsed = JSON.parse(value);
+    if (!plain(parsed)) fail("handoff response body is invalid");
+    return parsed;
+  } catch {
+    fail("handoff response body is invalid JSON");
+  }
+}
+
+const response = $input.first().json;
+const statusCode = Number(
+  response && (response.statusCode ?? response.status),
+);
+if (!Number.isInteger(statusCode) || statusCode !== 200) {
+  fail("handoff persistence did not return HTTP 200");
+}
+const rawReceipt = parseBody(
+  response && response.body !== undefined ?
+    response.body :
+    response && response.data !== undefined ?
+      response.data :
+      null,
+);
+exactKeys(rawReceipt, RESPONSE_KEYS, "handoffReceipt");
+if (rawReceipt.contractVersion !==
+    "risk-scan-public-lite-provider-handoff-receipt-v1" ||
+    rawReceipt.providerCode !== "n8n_public_lite" ||
+    rawReceipt.state !== "accepted" ||
+    typeof rawReceipt.replayed !== "boolean") {
+  fail("handoff receipt contract is unsupported");
+}
+const context =
+  $("Build Durable Provider Handoff Request").first().json;
+const request = context && context.handoffRequest;
+const dispatch = context && context.dispatchEnvelope;
+if (!request || !dispatch) {
+  fail("handoff request context is missing");
+}
+const executionId = sha(rawReceipt.executionId, "executionId");
+const handoffId = sha(rawReceipt.handoffId, "handoffId");
+const scanRunId = text(rawReceipt.scanRunId, "scanRunId", 180);
+const gatewayExecutionId = text(
+  rawReceipt.gatewayExecutionId,
+  "gatewayExecutionId",
+  256,
+);
+const acceptedAt = iso(rawReceipt.acceptedAt, "acceptedAt");
+if (executionId !== request.executionId ||
+    scanRunId !== request.scanRunId ||
+    gatewayExecutionId !== request.gatewayExecutionId) {
+  fail("handoff receipt scope does not match the request");
+}
+return [{
+  json: {
+    dispatchEnvelope: dispatch,
+    handoffRequest: request,
+    handoffReceipt: {
+      contractVersion: rawReceipt.contractVersion,
+      providerCode: rawReceipt.providerCode,
+      handoffId,
+      executionId,
+      scanRunId,
+      gatewayExecutionId,
+      acceptedAt,
+      state: "accepted",
+      replayed: rawReceipt.replayed,
+    },
     receipt: {
       contractVersion:
-        "risk-scan-public-lite-dispatch-receipt-v1",
+        "risk-scan-public-lite-dispatch-receipt-v2",
       providerCode: "n8n_public_lite",
-      executionId: dispatchExecutionId,
-      externalExecutionId,
+      executionId,
+      externalExecutionId: gatewayExecutionId,
+      handoffId,
       acceptedAt,
     },
     gatewayState: {
       contractVersion:
-        "risk-scan-public-lite-dispatch-receipt-v1",
-      acquisitionEngineInstalled: true,
-      acquisitionEngineEnabled: false,
+        "risk-scan-public-lite-dispatch-receipt-v2",
+      durableProviderHandoffAccepted: true,
+      handoffReplayed: rawReceipt.replayed,
+      outboundAcquisition: false,
+      resultCallback: false,
       activationAllowed: false,
     },
   },
 }];`;
 }
 
+function acquisitionCommandValidatorCode() {
+  return String.raw`const COMMAND_KEYS = [
+  "attempt",
+  "contractVersion",
+  "dispatchEnvelope",
+  "executionId",
+  "handoffId",
+  "leaseToken",
+  "scanRunId",
+].sort();
+const DISPATCH_KEYS = [
+  "accessTier",
+  "channelCodes",
+  "contractVersion",
+  "executionId",
+  "expiresAt",
+  "identityMode",
+  "requestedAt",
+  "scanMode",
+  "scanRunId",
+  "target",
+  "trace",
+].sort();
+const TARGET_KEYS = [
+  "brandNameNormalized",
+  "officialHost",
+  "officialWebsiteCanonicalUrl",
+  "targetFingerprintSha256",
+].sort();
+const TRACE_KEYS = [
+  "requestFingerprintSha256",
+  "requestId",
+  "sourceEventId",
+].sort();
+const CHANNELS = [
+  "similarDomains",
+  "openWeb",
+  "marketplaceLimited",
+];
+const FORBIDDEN = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "accesskey",
+  "access_key",
+  "access-key",
+  "accesstoken",
+  "access_token",
+  "access-token",
+  "secret",
+  "token",
+  "password",
+  "passwd",
+]);
+
+function fail(message) {
+  throw new Error(
+    "PUBLIC_LITE_ACQUISITION_COMMAND_REJECTED: " + message,
+  );
+}
+
+function plain(value) {
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function exactKeys(value, expected, label) {
+  if (!plain(value)) fail(label + " must be an object");
+  const actual = Object.keys(value).sort();
+  if (actual.length !== expected.length ||
+      actual.some((key, index) => key !== expected[index])) {
+    fail(label + " keys are invalid");
+  }
+}
+
+function text(value, label, maximum) {
+  if (typeof value !== "string") fail(label + " must be a string");
+  const normalized = value.trim();
+  if (!normalized ||
+      Buffer.byteLength(normalized, "utf8") > maximum) {
+    fail(label + " is empty or too long");
+  }
+  return normalized;
+}
+
+function sha(value, label) {
+  const normalized = text(value, label, 64).toLowerCase();
+  if (!/^[a-f0-9]{64}$/u.test(normalized)) {
+    fail(label + " must be SHA-256 hex");
+  }
+  return normalized;
+}
+
+function iso(value, label) {
+  const normalized = text(value, label, 64);
+  const timestamp = Date.parse(normalized);
+  if (!Number.isFinite(timestamp) ||
+      new Date(timestamp).toISOString() !== normalized) {
+    fail(label + " must be canonical ISO-8601");
+  }
+  return normalized;
+}
+
+function safe(value, label, depth) {
+  if (depth > 8) fail(label + " is too deeply nested");
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) fail(label + " has non-finite number");
+    return value;
+  }
+  if (typeof value === "string") {
+    if (Buffer.byteLength(value, "utf8") > 32768) {
+      fail(label + " has oversized string");
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.length > 500) fail(label + " has oversized array");
+    return value.map((item, index) =>
+      safe(item, label + "[" + index + "]", depth + 1));
+  }
+  if (!plain(value)) fail(label + " has unsafe value");
+  const keys = Object.keys(value);
+  if (keys.length > 500) fail(label + " has too many keys");
+  const output = {};
+  for (const key of keys.sort()) {
+    const normalizedKey = text(key, label + ".key", 180);
+    if (FORBIDDEN.has(normalizedKey.toLowerCase())) {
+      fail(label + " contains forbidden key");
+    }
+    output[normalizedKey] =
+      safe(value[key], label + "." + normalizedKey, depth + 1);
+  }
+  return output;
+}
+
+const incoming = $input.first().json;
+const raw = incoming && plain(incoming.body) ?
+  incoming.body : incoming;
+exactKeys(raw, COMMAND_KEYS, "acquisitionCommand");
+if (raw.contractVersion !==
+    "risk-scan-public-lite-acquisition-command-v1") {
+  fail("unsupported acquisition command");
+}
+const handoffId = sha(raw.handoffId, "handoffId");
+const executionId = sha(raw.executionId, "executionId");
+const scanRunId = text(raw.scanRunId, "scanRunId", 180);
+if (scanRunId.includes("/") ||
+    scanRunId === "." || scanRunId === "..") {
+  fail("scanRunId is invalid");
+}
+if (!Number.isInteger(raw.attempt) ||
+    raw.attempt < 1 || raw.attempt > 5) {
+  fail("attempt is outside child dispatch policy");
+}
+const leaseToken = sha(raw.leaseToken, "leaseToken");
+const dispatchRaw = raw.dispatchEnvelope;
+exactKeys(dispatchRaw, DISPATCH_KEYS, "dispatchEnvelope");
+if (dispatchRaw.contractVersion !==
+    "risk-scan-public-lite-dispatch-envelope-v1" ||
+    dispatchRaw.scanMode !== "quick" ||
+    dispatchRaw.accessTier !== "publicLite" ||
+    dispatchRaw.identityMode !== "anonymous") {
+  fail("unsupported dispatch mode");
+}
+exactKeys(dispatchRaw.target, TARGET_KEYS, "target");
+exactKeys(dispatchRaw.trace, TRACE_KEYS, "trace");
+const dispatchExecutionId = sha(
+  dispatchRaw.executionId,
+  "dispatchEnvelope.executionId",
+);
+const dispatchScanRunId = text(
+  dispatchRaw.scanRunId,
+  "dispatchEnvelope.scanRunId",
+  180,
+);
+if (dispatchExecutionId !== executionId ||
+    dispatchScanRunId !== scanRunId) {
+  fail("dispatch scope does not match acquisition command");
+}
+const officialHost = text(
+  dispatchRaw.target.officialHost,
+  "target.officialHost",
+  512,
+).toLowerCase().replace(/\.$/u, "");
+const officialUrl = new URL(text(
+  dispatchRaw.target.officialWebsiteCanonicalUrl,
+  "target.officialWebsiteCanonicalUrl",
+  4096,
+));
+if (!["http:", "https:"].includes(officialUrl.protocol) ||
+    officialUrl.username || officialUrl.password ||
+    officialUrl.pathname !== "/" ||
+    officialUrl.search || officialUrl.hash ||
+    officialUrl.hostname.toLowerCase().replace(/\.$/u, "") !==
+      officialHost) {
+  fail("target official URL is invalid");
+}
+if (!Array.isArray(dispatchRaw.channelCodes) ||
+    dispatchRaw.channelCodes.length !== CHANNELS.length ||
+    dispatchRaw.channelCodes.some(
+      (value, index) => value !== CHANNELS[index])) {
+  fail("canonical channel set is required");
+}
+const requestedAt = iso(dispatchRaw.requestedAt, "requestedAt");
+const expiresAt = iso(dispatchRaw.expiresAt, "expiresAt");
+if (Date.parse(expiresAt) <= Date.parse(requestedAt)) {
+  fail("dispatch is expired");
+}
+const dispatchEnvelope = safe({
+  contractVersion:
+    "risk-scan-public-lite-dispatch-envelope-v1",
+  executionId,
+  scanRunId,
+  scanMode: "quick",
+  accessTier: "publicLite",
+  identityMode: "anonymous",
+  target: {
+    brandNameNormalized: text(
+      dispatchRaw.target.brandNameNormalized,
+      "target.brandNameNormalized",
+      300,
+    ),
+    officialHost,
+    officialWebsiteCanonicalUrl: officialUrl.toString(),
+    targetFingerprintSha256: sha(
+      dispatchRaw.target.targetFingerprintSha256,
+      "target.targetFingerprintSha256",
+    ),
+  },
+  channelCodes: [...CHANNELS],
+  requestedAt,
+  expiresAt,
+  trace: {
+    sourceEventId: text(
+      dispatchRaw.trace.sourceEventId,
+      "trace.sourceEventId",
+      512,
+    ),
+    requestId: text(
+      dispatchRaw.trace.requestId,
+      "trace.requestId",
+      180,
+    ),
+    requestFingerprintSha256: sha(
+      dispatchRaw.trace.requestFingerprintSha256,
+      "trace.requestFingerprintSha256",
+    ),
+  },
+}, "dispatchEnvelope", 0);
+return [{
+  json: {
+    acquisitionCommand: {
+      contractVersion:
+        "risk-scan-public-lite-acquisition-command-v1",
+      handoffId,
+      executionId,
+      scanRunId,
+      dispatchEnvelope,
+      attempt: raw.attempt,
+      leaseToken,
+    },
+    dispatchEnvelope,
+  },
+}];`;
+}
+
+function acquisitionReceiptCode() {
+  return String.raw`const item = $input.first().json;
+const command = item && item.acquisitionCommand;
+if (!command || typeof command !== "object") {
+  throw new Error(
+    "PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: command missing",
+  );
+}
+const n8nExecutionId = String($execution.id || "").trim();
+if (!n8nExecutionId) {
+  throw new Error(
+    "PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: n8n execution id missing",
+  );
+}
+const externalExecutionId =
+  ("n8n:" + n8nExecutionId).slice(0, 256);
+const acceptedAt = new Date().toISOString();
+return [{
+  json: {
+    acquisitionCommand: command,
+    dispatchEnvelope: command.dispatchEnvelope,
+    receipt: {
+      contractVersion:
+        "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+      providerCode: "n8n_public_lite",
+      handoffId: command.handoffId,
+      executionId: command.executionId,
+      externalExecutionId,
+      acceptedAt,
+    },
+    workerState: {
+      contractVersion:
+        "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+      acquisitionInstalled: true,
+      acquisitionExecutionEnabled: false,
+      resultCallbackEnabled: false,
+      activationAllowed: false,
+    },
+  },
+}];`;
+}
 function acquisitionPlanCode({
   executionEnabled = false,
 } = {}) {
@@ -698,96 +1199,132 @@ function resultTemplateBody() {
   return String.raw`={{ JSON.stringify($json.resultEnvelope) }}`;
 }
 
+
+function assertCredentialPair(id, name, label) {
+  if (Boolean(id) !== Boolean(name)) {
+    throw new TypeError(
+      `${label} credential id and name must be supplied together`,
+    );
+  }
+}
+
+function headerAuthNode({
+  node,
+  credentialId,
+  credentialName,
+}) {
+  if (!credentialId || !credentialName) return node;
+  return {
+    ...node,
+    parameters: {
+      ...node.parameters,
+      authentication: "genericCredentialType",
+      genericAuthType: "httpHeaderAuth",
+    },
+    credentials: {
+      httpHeaderAuth: {
+        id: credentialId,
+        name: credentialName,
+      },
+    },
+  };
+}
+
+function webhookWithCredential({
+  node,
+  credentialId,
+  credentialName,
+}) {
+  if (!credentialId || !credentialName) return node;
+  return {
+    ...node,
+    parameters: {
+      ...node.parameters,
+      authentication: "headerAuth",
+    },
+    credentials: {
+      httpHeaderAuth: {
+        id: credentialId,
+        name: credentialName,
+      },
+    },
+  };
+}
+
 function buildWorkflow({
   webhookCredentialId = "",
   webhookCredentialName = "",
-  resultCredentialId = "",
-  resultCredentialName = "",
-  acquisitionExecutionEnabled = false,
-  resultCallbackEnabled = false,
+  handoffCredentialId = "",
+  handoffCredentialName = "",
 } = {}) {
+  assertCredentialPair(
+    webhookCredentialId,
+    webhookCredentialName,
+    "webhook",
+  );
+  assertCredentialPair(
+    handoffCredentialId,
+    handoffCredentialName,
+    "handoff",
+  );
+
   const webhookBound = Boolean(
     webhookCredentialId && webhookCredentialName);
-  const resultBound = Boolean(
-    resultCredentialId && resultCredentialName);
+  const handoffBound = Boolean(
+    handoffCredentialId && handoffCredentialName);
 
-  if (typeof acquisitionExecutionEnabled !== "boolean") {
-    throw new TypeError(
-      "acquisitionExecutionEnabled must be a boolean");
-  }
-  if (typeof resultCallbackEnabled !== "boolean") {
-    throw new TypeError(
-      "resultCallbackEnabled must be a boolean");
-  }
-
-  if (Boolean(webhookCredentialId) !== Boolean(webhookCredentialName)) {
-    throw new TypeError(
-      "webhook credential id and name must be supplied together");
-  }
-  if (Boolean(resultCredentialId) !== Boolean(resultCredentialName)) {
-    throw new TypeError(
-      "result credential id and name must be supplied together");
-  }
-  if (resultCallbackEnabled && !resultBound) {
-    throw new TypeError(
-      "result callback enable requires result credential binding");
-  }
-
-  const webhookNode = {
-    parameters: {
-      httpMethod: "POST",
-      path: WEBHOOK_PATH,
-      responseMode: "responseNode",
-      options: {},
+  const webhookNode = webhookWithCredential({
+    credentialId: webhookCredentialId,
+    credentialName: webhookCredentialName,
+    node: {
+      parameters: {
+        httpMethod: "POST",
+        path: WEBHOOK_PATH,
+        responseMode: "responseNode",
+        options: {},
+      },
+      id: NODE_IDS.webhook,
+      name: "Public Lite Dispatch Webhook",
+      type: "n8n-nodes-base.webhook",
+      typeVersion: 2.1,
+      position: [-680, 20],
+      webhookId: WEBHOOK_ID,
+      disabled: !webhookBound,
     },
-    id: NODE_IDS.webhook,
-    name: "Public Lite Dispatch Webhook",
-    type: "n8n-nodes-base.webhook",
-    typeVersion: 2.1,
-    position: [-680, 20],
-    webhookId: WEBHOOK_ID,
-    disabled: !webhookBound,
-  };
-  if (webhookBound) {
-    webhookNode.parameters.authentication = "headerAuth";
-    webhookNode.credentials = {
-      httpHeaderAuth: {
-        id: webhookCredentialId,
-        name: webhookCredentialName,
-      },
-    };
-  }
+  });
 
-  const resultTemplateNode = {
-    parameters: {
-      method: "POST",
-      url: CALLBACK_URL,
-      authentication: resultBound ?
-        "genericCredentialType" : "none",
-      sendBody: true,
-      contentType: "raw",
-      rawContentType: "application/json",
-      body: resultTemplateBody(),
-      options: {
-        timeout: 45000,
+  const handoffNode = headerAuthNode({
+    credentialId: handoffCredentialId,
+    credentialName: handoffCredentialName,
+    node: {
+      parameters: {
+        method: "POST",
+        url: HANDOFF_URL,
+        authentication: "none",
+        sendBody: true,
+        contentType: "raw",
+        rawContentType: "application/json",
+        body:
+          "={{ JSON.stringify($json.handoffRequest) }}",
+        options: {
+          timeout: 15000,
+          response: {
+            response: {
+              fullResponse: true,
+              neverError: true,
+              responseFormat: "json",
+            },
+          },
+        },
       },
+      id: NODE_IDS.handoffHttp,
+      name: "Persist Durable Provider Handoff",
+      type: "n8n-nodes-base.httpRequest",
+      typeVersion: 4.2,
+      position: [160, 20],
+      disabled: !handoffBound,
     },
-    id: NODE_IDS.resultTemplate,
-    name: "Result Callback Template - Disabled",
-    type: "n8n-nodes-base.httpRequest",
-    typeVersion: 4.2,
-    position: [1280, 360],
-    disabled: !resultCallbackEnabled,
-  };
-  if (resultBound) {
-    resultTemplateNode.parameters.genericAuthType = "httpHeaderAuth";
-    resultTemplateNode.credentials = {
-      httpHeaderAuth: {
-        id: resultCredentialId,
-        name: resultCredentialName,
-      },
-    };
-  }
+  });
 
   return {
     name: WORKFLOW_NAME,
@@ -795,21 +1332,23 @@ function buildWorkflow({
       {
         parameters: {
           content:
-            "## HRT-MKT-TR-1B — INACTIVE INTEGRATION\n\n" +
-            "The real marketplaceLimited adapter chain is installed, but " +
-            "its execution guard is false and its HTTP Request node is " +
-            "disabled. Do not activate this workflow until controlled " +
-            "inactive import, live acquisition validation, and result " +
-            "materialization are complete.",
-          height: 260,
-          width: 520,
+            "## HRT-MKT-TR-1D-3D-B4-B5 — INACTIVE GATEWAY V2\n\n" +
+            "This parent workflow returns HTTP 202 only after the " +
+            "provider handoff is durably accepted by Firestore through " +
+            "acceptPublicLiteRiskScanHandoff. It contains no marketplace " +
+            "acquisition and no result callback. Do not activate until " +
+            "credential binding, inactive import, backend deployment, " +
+            "index/TTL operationalization, reconciliation/redrive, and " +
+            "controlled live validation are complete.",
+          height: 340,
+          width: 560,
           color: 5,
         },
         id: NODE_IDS.note,
-        name: "Deployment Safety Gate",
+        name: "Gateway V2 Deployment Safety Gate",
         type: "n8n-nodes-base.stickyNote",
         typeVersion: 1,
-        position: [-760, -320],
+        position: [-760, -360],
       },
       webhookNode,
       {
@@ -824,10 +1363,246 @@ function buildWorkflow({
       },
       {
         parameters: {
+          content:
+            "## Durable provider handoff\n\n" +
+            `Request: ${HANDOFF_REQUEST_VERSION}\n\n` +
+            `Receipt: ${HANDOFF_RECEIPT_VERSION}\n\n` +
+            `Endpoint: ${HANDOFF_URL}\n\n` +
+            `Header: ${HANDOFF_HEADER}\n\n` +
+            "The dedicated header credential is metadata-only in the " +
+            "workflow JSON; no token value may be embedded.",
+          height: 300,
+          width: 520,
+          color: 3,
+        },
+        id: NODE_IDS.handoffNote,
+        name: "Durable Handoff Contract Note",
+        type: "n8n-nodes-base.stickyNote",
+        typeVersion: 1,
+        position: [-120, -360],
+      },
+      {
+        parameters: {
+          jsCode: handoffRequestCode(),
+        },
+        id: NODE_IDS.handoffRequest,
+        name: "Build Durable Provider Handoff Request",
+        type: "n8n-nodes-base.code",
+        typeVersion: 2,
+        position: [-120, 20],
+      },
+      handoffNode,
+      {
+        parameters: {
           jsCode: receiptCode(),
         },
         id: NODE_IDS.receipt,
-        name: "Build Dispatch Receipt",
+        name: "Build Durable Dispatch Receipt",
+        type: "n8n-nodes-base.code",
+        typeVersion: 2,
+        position: [440, 20],
+      },
+      {
+        parameters: {
+          respondWith: "json",
+          responseBody: "={{ $json.receipt }}",
+          options: {
+            responseCode: 202,
+          },
+        },
+        id: NODE_IDS.respond,
+        name: "Return 202 Durable Dispatch Receipt",
+        type: "n8n-nodes-base.respondToWebhook",
+        typeVersion: 1.4,
+        position: [720, 20],
+      },
+    ],
+    pinData: {},
+    connections: {
+      "Public Lite Dispatch Webhook": {
+        main: [[{
+          node: "Validate Public Lite Dispatch",
+          type: "main",
+          index: 0,
+        }]],
+      },
+      "Validate Public Lite Dispatch": {
+        main: [[{
+          node: "Build Durable Provider Handoff Request",
+          type: "main",
+          index: 0,
+        }]],
+      },
+      "Build Durable Provider Handoff Request": {
+        main: [[{
+          node: "Persist Durable Provider Handoff",
+          type: "main",
+          index: 0,
+        }]],
+      },
+      "Persist Durable Provider Handoff": {
+        main: [[{
+          node: "Build Durable Dispatch Receipt",
+          type: "main",
+          index: 0,
+        }]],
+      },
+      "Build Durable Dispatch Receipt": {
+        main: [[{
+          node: "Return 202 Durable Dispatch Receipt",
+          type: "main",
+          index: 0,
+        }]],
+      },
+    },
+    active: false,
+    settings: {
+      executionOrder: "v1",
+      saveManualExecutions: true,
+      callerPolicy: "workflowsFromSameOwner",
+    },
+    versionId: WORKFLOW_VERSION_ID,
+    meta: {
+      templateCredsSetupCompleted:
+        webhookBound && handoffBound,
+      hrtPhase: "HRT-MKT-TR-1D-3D-B4-B5",
+      gatewayContractVersion: DISPATCH_ENVELOPE_VERSION,
+      dispatchReceiptContractVersion:
+        DISPATCH_RECEIPT_VERSION_V2,
+      providerCode: PROVIDER_CODE,
+      durableProviderHandoffInstalled: true,
+      durableProviderHandoffEnabled: handoffBound,
+      outboundAcquisition: false,
+      resultCallback: false,
+      webhookHeader: WEBHOOK_HEADER,
+      handoffHeader: HANDOFF_HEADER,
+      activationAllowed: false,
+    },
+    tags: [],
+  };
+}
+
+function buildAcquisitionWorkflow({
+  acquisitionCredentialId = "",
+  acquisitionCredentialName = "",
+  resultCredentialId = "",
+  resultCredentialName = "",
+  acquisitionExecutionEnabled = false,
+  resultCallbackEnabled = false,
+} = {}) {
+  assertCredentialPair(
+    acquisitionCredentialId,
+    acquisitionCredentialName,
+    "acquisition webhook",
+  );
+  assertCredentialPair(
+    resultCredentialId,
+    resultCredentialName,
+    "result",
+  );
+  if (typeof acquisitionExecutionEnabled !== "boolean") {
+    throw new TypeError(
+      "acquisitionExecutionEnabled must be a boolean");
+  }
+  if (typeof resultCallbackEnabled !== "boolean") {
+    throw new TypeError(
+      "resultCallbackEnabled must be a boolean");
+  }
+
+  const acquisitionBound = Boolean(
+    acquisitionCredentialId && acquisitionCredentialName);
+  const resultBound = Boolean(
+    resultCredentialId && resultCredentialName);
+  if (resultCallbackEnabled && !resultBound) {
+    throw new TypeError(
+      "result callback enable requires result credential binding");
+  }
+
+  const webhookNode = webhookWithCredential({
+    credentialId: acquisitionCredentialId,
+    credentialName: acquisitionCredentialName,
+    node: {
+      parameters: {
+        httpMethod: "POST",
+        path: ACQUISITION_WEBHOOK_PATH,
+        responseMode: "responseNode",
+        options: {},
+      },
+      id: ACQUISITION_NODE_IDS.webhook,
+      name: "Acquisition Handoff Webhook",
+      type: "n8n-nodes-base.webhook",
+      typeVersion: 2.1,
+      position: [-680, 20],
+      webhookId: ACQUISITION_WEBHOOK_ID,
+      disabled: !acquisitionBound,
+    },
+  });
+
+  const resultTemplateNode = headerAuthNode({
+    credentialId: resultCredentialId,
+    credentialName: resultCredentialName,
+    node: {
+      parameters: {
+        method: "POST",
+        url: CALLBACK_URL,
+        authentication: "none",
+        sendBody: true,
+        contentType: "raw",
+        rawContentType: "application/json",
+        body: resultTemplateBody(),
+        options: {
+          timeout: 45000,
+        },
+      },
+      id: ACQUISITION_NODE_IDS.resultTemplate,
+      name: "Result Callback Template - Disabled",
+      type: "n8n-nodes-base.httpRequest",
+      typeVersion: 4.2,
+      position: [1280, 360],
+      disabled: !resultCallbackEnabled,
+    },
+  });
+
+  return {
+    name: ACQUISITION_WORKFLOW_NAME,
+    nodes: [
+      {
+        parameters: {
+          content:
+            "## HRT-MKT-TR-1D-3D-B4-B5 — INACTIVE ACQUISITION WORKER\n\n" +
+            "This child workflow acknowledges a validated acquisition " +
+            "command with HTTP 202 before the long marketplace path. " +
+            "Acquisition execution and result callback remain disabled. " +
+            "Do not activate until inactive import, credential binding, " +
+            "backend deployment, reconciliation/redrive, index/TTL " +
+            "operationalization, and controlled live validation complete.",
+          height: 340,
+          width: 560,
+          color: 5,
+        },
+        id: ACQUISITION_NODE_IDS.note,
+        name: "Acquisition Worker Deployment Safety Gate",
+        type: "n8n-nodes-base.stickyNote",
+        typeVersion: 1,
+        position: [-760, -360],
+      },
+      webhookNode,
+      {
+        parameters: {
+          jsCode: acquisitionCommandValidatorCode(),
+        },
+        id: ACQUISITION_NODE_IDS.validate,
+        name: "Validate Acquisition Handoff Command",
+        type: "n8n-nodes-base.code",
+        typeVersion: 2,
+        position: [-400, 20],
+      },
+      {
+        parameters: {
+          jsCode: acquisitionReceiptCode(),
+        },
+        id: ACQUISITION_NODE_IDS.receipt,
+        name: "Build Acquisition Dispatch Receipt",
         type: "n8n-nodes-base.code",
         typeVersion: 2,
         position: [-120, 20],
@@ -840,8 +1615,8 @@ function buildWorkflow({
             responseCode: 202,
           },
         },
-        id: NODE_IDS.respond,
-        name: "Return 202 Dispatch Receipt",
+        id: ACQUISITION_NODE_IDS.respond,
+        name: "Return 202 Acquisition Dispatch Receipt",
         type: "n8n-nodes-base.respondToWebhook",
         typeVersion: 1.4,
         position: [160, 20],
@@ -849,7 +1624,7 @@ function buildWorkflow({
       {
         parameters: {
           content:
-            "## marketplaceLimited integration — execution disabled\n\n" +
+            "## marketplaceLimited execution — disabled\n\n" +
             `Adapter: ${ADAPTER_CODE}\n\n` +
             `Channel adapter result: ${CHANNEL_ADAPTER_RESULT_CONTRACT_VERSION}\n\n` +
             "Public pages only. No authentication, cookies, API keys, " +
@@ -859,7 +1634,7 @@ function buildWorkflow({
           width: 520,
           color: 5,
         },
-        id: NODE_IDS.acquisitionNote,
+        id: ACQUISITION_NODE_IDS.acquisitionNote,
         name: "Marketplace Limited Safety Gate",
         type: "n8n-nodes-base.stickyNote",
         typeVersion: 1,
@@ -868,10 +1643,10 @@ function buildWorkflow({
       {
         parameters: {
           jsCode: acquisitionPlanCode({
-              executionEnabled: acquisitionExecutionEnabled,
-            }),
+            executionEnabled: acquisitionExecutionEnabled,
+          }),
         },
-        id: NODE_IDS.acquisitionPlan,
+        id: ACQUISITION_NODE_IDS.acquisitionPlan,
         name: "Build Marketplace Limited Acquisition Plan",
         type: "n8n-nodes-base.code",
         typeVersion: 2,
@@ -881,7 +1656,7 @@ function buildWorkflow({
         parameters: {
           jsCode: acquisitionGuardCode(),
         },
-        id: NODE_IDS.acquisitionGuard,
+        id: ACQUISITION_NODE_IDS.acquisitionGuard,
         name: "Assert Marketplace Acquisition Enabled",
         type: "n8n-nodes-base.code",
         typeVersion: 2,
@@ -915,7 +1690,7 @@ function buildWorkflow({
             },
           },
         },
-        id: NODE_IDS.acquisitionHttp,
+        id: ACQUISITION_NODE_IDS.acquisitionHttp,
         name: "Trendyol Public Listing Acquisition - Disabled",
         type: "n8n-nodes-base.httpRequest",
         typeVersion: 4.2,
@@ -926,7 +1701,7 @@ function buildWorkflow({
         parameters: {
           jsCode: marketplaceNormalizerCode(),
         },
-        id: NODE_IDS.normalizeMarketplace,
+        id: ACQUISITION_NODE_IDS.normalizeMarketplace,
         name: "Normalize Marketplace Limited Result",
         type: "n8n-nodes-base.code",
         typeVersion: 2,
@@ -936,7 +1711,7 @@ function buildWorkflow({
         parameters: {
           jsCode: providerAssemblerCode(),
         },
-        id: NODE_IDS.assembleProvider,
+        id: ACQUISITION_NODE_IDS.assembleProvider,
         name: "Assemble Canonical Provider Result",
         type: "n8n-nodes-base.code",
         typeVersion: 2,
@@ -945,20 +1720,19 @@ function buildWorkflow({
       {
         parameters: {
           content:
-            "## Result callback template — disabled\n\n" +
+            "## Result callback — disabled\n\n" +
             `Contract: ${RESULT_ENVELOPE_VERSION}\n\n` +
             `Provider result: ${PROVIDER_RESULT_VERSION}\n\n` +
             `Callback: ${CALLBACK_URL}\n\n` +
             `Header: ${RESULT_HEADER}\n\n` +
-            "This node is intentionally disabled and unconnected. " +
-            "It accepts only the assembled resultEnvelope after controlled " +
-            "live validation. No synthetic result or placeholder evidence " +
-            "may be sent.",
+            "Only the assembled resultEnvelope may be sent after " +
+            "controlled live validation. No synthetic result or " +
+            "placeholder evidence may be sent.",
           height: 300,
           width: 500,
           color: 3,
         },
-        id: NODE_IDS.resultTemplateNote,
+        id: ACQUISITION_NODE_IDS.resultTemplateNote,
         name: "Result Contract Safety Note",
         type: "n8n-nodes-base.stickyNote",
         typeVersion: 1,
@@ -968,24 +1742,24 @@ function buildWorkflow({
     ],
     pinData: {},
     connections: {
-      "Public Lite Dispatch Webhook": {
+      "Acquisition Handoff Webhook": {
         main: [[{
-          node: "Validate Public Lite Dispatch",
+          node: "Validate Acquisition Handoff Command",
           type: "main",
           index: 0,
         }]],
       },
-      "Validate Public Lite Dispatch": {
+      "Validate Acquisition Handoff Command": {
         main: [[{
-          node: "Build Dispatch Receipt",
+          node: "Build Acquisition Dispatch Receipt",
           type: "main",
           index: 0,
         }]],
       },
-      "Build Dispatch Receipt": {
+      "Build Acquisition Dispatch Receipt": {
         main: [[
           {
-            node: "Return 202 Dispatch Receipt",
+            node: "Return 202 Acquisition Dispatch Receipt",
             type: "main",
             index: 0,
           },
@@ -1040,20 +1814,20 @@ function buildWorkflow({
       saveManualExecutions: true,
       callerPolicy: "workflowsFromSameOwner",
     },
-    versionId: WORKFLOW_VERSION_ID,
+    versionId: ACQUISITION_WORKFLOW_VERSION_ID,
     meta: {
       templateCredsSetupCompleted:
-        webhookBound && resultBound,
-      hrtPhase: "HRT-MKT-TR-1B",
-      gatewayContractVersion: DISPATCH_ENVELOPE_VERSION,
+        acquisitionBound && resultBound,
+      hrtPhase: "HRT-MKT-TR-1D-3D-B4-B5",
+      acquisitionCommandContractVersion:
+        ACQUISITION_COMMAND_VERSION,
+      acquisitionReceiptContractVersion:
+        ACQUISITION_RECEIPT_VERSION,
       providerCode: PROVIDER_CODE,
-      acquisitionEngineInstalled: true,
-      acquisitionEngineEnabled: false,
-      acquisitionAdapterCode: ADAPTER_CODE,
-      acquisitionChannelCode: MARKETPLACE_CHANNEL_CODE,
-      channelAdapterResultContractVersion:
-        CHANNEL_ADAPTER_RESULT_CONTRACT_VERSION,
-      webhookHeader: WEBHOOK_HEADER,
+      acquisitionInstalled: true,
+      acquisitionExecutionEnabled,
+      resultCallbackEnabled,
+      acquisitionHeader: ACQUISITION_HEADER,
       resultHeader: RESULT_HEADER,
       activationAllowed: false,
     },
@@ -1085,22 +1859,46 @@ function writeWorkflow(outputPath, options = {}) {
   return workflow;
 }
 
+function writeAcquisitionWorkflow(outputPath, options = {}) {
+  const workflow = buildAcquisitionWorkflow(options);
+  const serialized = serializeWorkflow(workflow);
+  fs.mkdirSync(path.dirname(outputPath), {recursive: true});
+  fs.writeFileSync(outputPath, serialized, "utf8");
+  return workflow;
+}
+
 module.exports = Object.freeze({
+  ACQUISITION_COMMAND_VERSION,
+  ACQUISITION_HEADER,
+  ACQUISITION_NODE_IDS,
+  ACQUISITION_RECEIPT_VERSION,
+  ACQUISITION_WEBHOOK_PATH,
+  ACQUISITION_WORKFLOW_NAME,
   CALLBACK_URL,
+  DISPATCH_RECEIPT_VERSION_V2,
+  HANDOFF_HEADER,
+  HANDOFF_RECEIPT_VERSION,
+  HANDOFF_REQUEST_VERSION,
+  HANDOFF_URL,
   NODE_IDS,
   RESULT_HEADER,
   WEBHOOK_HEADER,
   WEBHOOK_PATH,
   WORKFLOW_NAME,
+  acquisitionCommandValidatorCode,
   acquisitionGuardCode,
   acquisitionPlanCode,
+  acquisitionReceiptCode,
+  buildAcquisitionWorkflow,
   buildWorkflow,
   canonicalJson,
+  handoffRequestCode,
   marketplaceNormalizerCode,
   providerAssemblerCode,
   receiptCode,
   resultTemplateBody,
   serializeWorkflow,
   validatorCode,
+  writeAcquisitionWorkflow,
   writeWorkflow,
 });

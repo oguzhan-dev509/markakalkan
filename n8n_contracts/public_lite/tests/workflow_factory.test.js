@@ -6,16 +6,31 @@ const vm = require("node:vm");
 
 const validDispatch = require("../fixtures/valid_dispatch_envelope.json");
 const {
+  ACQUISITION_COMMAND_VERSION,
+  ACQUISITION_HEADER,
+  ACQUISITION_NODE_IDS,
+  ACQUISITION_RECEIPT_VERSION,
+  ACQUISITION_WEBHOOK_PATH,
+  ACQUISITION_WORKFLOW_NAME,
   CALLBACK_URL,
+  DISPATCH_RECEIPT_VERSION_V2,
+  HANDOFF_HEADER,
+  HANDOFF_RECEIPT_VERSION,
+  HANDOFF_REQUEST_VERSION,
+  HANDOFF_URL,
   NODE_IDS,
   RESULT_HEADER,
   WEBHOOK_HEADER,
   WEBHOOK_PATH,
   WORKFLOW_NAME,
+  acquisitionCommandValidatorCode,
   acquisitionGuardCode,
   acquisitionPlanCode,
+  acquisitionReceiptCode,
+  buildAcquisitionWorkflow,
   buildWorkflow,
   canonicalJson,
+  handoffRequestCode,
   marketplaceNormalizerCode,
   providerAssemblerCode,
   receiptCode,
@@ -31,11 +46,13 @@ function findNode(workflow, name) {
 async function executeCode(code, {
   input,
   executionId = "12345",
+  contextByNode = {},
 } = {}) {
   const functionBody = `"use strict";\n${code}`;
   const runner = new Function(
     "$input",
     "$execution",
+    "$",
     functionBody,
   );
   return runner(
@@ -45,6 +62,14 @@ async function executeCode(code, {
       },
     },
     {id: executionId},
+    (nodeName) => ({
+      first() {
+        if (!Object.hasOwn(contextByNode, nodeName)) {
+          throw new Error(`missing test context: ${nodeName}`);
+        }
+        return {json: contextByNode[nodeName]};
+      },
+    }),
   );
 }
 
@@ -67,406 +92,15 @@ function executeCodeInRestrictedVm(code, {
   );
 }
 
-test("workflow identity is stable", () => {
-  const workflow = buildWorkflow();
-  assert.equal(workflow.name, WORKFLOW_NAME);
-  assert.equal(
-    workflow.versionId,
-    "7fe6860d-8f63-5c16-94e1-ef7a8245b7cb",
-  );
-  assert.equal(workflow.active, false);
-});
-
-test("workflow contains thirteen deterministic nodes", () => {
-  const workflow = buildWorkflow();
-  assert.equal(workflow.nodes.length, 13);
-  assert.deepEqual(
-    workflow.nodes.map((node) => node.id).sort(),
-    Object.values(NODE_IDS).sort(),
-  );
-});
-
-test("unbound webhook is disabled and unauthenticated", () => {
-  const workflow = buildWorkflow();
-  const webhook = findNode(
-    workflow,
-    "Public Lite Dispatch Webhook",
-  );
-  assert.equal(webhook.disabled, true);
-  assert.equal(webhook.parameters.path, WEBHOOK_PATH);
-  assert.equal(webhook.parameters.httpMethod, "POST");
-  assert.equal(webhook.parameters.responseMode, "responseNode");
-  assert.equal(webhook.parameters.authentication, undefined);
-  assert.equal(webhook.credentials, undefined);
-});
-
-test("credential-bound webhook uses header auth but remains inactive", () => {
-  const workflow = buildWorkflow({
-    webhookCredentialId: "credential-webhook-1",
-    webhookCredentialName: "Public Lite Webhook Header Auth",
-  });
-  const webhook = findNode(
-    workflow,
-    "Public Lite Dispatch Webhook",
-  );
-  assert.equal(webhook.disabled, false);
-  assert.equal(webhook.parameters.authentication, "headerAuth");
-  assert.deepEqual(webhook.credentials, {
-    httpHeaderAuth: {
-      id: "credential-webhook-1",
-      name: "Public Lite Webhook Header Auth",
-    },
-  });
-  assert.equal(workflow.active, false);
-  assert.equal(workflow.meta.activationAllowed, false);
-});
-
-test("partial webhook credential binding is rejected", () => {
-  assert.throws(
-    () => buildWorkflow({
-      webhookCredentialId: "credential-webhook-1",
-    }),
-    /must be supplied together/,
-  );
-});
-
-test("partial result credential binding is rejected", () => {
-  assert.throws(
-    () => buildWorkflow({
-      resultCredentialName: "Public Lite Result Header Auth",
-    }),
-    /must be supplied together/,
-  );
-});
-
-test("result callback template is disabled and unconnected", () => {
-  const workflow = buildWorkflow();
-  const result = findNode(
-    workflow,
-    "Result Callback Template - Disabled",
-  );
-  assert.equal(result.disabled, true);
-  assert.equal(result.parameters.url, CALLBACK_URL);
-  assert.equal(result.parameters.method, "POST");
-  assert.equal(
-    workflow.connections[
-      "Result Callback Template - Disabled"
-    ],
-    undefined,
-  );
-  const serialized = JSON.stringify(workflow);
-  assert.match(serialized, new RegExp(RESULT_HEADER));
-});
-
-test("result callback credential can be bound without enabling node", () => {
-  const workflow = buildWorkflow({
-    resultCredentialId: "credential-result-1",
-    resultCredentialName: "Public Lite Result Header Auth",
-  });
-  const result = findNode(
-    workflow,
-    "Result Callback Template - Disabled",
-  );
-  assert.equal(result.disabled, true);
-  assert.equal(
-    result.parameters.authentication,
-    "genericCredentialType",
-  );
-  assert.equal(
-    result.parameters.genericAuthType,
-    "httpHeaderAuth",
-  );
-  assert.deepEqual(result.credentials, {
-    httpHeaderAuth: {
-      id: "credential-result-1",
-      name: "Public Lite Result Header Auth",
-    },
-  });
-});
-
-test("gateway branches to receipt and guarded acquisition integration", () => {
-  const workflow = buildWorkflow();
-  assert.deepEqual(
-    workflow.connections,
-    {
-      "Public Lite Dispatch Webhook": {
-        main: [[{
-          node: "Validate Public Lite Dispatch",
-          type: "main",
-          index: 0,
-        }]],
-      },
-      "Validate Public Lite Dispatch": {
-        main: [[{
-          node: "Build Dispatch Receipt",
-          type: "main",
-          index: 0,
-        }]],
-      },
-      "Build Dispatch Receipt": {
-        main: [[
-          {
-            node: "Return 202 Dispatch Receipt",
-            type: "main",
-            index: 0,
-          },
-          {
-            node: "Build Marketplace Limited Acquisition Plan",
-            type: "main",
-            index: 0,
-          },
-        ]],
-      },
-      "Build Marketplace Limited Acquisition Plan": {
-        main: [[{
-          node: "Assert Marketplace Acquisition Enabled",
-          type: "main",
-          index: 0,
-        }]],
-      },
-      "Assert Marketplace Acquisition Enabled": {
-        main: [[{
-          node: "Trendyol Public Listing Acquisition - Disabled",
-          type: "main",
-          index: 0,
-        }]],
-      },
-      "Trendyol Public Listing Acquisition - Disabled": {
-        main: [[{
-          node: "Normalize Marketplace Limited Result",
-          type: "main",
-          index: 0,
-        }]],
-      },
-      "Normalize Marketplace Limited Result": {
-        main: [[{
-          node: "Assemble Canonical Provider Result",
-          type: "main",
-          index: 0,
-        }]],
-      },
-    },
-  );
-});
-
-test("gateway response is HTTP 202 JSON receipt", () => {
-  const workflow = buildWorkflow();
-  const response = findNode(
-    workflow,
-    "Return 202 Dispatch Receipt",
-  );
-  assert.equal(response.parameters.respondWith, "json");
-  assert.equal(response.parameters.responseBody, "={{ $json.receipt }}");
-  assert.equal(response.parameters.options.responseCode, 202);
-});
-
-test("workflow contains no embedded secret values", () => {
-  const serialized = serializeWorkflow(buildWorkflow());
-  assert.doesNotMatch(
-    serialized,
-    /Bearer\s+[A-Za-z0-9._-]+/,
-  );
-  assert.doesNotMatch(
-    serialized,
-    /AIza[0-9A-Za-z_-]{20,}/,
-  );
-  assert.doesNotMatch(
-    serialized,
-    /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/,
-  );
-  assert.match(serialized, new RegExp(WEBHOOK_HEADER));
-  assert.match(serialized, new RegExp(RESULT_HEADER));
-});
-
-test("workflow safety note prohibits activation", () => {
-  const workflow = buildWorkflow();
-  const note = findNode(workflow, "Deployment Safety Gate");
-  assert.match(note.parameters.content, /Do not activate/i);
-  assert.match(note.parameters.content, /real marketplaceLimited adapter/i);
-  assert.match(note.parameters.content, /execution guard is false/i);
-  assert.match(note.parameters.content, /result materialization/i);
-});
-
-test("workflow result note prohibits synthetic zero findings", () => {
-  const workflow = buildWorkflow();
-  const note = findNode(
-    workflow,
-    "Result Contract Safety Note",
-  );
-  assert.match(note.parameters.content, /No synthetic result/i);
-  assert.match(note.parameters.content, /synthetic result/i);
-  assert.match(note.parameters.content, /placeholder evidence/i);
-});
-
-test("validator code accepts webhook body envelope", async () => {
-  const output = await executeCode(validatorCode(), {
-    input: {body: validDispatch},
-  });
-  assert.equal(output.length, 1);
-  assert.equal(
-    output[0].json.dispatchEnvelope.executionId,
-    validDispatch.executionId,
-  );
-  assert.deepEqual(
-    output[0].json.dispatchEnvelope.channelCodes,
-    validDispatch.channelCodes,
-  );
-});
-
-test("validator code accepts direct envelope", async () => {
-  const output = await executeCode(validatorCode(), {
-    input: validDispatch,
-  });
-  assert.equal(
-    output[0].json.dispatchEnvelope.scanRunId,
-    validDispatch.scanRunId,
-  );
-});
-
-test("validator code rejects extra tenant field", async () => {
-  await assert.rejects(
-    async () => executeCode(validatorCode(), {
-      input: {
-        body: {
-          ...validDispatch,
-          tenantId: "forbidden",
-        },
-      },
-    }),
-    /PUBLIC_LITE_DISPATCH_REJECTED/,
-  );
-});
-
-test("validator code rejects token-like nested keys", async () => {
-  const dispatch = JSON.parse(JSON.stringify(validDispatch));
-  dispatch.target.token = "forbidden";
-  await assert.rejects(
-    async () => executeCode(validatorCode(), {
-      input: {body: dispatch},
-    }),
-    /target keys are invalid/,
-  );
-});
-
-test("receipt code returns provider acceptance", async () => {
-  const output = await executeCode(receiptCode(), {
-    input: {dispatchEnvelope: validDispatch},
-    executionId: "998877",
-  });
-  assert.equal(output.length, 1);
-  assert.equal(
-    output[0].json.receipt.providerCode,
-    "n8n_public_lite",
-  );
-  assert.equal(
-    output[0].json.receipt.externalExecutionId,
-    "n8n:998877",
-  );
-  assert.equal(
-    output[0].json.gatewayState.acquisitionEngineInstalled,
-    true,
-  );
-  assert.equal(
-    output[0].json.gatewayState.acquisitionEngineEnabled,
-    false,
-  );
-  assert.equal(
-    output[0].json.gatewayState.activationAllowed,
-    false,
-  );
-  assert.ok(
-    Number.isFinite(Date.parse(output[0].json.receipt.acceptedAt)),
-  );
-});
-
-test("receipt code rejects missing execution id", async () => {
-  await assert.rejects(
-    async () => executeCode(receiptCode(), {
-      input: {dispatchEnvelope: validDispatch},
-      executionId: "",
-    }),
-    /n8n execution id missing/,
-  );
-});
-
-test("result template serializes only assembled result envelope", () => {
-  const body = resultTemplateBody();
-  assert.equal(
-    body,
-    "={{ JSON.stringify($json.resultEnvelope) }}",
-  );
-  assert.doesNotMatch(body, /replace-with-provider-event-id/);
-  assert.doesNotMatch(body, /public_lite_engine_pending/);
-});
-
-test("result template does not synthesize findings", () => {
-  const body = resultTemplateBody();
-  assert.doesNotMatch(body, /findingCount/);
-  assert.doesNotMatch(body, /riskLevel/);
-  assert.doesNotMatch(body, /channels: \[\]/);
-});
-
-test("serialized workflow is stable across builds", () => {
-  const first = serializeWorkflow(buildWorkflow());
-  const second = serializeWorkflow(buildWorkflow());
-  assert.equal(first, second);
-});
-
-test("canonical workflow JSON helper is deterministic", () => {
-  assert.equal(
-    canonicalJson({z: [2, {b: 1, a: 2}], a: 3}),
-    '{"a":3,"z":[2,{"a":2,"b":1}]}',
-  );
-});
-
-test("workflow metadata records the HRT phase", () => {
-  const workflow = buildWorkflow();
-  assert.equal(workflow.meta.hrtPhase, "HRT-MKT-TR-1B");
-  assert.equal(
-    workflow.meta.gatewayContractVersion,
-    "risk-scan-public-lite-dispatch-envelope-v1",
-  );
-  assert.equal(workflow.meta.providerCode, "n8n_public_lite");
-  assert.equal(workflow.meta.acquisitionEngineInstalled, true);
-  assert.equal(workflow.meta.acquisitionEngineEnabled, false);
-  assert.equal(
-    workflow.meta.acquisitionAdapterCode,
-    "trendyol_public_listing_v1",
-  );
-  assert.equal(
-    workflow.meta.acquisitionChannelCode,
-    "marketplaceLimited",
-  );
-  assert.equal(
-    workflow.meta.channelAdapterResultContractVersion,
-    "risk-scan-public-lite-channel-adapter-result-v1",
-  );
-  assert.equal(workflow.meta.webhookHeader, WEBHOOK_HEADER);
-  assert.equal(workflow.meta.resultHeader, RESULT_HEADER);
-});
-
-test("all credential bindings mark setup complete only together", () => {
-  const workflow = buildWorkflow({
-    webhookCredentialId: "credential-webhook-1",
-    webhookCredentialName: "Public Lite Webhook Header Auth",
-    resultCredentialId: "credential-result-1",
-    resultCredentialName: "Public Lite Result Header Auth",
-  });
-  assert.equal(
-    workflow.meta.templateCredsSetupCompleted,
-    true,
-  );
-  assert.equal(workflow.active, false);
-});
-
-
 async function executeIntegrationCode(code, {
   input,
   contextByNode = {},
+  executionId = "12345",
 } = {}) {
   const runner = new Function(
     "$input",
     "$",
+    "$execution",
     `"use strict"; return (async () => {${code}})();`,
   );
   return runner(
@@ -483,8 +117,610 @@ async function executeIntegrationCode(code, {
         return {json: contextByNode[nodeName]};
       },
     }),
+    {id: executionId},
   );
 }
+
+function validAcquisitionCommand() {
+  return {
+    contractVersion: ACQUISITION_COMMAND_VERSION,
+    handoffId: "d".repeat(64),
+    executionId: validDispatch.executionId,
+    scanRunId: validDispatch.scanRunId,
+    dispatchEnvelope: validDispatch,
+    attempt: 1,
+    leaseToken: "e".repeat(64),
+  };
+}
+
+function validHandoffReceipt() {
+  return {
+    contractVersion: HANDOFF_RECEIPT_VERSION,
+    providerCode: "n8n_public_lite",
+    handoffId: "d".repeat(64),
+    executionId: validDispatch.executionId,
+    scanRunId: validDispatch.scanRunId,
+    gatewayExecutionId: "n8n:998877",
+    acceptedAt: "2026-08-06T12:00:00.000Z",
+    state: "accepted",
+    replayed: false,
+  };
+}
+
+test("durable handoff contract constants are stable", () => {
+  assert.equal(
+    HANDOFF_REQUEST_VERSION,
+    "risk-scan-public-lite-provider-handoff-request-v1",
+  );
+  assert.equal(
+    HANDOFF_RECEIPT_VERSION,
+    "risk-scan-public-lite-provider-handoff-receipt-v1",
+  );
+  assert.equal(
+    DISPATCH_RECEIPT_VERSION_V2,
+    "risk-scan-public-lite-dispatch-receipt-v2",
+  );
+  assert.equal(
+    ACQUISITION_COMMAND_VERSION,
+    "risk-scan-public-lite-acquisition-command-v1",
+  );
+  assert.equal(
+    ACQUISITION_RECEIPT_VERSION,
+    "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+  );
+});
+
+test("parent gateway identity and eight nodes are deterministic", () => {
+  const workflow = buildWorkflow();
+  assert.equal(workflow.name, WORKFLOW_NAME);
+  assert.equal(
+    workflow.versionId,
+    "8fcca337-2349-590e-a27b-fa9ab52e49c3",
+  );
+  assert.equal(workflow.active, false);
+  assert.equal(workflow.nodes.length, 8);
+  assert.deepEqual(
+    workflow.nodes.map((node) => node.id).sort(),
+    Object.values(NODE_IDS).sort(),
+  );
+});
+
+test("child worker identity and thirteen nodes are deterministic", () => {
+  const workflow = buildAcquisitionWorkflow();
+  assert.equal(workflow.name, ACQUISITION_WORKFLOW_NAME);
+  assert.equal(
+    workflow.versionId,
+    "24501e82-58b3-5cd1-8ed3-00eb5d7581a7",
+  );
+  assert.equal(workflow.active, false);
+  assert.equal(workflow.nodes.length, 13);
+  assert.deepEqual(
+    workflow.nodes.map((node) => node.id).sort(),
+    Object.values(ACQUISITION_NODE_IDS).sort(),
+  );
+});
+
+test("unbound parent ingress and handoff HTTP nodes are disabled", () => {
+  const workflow = buildWorkflow();
+  const webhook = findNode(
+    workflow,
+    "Public Lite Dispatch Webhook",
+  );
+  const handoff = findNode(
+    workflow,
+    "Persist Durable Provider Handoff",
+  );
+  assert.equal(webhook.disabled, true);
+  assert.equal(webhook.parameters.path, WEBHOOK_PATH);
+  assert.equal(webhook.parameters.authentication, undefined);
+  assert.equal(webhook.credentials, undefined);
+  assert.equal(handoff.disabled, true);
+  assert.equal(handoff.parameters.url, HANDOFF_URL);
+  assert.equal(handoff.parameters.authentication, "none");
+  assert.equal(handoff.credentials, undefined);
+});
+
+test("bound parent uses separate webhook and handoff credentials", () => {
+  const workflow = buildWorkflow({
+    webhookCredentialId: "webhook-id",
+    webhookCredentialName: "Public Lite Webhook Header Auth",
+    handoffCredentialId: "handoff-id",
+    handoffCredentialName: "Public Lite Handoff Header Auth",
+  });
+  const webhook = findNode(
+    workflow,
+    "Public Lite Dispatch Webhook",
+  );
+  const handoff = findNode(
+    workflow,
+    "Persist Durable Provider Handoff",
+  );
+  assert.equal(webhook.disabled, false);
+  assert.equal(webhook.parameters.authentication, "headerAuth");
+  assert.deepEqual(webhook.credentials, {
+    httpHeaderAuth: {
+      id: "webhook-id",
+      name: "Public Lite Webhook Header Auth",
+    },
+  });
+  assert.equal(handoff.disabled, false);
+  assert.equal(
+    handoff.parameters.authentication,
+    "genericCredentialType",
+  );
+  assert.equal(
+    handoff.parameters.genericAuthType,
+    "httpHeaderAuth",
+  );
+  assert.deepEqual(handoff.credentials, {
+    httpHeaderAuth: {
+      id: "handoff-id",
+      name: "Public Lite Handoff Header Auth",
+    },
+  });
+  assert.equal(workflow.active, false);
+  assert.equal(workflow.meta.activationAllowed, false);
+});
+
+test("partial parent credential bindings are rejected", () => {
+  assert.throws(
+    () => buildWorkflow({
+      webhookCredentialId: "webhook-id",
+    }),
+    /webhook credential id and name must be supplied together/u,
+  );
+  assert.throws(
+    () => buildWorkflow({
+      handoffCredentialName: "Handoff Credential",
+    }),
+    /handoff credential id and name must be supplied together/u,
+  );
+});
+
+test("parent topology persists before building and returning HTTP 202", () => {
+  const workflow = buildWorkflow();
+  assert.deepEqual(workflow.connections, {
+    "Public Lite Dispatch Webhook": {
+      main: [[{
+        node: "Validate Public Lite Dispatch",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Validate Public Lite Dispatch": {
+      main: [[{
+        node: "Build Durable Provider Handoff Request",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Build Durable Provider Handoff Request": {
+      main: [[{
+        node: "Persist Durable Provider Handoff",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Persist Durable Provider Handoff": {
+      main: [[{
+        node: "Build Durable Dispatch Receipt",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Build Durable Dispatch Receipt": {
+      main: [[{
+        node: "Return 202 Durable Dispatch Receipt",
+        type: "main",
+        index: 0,
+      }]],
+    },
+  });
+  const response = findNode(
+    workflow,
+    "Return 202 Durable Dispatch Receipt",
+  );
+  assert.equal(response.parameters.respondWith, "json");
+  assert.equal(response.parameters.responseBody, "={{ $json.receipt }}");
+  assert.equal(response.parameters.options.responseCode, 202);
+});
+
+test("parent contains no acquisition or callback execution nodes", () => {
+  const workflow = buildWorkflow();
+  const names = workflow.nodes.map((node) => node.name);
+  assert.equal(
+    names.some((name) => /Trendyol|Marketplace Acquisition/u.test(name)),
+    false,
+  );
+  assert.equal(
+    names.some((name) => /Result Callback/u.test(name)),
+    false,
+  );
+  assert.equal(workflow.meta.outboundAcquisition, false);
+  assert.equal(workflow.meta.resultCallback, false);
+});
+
+test("parent safety note requires durable acceptance before HTTP 202", () => {
+  const workflow = buildWorkflow();
+  const note = findNode(
+    workflow,
+    "Gateway V2 Deployment Safety Gate",
+  );
+  assert.match(note.parameters.content, /HTTP 202 only after/u);
+  assert.match(note.parameters.content, /durably accepted/u);
+  assert.match(note.parameters.content, /no marketplace acquisition/u);
+  assert.match(note.parameters.content, /Do not activate/u);
+});
+
+test("parent workflow contains header names but no secret values", () => {
+  const serialized = serializeWorkflow(buildWorkflow());
+  assert.match(serialized, new RegExp(WEBHOOK_HEADER));
+  assert.match(serialized, new RegExp(HANDOFF_HEADER));
+  assert.doesNotMatch(serialized, /Bearer\s+[A-Za-z0-9._-]+/u);
+  assert.doesNotMatch(serialized, /AIza[0-9A-Za-z_-]{20,}/u);
+  assert.doesNotMatch(
+    serialized,
+    /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/u,
+  );
+});
+
+test("validator code accepts webhook and direct dispatch envelopes", async () => {
+  const webhookOutput = await executeCode(validatorCode(), {
+    input: {body: validDispatch},
+  });
+  const directOutput = await executeCode(validatorCode(), {
+    input: validDispatch,
+  });
+  assert.equal(
+    webhookOutput[0].json.dispatchEnvelope.executionId,
+    validDispatch.executionId,
+  );
+  assert.equal(
+    directOutput[0].json.dispatchEnvelope.scanRunId,
+    validDispatch.scanRunId,
+  );
+});
+
+test("validator code rejects tenant and token-like drift", async () => {
+  await assert.rejects(
+    async () => executeCode(validatorCode(), {
+      input: {
+        body: {
+          ...validDispatch,
+          tenantId: "forbidden",
+        },
+      },
+    }),
+    /PUBLIC_LITE_DISPATCH_REJECTED/u,
+  );
+  const dispatch = JSON.parse(JSON.stringify(validDispatch));
+  dispatch.target.token = "forbidden";
+  await assert.rejects(
+    async () => executeCode(validatorCode(), {
+      input: {body: dispatch},
+    }),
+    /target keys are invalid/u,
+  );
+});
+
+test("handoff request binds dispatch to the parent execution", async () => {
+  const output = await executeCode(handoffRequestCode(), {
+    input: {dispatchEnvelope: validDispatch},
+    executionId: "998877",
+  });
+  const request = output[0].json.handoffRequest;
+  assert.deepEqual(request, {
+    contractVersion: HANDOFF_REQUEST_VERSION,
+    providerCode: "n8n_public_lite",
+    executionId: validDispatch.executionId,
+    scanRunId: validDispatch.scanRunId,
+    gatewayExecutionId: "n8n:998877",
+    dispatchEnvelope: validDispatch,
+  });
+});
+
+test("handoff request rejects a missing parent execution id", async () => {
+  await assert.rejects(
+    async () => executeCode(handoffRequestCode(), {
+      input: {dispatchEnvelope: validDispatch},
+      executionId: "",
+    }),
+    /n8n execution id missing/u,
+  );
+});
+
+test("durable receipt maps backend acceptance to dispatch receipt v2", async () => {
+  const requestContext = {
+    dispatchEnvelope: validDispatch,
+    handoffRequest: {
+      contractVersion: HANDOFF_REQUEST_VERSION,
+      providerCode: "n8n_public_lite",
+      executionId: validDispatch.executionId,
+      scanRunId: validDispatch.scanRunId,
+      gatewayExecutionId: "n8n:998877",
+      dispatchEnvelope: validDispatch,
+    },
+  };
+  const output = await executeIntegrationCode(receiptCode(), {
+    input: {
+      statusCode: 200,
+      body: validHandoffReceipt(),
+    },
+    contextByNode: {
+      "Build Durable Provider Handoff Request": requestContext,
+    },
+  });
+  assert.deepEqual(output[0].json.receipt, {
+    contractVersion: DISPATCH_RECEIPT_VERSION_V2,
+    providerCode: "n8n_public_lite",
+    executionId: validDispatch.executionId,
+    externalExecutionId: "n8n:998877",
+    handoffId: "d".repeat(64),
+    acceptedAt: "2026-08-06T12:00:00.000Z",
+  });
+  assert.equal(
+    output[0].json.gatewayState.durableProviderHandoffAccepted,
+    true,
+  );
+  assert.equal(output[0].json.gatewayState.outboundAcquisition, false);
+});
+
+test("durable receipt rejects non-200 and mismatched scope", async () => {
+  const requestContext = {
+    dispatchEnvelope: validDispatch,
+    handoffRequest: {
+      contractVersion: HANDOFF_REQUEST_VERSION,
+      providerCode: "n8n_public_lite",
+      executionId: validDispatch.executionId,
+      scanRunId: validDispatch.scanRunId,
+      gatewayExecutionId: "n8n:998877",
+      dispatchEnvelope: validDispatch,
+    },
+  };
+  await assert.rejects(
+    async () => executeIntegrationCode(receiptCode(), {
+      input: {
+        statusCode: 409,
+        body: {ok: false, code: "conflict"},
+      },
+      contextByNode: {
+        "Build Durable Provider Handoff Request": requestContext,
+      },
+    }),
+    /did not return HTTP 200/u,
+  );
+  await assert.rejects(
+    async () => executeIntegrationCode(receiptCode(), {
+      input: {
+        statusCode: 200,
+        body: {
+          ...validHandoffReceipt(),
+          executionId: "f".repeat(64),
+        },
+      },
+      contextByNode: {
+        "Build Durable Provider Handoff Request": requestContext,
+      },
+    }),
+    /scope does not match/u,
+  );
+});
+
+test("unbound child ingress is disabled and unauthenticated", () => {
+  const workflow = buildAcquisitionWorkflow();
+  const webhook = findNode(
+    workflow,
+    "Acquisition Handoff Webhook",
+  );
+  assert.equal(webhook.disabled, true);
+  assert.equal(webhook.parameters.path, ACQUISITION_WEBHOOK_PATH);
+  assert.equal(webhook.parameters.authentication, undefined);
+  assert.equal(webhook.credentials, undefined);
+});
+
+test("bound child ingress uses the acquisition header credential", () => {
+  const workflow = buildAcquisitionWorkflow({
+    acquisitionCredentialId: "acquisition-id",
+    acquisitionCredentialName: "Acquisition Header Auth",
+  });
+  const webhook = findNode(
+    workflow,
+    "Acquisition Handoff Webhook",
+  );
+  assert.equal(webhook.disabled, false);
+  assert.equal(webhook.parameters.authentication, "headerAuth");
+  assert.deepEqual(webhook.credentials, {
+    httpHeaderAuth: {
+      id: "acquisition-id",
+      name: "Acquisition Header Auth",
+    },
+  });
+  assert.equal(workflow.active, false);
+});
+
+test("partial child credential bindings are rejected", () => {
+  assert.throws(
+    () => buildAcquisitionWorkflow({
+      acquisitionCredentialId: "acquisition-id",
+    }),
+    /acquisition webhook credential id and name/u,
+  );
+  assert.throws(
+    () => buildAcquisitionWorkflow({
+      resultCredentialName: "Result Header Auth",
+    }),
+    /result credential id and name/u,
+  );
+});
+
+test("child topology acknowledges before the disabled long path", () => {
+  const workflow = buildAcquisitionWorkflow();
+  assert.deepEqual(workflow.connections, {
+    "Acquisition Handoff Webhook": {
+      main: [[{
+        node: "Validate Acquisition Handoff Command",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Validate Acquisition Handoff Command": {
+      main: [[{
+        node: "Build Acquisition Dispatch Receipt",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Build Acquisition Dispatch Receipt": {
+      main: [[
+        {
+          node: "Return 202 Acquisition Dispatch Receipt",
+          type: "main",
+          index: 0,
+        },
+        {
+          node: "Build Marketplace Limited Acquisition Plan",
+          type: "main",
+          index: 0,
+        },
+      ]],
+    },
+    "Build Marketplace Limited Acquisition Plan": {
+      main: [[{
+        node: "Assert Marketplace Acquisition Enabled",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Assert Marketplace Acquisition Enabled": {
+      main: [[{
+        node: "Trendyol Public Listing Acquisition - Disabled",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Trendyol Public Listing Acquisition - Disabled": {
+      main: [[{
+        node: "Normalize Marketplace Limited Result",
+        type: "main",
+        index: 0,
+      }]],
+    },
+    "Normalize Marketplace Limited Result": {
+      main: [[{
+        node: "Assemble Canonical Provider Result",
+        type: "main",
+        index: 0,
+      }]],
+    },
+  });
+  const response = findNode(
+    workflow,
+    "Return 202 Acquisition Dispatch Receipt",
+  );
+  assert.equal(response.parameters.options.responseCode, 202);
+  assert.equal(response.parameters.responseBody, "={{ $json.receipt }}");
+});
+
+test("acquisition command validator accepts the exact backend command", async () => {
+  const output = await executeCode(
+    acquisitionCommandValidatorCode(),
+    {input: {body: validAcquisitionCommand()}},
+  );
+  const command = output[0].json.acquisitionCommand;
+  assert.equal(command.contractVersion, ACQUISITION_COMMAND_VERSION);
+  assert.equal(command.handoffId, "d".repeat(64));
+  assert.equal(command.executionId, validDispatch.executionId);
+  assert.equal(command.attempt, 1);
+  assert.equal(command.leaseToken, "e".repeat(64));
+});
+
+test("acquisition command validator rejects drift and scope mismatch", async () => {
+  await assert.rejects(
+    async () => executeCode(
+      acquisitionCommandValidatorCode(),
+      {
+        input: {
+          body: {
+            ...validAcquisitionCommand(),
+            tenantId: "forbidden",
+          },
+        },
+      },
+    ),
+    /acquisitionCommand keys are invalid/u,
+  );
+  const mismatched = validAcquisitionCommand();
+  mismatched.dispatchEnvelope = {
+    ...validDispatch,
+    executionId: "f".repeat(64),
+  };
+  await assert.rejects(
+    async () => executeCode(
+      acquisitionCommandValidatorCode(),
+      {input: {body: mismatched}},
+    ),
+    /dispatch scope does not match/u,
+  );
+});
+
+test("acquisition command validator rejects an invalid attempt", async () => {
+  await assert.rejects(
+    async () => executeCode(
+      acquisitionCommandValidatorCode(),
+      {
+        input: {
+          body: {
+            ...validAcquisitionCommand(),
+            attempt: 6,
+          },
+        },
+      },
+    ),
+    /outside child dispatch policy/u,
+  );
+});
+
+test("acquisition receipt binds child execution and handoff scope", async () => {
+  const command = validAcquisitionCommand();
+  const output = await executeCode(acquisitionReceiptCode(), {
+    input: {
+      acquisitionCommand: command,
+      dispatchEnvelope: validDispatch,
+    },
+    executionId: "child-7788",
+  });
+  const receipt = output[0].json.receipt;
+  assert.equal(receipt.contractVersion, ACQUISITION_RECEIPT_VERSION);
+  assert.equal(receipt.providerCode, "n8n_public_lite");
+  assert.equal(receipt.handoffId, command.handoffId);
+  assert.equal(receipt.executionId, command.executionId);
+  assert.equal(receipt.externalExecutionId, "n8n:child-7788");
+  assert.ok(Number.isFinite(Date.parse(receipt.acceptedAt)));
+});
+
+test("child safety note and metadata prohibit activation", () => {
+  const workflow = buildAcquisitionWorkflow();
+  const note = findNode(
+    workflow,
+    "Acquisition Worker Deployment Safety Gate",
+  );
+  assert.match(note.parameters.content, /acknowledges.*HTTP 202/is);
+  assert.match(note.parameters.content, /remain disabled/u);
+  assert.match(note.parameters.content, /Do not activate/u);
+  assert.equal(workflow.meta.activationAllowed, false);
+  assert.equal(workflow.meta.acquisitionExecutionEnabled, false);
+  assert.equal(workflow.meta.resultCallbackEnabled, false);
+});
+
+test("child workflow contains header names but no secret values", () => {
+  const serialized = serializeWorkflow(
+    buildAcquisitionWorkflow(),
+  );
+  assert.match(serialized, new RegExp(ACQUISITION_HEADER));
+  assert.match(serialized, new RegExp(RESULT_HEADER));
+  assert.doesNotMatch(serialized, /Bearer\s+[A-Za-z0-9._-]+/u);
+  assert.doesNotMatch(serialized, /AIza[0-9A-Za-z_-]{20,}/u);
+});
 
 test("acquisition plan is deterministic, public-only, and disabled", async () => {
   const input = {
@@ -552,7 +788,7 @@ test("acquisition guard accepts only explicit true", async () => {
 });
 
 test("Trendyol HTTP node is disabled, unauthenticated, and bounded", () => {
-  const workflow = buildWorkflow();
+  const workflow = buildAcquisitionWorkflow();
   const node = findNode(
     workflow,
     "Trendyol Public Listing Acquisition - Disabled",
@@ -699,7 +935,7 @@ test("provider assembler creates canonical three-channel result envelope", async
 });
 
 test("callback remains disabled and unconnected after result assembly", () => {
-  const workflow = buildWorkflow();
+  const workflow = buildAcquisitionWorkflow();
   const callback = findNode(
     workflow,
     "Result Callback Template - Disabled",
@@ -716,7 +952,7 @@ test("callback remains disabled and unconnected after result assembly", () => {
 });
 
 test("integration workflow contains no tenant, auth, cookie, or API key fields", () => {
-  const serialized = serializeWorkflow(buildWorkflow()).toLowerCase();
+  const serialized = serializeWorkflow(buildAcquisitionWorkflow()).toLowerCase();
   assert.doesNotMatch(serialized, /"tenantid"/);
   assert.doesNotMatch(serialized, /"brandid"/);
   assert.doesNotMatch(serialized, /"actoruid"/);
@@ -727,7 +963,7 @@ test("integration workflow contains no tenant, auth, cookie, or API key fields",
 });
 
 test("explicit activation capabilities remain opt-in and workflow-inactive", () => {
-  const workflow = buildWorkflow();
+  const workflow = buildAcquisitionWorkflow();
   const acquisition = findNode(
     workflow,
     "Trendyol Public Listing Acquisition - Disabled",
@@ -755,7 +991,7 @@ test("explicit activation capabilities remain opt-in and workflow-inactive", () 
 });
 
 test("acquisition can be explicitly enabled without activating workflow", () => {
-  const workflow = buildWorkflow({
+  const workflow = buildAcquisitionWorkflow({
     acquisitionExecutionEnabled: true,
   });
   const acquisition = findNode(
@@ -777,7 +1013,7 @@ test("acquisition can be explicitly enabled without activating workflow", () => 
 
 test("result callback enable requires bound result credential", () => {
   assert.throws(
-    () => buildWorkflow({
+    () => buildAcquisitionWorkflow({
       resultCallbackEnabled: true,
     }),
     /requires result credential binding/u,
@@ -785,7 +1021,7 @@ test("result callback enable requires bound result credential", () => {
 });
 
 test("result callback can be explicitly enabled and connected", () => {
-  const workflow = buildWorkflow({
+  const workflow = buildAcquisitionWorkflow({
     resultCredentialId: "credential-result-activation-1",
     resultCredentialName: "Public Lite Result Header Auth",
     resultCallbackEnabled: true,
@@ -825,13 +1061,13 @@ test("result callback can be explicitly enabled and connected", () => {
 
 test("activation capability flags must be booleans", () => {
   assert.throws(
-    () => buildWorkflow({
+    () => buildAcquisitionWorkflow({
       acquisitionExecutionEnabled: "true",
     }),
     /acquisitionExecutionEnabled must be a boolean/u,
   );
   assert.throws(
-    () => buildWorkflow({
+    () => buildAcquisitionWorkflow({
       resultCallbackEnabled: 1,
     }),
     /resultCallbackEnabled must be a boolean/u,
