@@ -35,6 +35,80 @@ class FakeDocumentReference {
   }
 }
 
+class FakeQuery {
+  constructor(store, path, clauses = [], order = null, limitValue = null) {
+    this.store = store;
+    this.path = path;
+    this.clauses = clauses;
+    this.order = order;
+    this.limitValue = limitValue;
+  }
+
+  where(field, operator, value) {
+    return new FakeQuery(
+        this.store,
+        this.path,
+        [...this.clauses, {field, operator, value}],
+        this.order,
+        this.limitValue);
+  }
+
+  orderBy(field, direction) {
+    return new FakeQuery(
+        this.store,
+        this.path,
+        this.clauses,
+        {field, direction},
+        this.limitValue);
+  }
+
+  limit(value) {
+    return new FakeQuery(
+        this.store,
+        this.path,
+        this.clauses,
+        this.order,
+        value);
+  }
+
+  async get() {
+    const prefix = `${this.path}/`;
+    let entries = [...this.store.documents.entries()]
+        .filter(([path]) => path.startsWith(prefix))
+        .map(([path, value]) => ({
+          id: path.slice(prefix.length),
+          value: clone(value),
+        }))
+        .filter(({value}) => this.clauses.every((clause) => {
+          const candidate = value[clause.field];
+          if (clause.operator === "in") {
+            return clause.value.includes(candidate);
+          }
+          if (clause.operator === "<=") {
+            return new Date(candidate).getTime() <=
+              new Date(clause.value).getTime();
+          }
+          throw new Error("unsupported query operator");
+        }));
+    if (this.order) {
+      entries.sort((left, right) =>
+        new Date(left.value[this.order.field]).getTime() -
+        new Date(right.value[this.order.field]).getTime());
+    }
+    if (this.limitValue !== null) {
+      entries = entries.slice(0, this.limitValue);
+    }
+    return {
+      size: entries.length,
+      docs: entries.map(({id, value}) => ({
+        id,
+        exists: true,
+        data: () => clone(value),
+      })),
+    };
+  }
+}
+
 class FakeCollectionReference {
   constructor(store, path) {
     this.store = store;
@@ -43,6 +117,11 @@ class FakeCollectionReference {
 
   doc(id) {
     return new FakeDocumentReference(this.store, `${this.path}/${id}`);
+  }
+
+  where(field, operator, value) {
+    return new FakeQuery(this.store, this.path)
+        .where(field, operator, value);
   }
 }
 
@@ -215,6 +294,8 @@ test("accept creates one durable record keyed by executionId", async () => {
   assert.equal(document.executionId, value.executionId);
   assert.equal(document.state, "accepted");
   assert.equal(document.purgeAtTimestamp instanceof Date, true);
+  assert.equal(document.childDispatchDueAtTimestamp instanceof Date, true);
+  assert.equal(document.childDispatchDueAtTimestamp.toISOString(), now);
 });
 
 test(
@@ -307,11 +388,13 @@ test("child dispatch success stores child execution identity", async () => {
     receipt: {
       contractVersion:
         handoffContract
-            .PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+            .PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
       providerCode: "n8n_public_lite",
       handoffId: accepted.record.handoffId,
       executionId: value.executionId,
-      externalExecutionId: "child-execution-1",
+      externalExecutionId:
+        handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+            accepted.record.handoffId),
       acceptedAt: later,
     },
     dispatchedAt: later,
@@ -319,7 +402,11 @@ test("child dispatch success stores child execution identity", async () => {
   assert.equal(result.outcome, "child_dispatched");
   const document = stored(db, handoffPath(value));
   assert.equal(document.state, "child_dispatched");
-  assert.equal(document.childExternalExecutionId, "child-execution-1");
+  assert.equal(
+      document.childExternalExecutionId,
+      handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+          accepted.record.handoffId));
+  assert.equal(document.childDispatchDueAtTimestamp, null);
 });
 
 test("retryable child failure can be reclaimed", async () => {
@@ -348,4 +435,49 @@ test("retryable child failure can be reclaimed", async () => {
   });
   assert.equal(reclaimed.outcome, "claimed");
   assert.equal(reclaimed.attemptCount, 2);
+});
+
+
+test("failed child dispatch is not reclaimable before due time", async () => {
+  const {port, command: value} = await acceptedPort();
+  const claim = await port.claimChildDispatch({
+    executionId: value.executionId,
+    ownerId: "child-worker-1",
+    now,
+    maxAttempts: 5,
+  });
+  await port.markChildDispatchFailed({
+    executionId: value.executionId,
+    ownerId: "child-worker-1",
+    attemptCount: claim.attemptCount,
+    leaseToken: claim.leaseToken,
+    failure: {code: "upstream_unavailable"},
+    retryable: true,
+    failedAt: later,
+  });
+  const result = await port.claimChildDispatch({
+    executionId: value.executionId,
+    ownerId: "child-worker-2",
+    now: "2026-08-04T10:01:59.999Z",
+    maxAttempts: 5,
+  });
+  assert.equal(result.outcome, "not_due");
+});
+
+test("due query returns only due handoffs", async () => {
+  const state = await acceptedPort();
+  const before = await state.port.listDueHandoffs({
+    now: new Date("2026-08-04T09:59:59.999Z"),
+    limit: 10,
+  });
+  assert.equal(before.length, 0);
+  const due = await state.port.listDueHandoffs({
+    now: new Date(now),
+    limit: 10,
+  });
+  assert.equal(due.length, 1);
+  assert.equal(due[0].executionId, state.command.executionId);
+  assert.equal(
+      due[0].childDispatchDueAtTimestamp.toISOString(),
+      now);
 });

@@ -16,18 +16,20 @@ const {
 
 const PUBLIC_LITE_PROVIDER_HANDOFF_REQUEST_VERSION_V1 =
   "risk-scan-public-lite-provider-handoff-request-v1";
-const PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V1 =
-  "risk-scan-public-lite-provider-handoff-record-v1";
+const PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V2 =
+  "risk-scan-public-lite-provider-handoff-record-v2";
 const PUBLIC_LITE_PROVIDER_HANDOFF_RECEIPT_VERSION_V1 =
   "risk-scan-public-lite-provider-handoff-receipt-v1";
 const PUBLIC_LITE_ACQUISITION_COMMAND_VERSION_V1 =
   "risk-scan-public-lite-acquisition-command-v1";
-const PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1 =
-  "risk-scan-public-lite-acquisition-dispatch-receipt-v1";
-const PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V1 =
-  "risk-scan-public-lite-provider-handoff-storage-v1";
+const PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2 =
+  "risk-scan-public-lite-acquisition-dispatch-receipt-v2";
+const PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V2 =
+  "risk-scan-public-lite-provider-handoff-storage-v2";
 const PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_ALGORITHM_V1 =
   "sha256-canonical-json-v1";
+const PUBLIC_LITE_PROVIDER_HANDOFF_RECONCILIATION_VERSION_V1 =
+  "risk-scan-public-lite-provider-handoff-reconciliation-v1";
 const PUBLIC_LITE_PROVIDER_HANDOFF_ID_NAMESPACE_V1 =
   "risk-scan-public-lite-provider-handoff-id-v1";
 const PUBLIC_LITE_PROVIDER_HANDOFF_LEASE_NAMESPACE_V1 =
@@ -37,8 +39,12 @@ const PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION =
   "risk_scan_public_lite_provider_handoffs";
 const PUBLIC_LITE_PROVIDER_HANDOFF_LEASE_MS = 5 * 60 * 1000;
 const PUBLIC_LITE_PROVIDER_HANDOFF_MAX_ATTEMPTS = 5;
+const PUBLIC_LITE_PROVIDER_HANDOFF_RETRY_BASE_MS = 60 * 1000;
+const PUBLIC_LITE_PROVIDER_HANDOFF_RETRY_MAX_MS = 15 * 60 * 1000;
 const PUBLIC_LITE_PROVIDER_HANDOFF_RETENTION_MS =
   30 * 24 * 60 * 60 * 1000;
+const PUBLIC_LITE_ACQUISITION_EXTERNAL_EXECUTION_PREFIX =
+  "n8n-handoff:";
 
 const PUBLIC_LITE_PROVIDER_HANDOFF_STATES = Object.freeze([
   "accepted",
@@ -47,6 +53,12 @@ const PUBLIC_LITE_PROVIDER_HANDOFF_STATES = Object.freeze([
   "failed",
   "completed",
   "dead_letter",
+]);
+
+const PUBLIC_LITE_PROVIDER_HANDOFF_DUE_STATES = Object.freeze([
+  "accepted",
+  "failed",
+  "child_dispatching",
 ]);
 
 const HANDOFF_TRANSITIONS = Object.freeze({
@@ -168,6 +180,29 @@ function derivePublicLiteProviderHandoffLeaseToken({
   ]));
 }
 
+function derivePublicLiteAcquisitionExternalExecutionId(handoffId) {
+  return PUBLIC_LITE_ACQUISITION_EXTERNAL_EXECUTION_PREFIX +
+    assertSha256Hex(handoffId, "handoffId");
+}
+
+function publicLiteProviderHandoffRetryDelayMs(attemptCount) {
+  if (!Number.isInteger(attemptCount) || attemptCount < 1 ||
+      attemptCount > PUBLIC_LITE_PROVIDER_HANDOFF_MAX_ATTEMPTS) {
+    fail("invalid-argument", "attemptCount is outside retry policy");
+  }
+  return Math.min(
+      PUBLIC_LITE_PROVIDER_HANDOFF_RETRY_BASE_MS *
+        (2 ** (attemptCount - 1)),
+      PUBLIC_LITE_PROVIDER_HANDOFF_RETRY_MAX_MS);
+}
+
+function publicLiteProviderHandoffRetryDueAt({attemptCount, failedAt}) {
+  const failedDate = timestampLikeToDate(failedAt, "failedAt");
+  return new Date(
+      failedDate.getTime() +
+      publicLiteProviderHandoffRetryDelayMs(attemptCount));
+}
+
 function normalizePublicLiteProviderHandoffRequest(raw) {
   assertExactKeys(raw, HANDOFF_REQUEST_KEYS, "handoffRequest");
   if (raw.contractVersion !==
@@ -204,7 +239,7 @@ function providerHandoffStorageFingerprint(document) {
 function withProviderHandoffStorageFingerprint(document) {
   const output = {
     ...document,
-    storageVersion: PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V1,
+    storageVersion: PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V2,
     storageFingerprintAlgorithm:
       PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_ALGORITHM_V1,
   };
@@ -220,13 +255,14 @@ function buildPublicLiteProviderHandoffRecord({
 }) {
   const normalized = normalizePublicLiteProviderHandoffRequest(request);
   const normalizedAcceptedAt = assertIsoTimestamp(acceptedAt, "acceptedAt");
+  const acceptedDate = new Date(normalizedAcceptedAt);
   const purgeDate = timestampLikeToDate(
       purgeAtTimestamp, "purgeAtTimestamp");
-  if (purgeDate.getTime() <= Date.parse(normalizedAcceptedAt)) {
+  if (purgeDate.getTime() <= acceptedDate.getTime()) {
     fail("invalid-argument", "purgeAtTimestamp must follow acceptedAt");
   }
   return withProviderHandoffStorageFingerprint({
-    contractVersion: PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V1,
+    contractVersion: PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V2,
     handoffId: derivePublicLiteProviderHandoffId(normalized.executionId),
     executionId: normalized.executionId,
     scanRunId: normalized.scanRunId,
@@ -241,11 +277,13 @@ function buildPublicLiteProviderHandoffRecord({
     childDispatchLeaseOwner: null,
     childDispatchLeaseToken: null,
     childDispatchLeaseUntil: null,
+    childDispatchDueAtTimestamp: acceptedDate,
     lastChildDispatchErrorCode: null,
     lastChildDispatchErrorAt: null,
     childExternalExecutionId: null,
     childDispatchedAt: null,
     completedAt: null,
+    deadLetteredAt: null,
     purgeAtTimestamp: purgeDate,
   });
 }
@@ -260,12 +298,18 @@ function assertNullableTimestamp(value, label) {
   return assertIsoTimestamp(value, label);
 }
 
+function assertNullableTimestampLike(value, label) {
+  if (value === null) return null;
+  timestampLikeToDate(value, label);
+  return value;
+}
+
 function assertPublicLiteProviderHandoffRecord(document) {
   assertPlainObject(document, "providerHandoff");
   if (document.contractVersion !==
-      PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V1 ||
+      PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V2 ||
       document.storageVersion !==
-      PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V1 ||
+      PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V2 ||
       document.storageFingerprintAlgorithm !==
       PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_ALGORITHM_V1) {
     fail("conflict", "provider handoff storage contract is unsupported");
@@ -301,6 +345,9 @@ function assertPublicLiteProviderHandoffRecord(document) {
   }
   assertNullableTimestamp(
       document.childDispatchLeaseUntil, "childDispatchLeaseUntil");
+  assertNullableTimestampLike(
+      document.childDispatchDueAtTimestamp,
+      "childDispatchDueAtTimestamp");
   assertNullableString(
       document.lastChildDispatchErrorCode,
       "lastChildDispatchErrorCode",
@@ -313,7 +360,25 @@ function assertPublicLiteProviderHandoffRecord(document) {
       256);
   assertNullableTimestamp(document.childDispatchedAt, "childDispatchedAt");
   assertNullableTimestamp(document.completedAt, "completedAt");
+  assertNullableTimestamp(document.deadLetteredAt, "deadLetteredAt");
   timestampLikeToDate(document.purgeAtTimestamp, "purgeAtTimestamp");
+
+  const dueState = PUBLIC_LITE_PROVIDER_HANDOFF_DUE_STATES
+      .includes(document.state);
+  if (dueState && document.childDispatchDueAtTimestamp === null) {
+    fail("conflict", "due provider handoff has no due timestamp");
+  }
+  if (!dueState && document.childDispatchDueAtTimestamp !== null) {
+    fail("conflict", "terminal provider handoff retains a due timestamp");
+  }
+  if (document.state === "dead_letter" &&
+      document.deadLetteredAt === null) {
+    fail("conflict", "dead-letter provider handoff has no timestamp");
+  }
+  if (document.state !== "dead_letter" &&
+      document.deadLetteredAt !== null) {
+    fail("conflict", "non-dead-letter provider handoff has a timestamp");
+  }
   return document;
 }
 
@@ -413,7 +478,7 @@ function normalizePublicLiteAcquisitionDispatchReceipt(raw, {
       ACQUISITION_DISPATCH_RECEIPT_KEYS,
       "acquisitionDispatchReceipt");
   if (raw.contractVersion !==
-      PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1) {
+      PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2) {
     fail("invalid-argument", "acquisition receipt contract is unsupported");
   }
   if (raw.providerCode !== PUBLIC_LITE_PROVIDER_CODE) {
@@ -431,14 +496,21 @@ function normalizePublicLiteAcquisitionDispatchReceipt(raw, {
           expectedExecutionId, "expectedExecutionId")) {
     fail("failed-precondition", "acquisition receipt executionId mismatches");
   }
+  const externalExecutionId = assertNonEmptyString(
+      raw.externalExecutionId, "externalExecutionId", 256);
+  if (externalExecutionId !==
+      derivePublicLiteAcquisitionExternalExecutionId(handoffId)) {
+    fail(
+        "failed-precondition",
+        "acquisition receipt externalExecutionId mismatches handoff");
+  }
   return Object.freeze({
     contractVersion:
-      PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+      PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
     providerCode: PUBLIC_LITE_PROVIDER_CODE,
     handoffId,
     executionId,
-    externalExecutionId: assertNonEmptyString(
-        raw.externalExecutionId, "externalExecutionId", 256),
+    externalExecutionId,
     acceptedAt: assertIsoTimestamp(raw.acceptedAt, "acceptedAt"),
   });
 }
@@ -451,6 +523,11 @@ function completePublicLiteProviderHandoffRecord(record, {
   const current = assertPublicLiteProviderHandoffRecord(record);
   const normalizedExternalExecutionId = assertNonEmptyString(
       externalExecutionId, "externalExecutionId", 256);
+  const expectedExternalExecutionId =
+    derivePublicLiteAcquisitionExternalExecutionId(current.handoffId);
+  if (normalizedExternalExecutionId !== expectedExternalExecutionId) {
+    fail("conflict", "result external execution conflicts with handoff");
+  }
   const normalizedCompletedAt = assertIsoTimestamp(
       completedAt, "completedAt");
   const normalizedUpdatedAt = assertIsoTimestamp(updatedAt, "updatedAt");
@@ -474,6 +551,7 @@ function completePublicLiteProviderHandoffRecord(record, {
     childDispatchLeaseOwner: null,
     childDispatchLeaseToken: null,
     childDispatchLeaseUntil: null,
+    childDispatchDueAtTimestamp: null,
     completedAt: normalizedCompletedAt,
     updatedAt: normalizedUpdatedAt,
   });
@@ -482,18 +560,23 @@ function completePublicLiteProviderHandoffRecord(record, {
 module.exports = Object.freeze({
   HANDOFF_TRANSITIONS,
   PUBLIC_LITE_ACQUISITION_COMMAND_VERSION_V1,
-  PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+  PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
+  PUBLIC_LITE_ACQUISITION_EXTERNAL_EXECUTION_PREFIX,
   PUBLIC_LITE_PROVIDER_CODE,
   PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION,
+  PUBLIC_LITE_PROVIDER_HANDOFF_DUE_STATES,
   PUBLIC_LITE_PROVIDER_HANDOFF_LEASE_MS,
   PUBLIC_LITE_PROVIDER_HANDOFF_MAX_ATTEMPTS,
   PUBLIC_LITE_PROVIDER_HANDOFF_RECEIPT_VERSION_V1,
-  PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V1,
+  PUBLIC_LITE_PROVIDER_HANDOFF_RECONCILIATION_VERSION_V1,
+  PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V2,
   PUBLIC_LITE_PROVIDER_HANDOFF_REQUEST_VERSION_V1,
   PUBLIC_LITE_PROVIDER_HANDOFF_RETENTION_MS,
+  PUBLIC_LITE_PROVIDER_HANDOFF_RETRY_BASE_MS,
+  PUBLIC_LITE_PROVIDER_HANDOFF_RETRY_MAX_MS,
   PUBLIC_LITE_PROVIDER_HANDOFF_STATES,
   PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_ALGORITHM_V1,
-  PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V1,
+  PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V2,
   PublicLiteProviderHandoffContractError,
   assertPublicLiteProviderHandoffRecord,
   assertPublicLiteProviderHandoffReplay,
@@ -503,11 +586,14 @@ module.exports = Object.freeze({
   buildPublicLiteProviderHandoffRecord,
   canonicalJson,
   completePublicLiteProviderHandoffRecord,
+  derivePublicLiteAcquisitionExternalExecutionId,
   derivePublicLiteProviderHandoffId,
   derivePublicLiteProviderHandoffLeaseToken,
   normalizePublicLiteAcquisitionDispatchReceipt,
   normalizePublicLiteProviderHandoffRequest,
   providerHandoffStorageFingerprint,
+  publicLiteProviderHandoffRetryDelayMs,
+  publicLiteProviderHandoffRetryDueAt,
   sha256Hex,
   timestampLikeToDate,
   updatePublicLiteProviderHandoffRecord,

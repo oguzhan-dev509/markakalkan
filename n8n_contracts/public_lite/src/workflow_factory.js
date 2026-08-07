@@ -49,7 +49,7 @@ const DISPATCH_RECEIPT_VERSION_V2 =
 const ACQUISITION_COMMAND_VERSION =
   "risk-scan-public-lite-acquisition-command-v1";
 const ACQUISITION_RECEIPT_VERSION =
-  "risk-scan-public-lite-acquisition-dispatch-receipt-v1";
+  "risk-scan-public-lite-acquisition-dispatch-receipt-v2";
 
 const NODE_IDS = Object.freeze({
   note: "bb432ce7-90ff-5d1d-af35-341997c07219",
@@ -770,14 +770,13 @@ if (!command || typeof command !== "object") {
     "PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: command missing",
   );
 }
-const n8nExecutionId = String($execution.id || "").trim();
-if (!n8nExecutionId) {
+const handoffId = String(command.handoffId || "").trim().toLowerCase();
+if (!/^[a-f0-9]{64}$/.test(handoffId)) {
   throw new Error(
-    "PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: n8n execution id missing",
+    "PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: handoffId invalid",
   );
 }
-const externalExecutionId =
-  ("n8n:" + n8nExecutionId).slice(0, 256);
+const externalExecutionId = "n8n-handoff:" + handoffId;
 const acceptedAt = new Date().toISOString();
 return [{
   json: {
@@ -785,7 +784,7 @@ return [{
     dispatchEnvelope: command.dispatchEnvelope,
     receipt: {
       contractVersion:
-        "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+        "risk-scan-public-lite-acquisition-dispatch-receipt-v2",
       providerCode: "n8n_public_lite",
       handoffId: command.handoffId,
       executionId: command.executionId,
@@ -794,7 +793,7 @@ return [{
     },
     workerState: {
       contractVersion:
-        "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+        "risk-scan-public-lite-acquisition-dispatch-receipt-v2",
       acquisitionInstalled: true,
       acquisitionExecutionEnabled: false,
       resultCallbackEnabled: false,
@@ -1575,7 +1574,8 @@ function buildAcquisitionWorkflow({
             "Acquisition execution and result callback remain disabled. " +
             "Do not activate until inactive import, credential binding, " +
             "backend deployment, reconciliation/redrive, index/TTL " +
-            "operationalization, and controlled live validation complete.",
+            "operationalization, and controlled live validation complete. " +
+            "Logical child identity is deterministic from handoffId.",
           height: 340,
           width: 560,
           color: 5,
@@ -1818,11 +1818,13 @@ function buildAcquisitionWorkflow({
     meta: {
       templateCredsSetupCompleted:
         acquisitionBound && resultBound,
-      hrtPhase: "HRT-MKT-TR-1D-3D-B4-B5",
+      hrtPhase: "HRT-MKT-TR-1D-3D-B4-C",
       acquisitionCommandContractVersion:
         ACQUISITION_COMMAND_VERSION,
       acquisitionReceiptContractVersion:
         ACQUISITION_RECEIPT_VERSION,
+      logicalExternalExecutionIdFormat:
+        "n8n-handoff:<handoffId>",
       providerCode: PROVIDER_CODE,
       acquisitionInstalled: true,
       acquisitionExecutionEnabled,

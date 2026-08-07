@@ -166,7 +166,7 @@ test("durable handoff contract constants are stable", () => {
   );
   assert.equal(
     ACQUISITION_RECEIPT_VERSION,
-    "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+    "risk-scan-public-lite-acquisition-dispatch-receipt-v2",
   );
 });
 
@@ -694,7 +694,10 @@ test("acquisition receipt binds child execution and handoff scope", async () => 
   assert.equal(receipt.providerCode, "n8n_public_lite");
   assert.equal(receipt.handoffId, command.handoffId);
   assert.equal(receipt.executionId, command.executionId);
-  assert.equal(receipt.externalExecutionId, "n8n:child-7788");
+  assert.equal(
+    receipt.externalExecutionId,
+    `n8n-handoff:${command.handoffId}`,
+  );
   assert.ok(Number.isFinite(Date.parse(receipt.acceptedAt)));
 });
 
@@ -1079,3 +1082,33 @@ test("activation capability flags must be booleans", () => {
     /executionEnabled must be a boolean/u,
   );
 });
+
+
+test(
+  "acquisition receipt logical identity ignores physical n8n execution",
+  async () => {
+  const command = validAcquisitionCommand();
+  const first = await executeCode(acquisitionReceiptCode(), {
+    input: {
+      acquisitionCommand: command,
+      dispatchEnvelope: validDispatch,
+    },
+    executionId: "physical-1",
+  });
+  const second = await executeCode(acquisitionReceiptCode(), {
+    input: {
+      acquisitionCommand: command,
+      dispatchEnvelope: validDispatch,
+    },
+    executionId: "physical-2",
+  });
+  assert.equal(
+    first[0].json.receipt.externalExecutionId,
+    `n8n-handoff:${command.handoffId}`,
+  );
+  assert.equal(
+    second[0].json.receipt.externalExecutionId,
+    first[0].json.receipt.externalExecutionId,
+  );
+  },
+);

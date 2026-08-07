@@ -15,6 +15,7 @@ const {
 } = require("./public_lite_execution_firestore_port");
 const {
   PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION,
+  PUBLIC_LITE_PROVIDER_HANDOFF_DUE_STATES,
   PUBLIC_LITE_PROVIDER_HANDOFF_LEASE_MS,
   PUBLIC_LITE_PROVIDER_HANDOFF_MAX_ATTEMPTS,
   assertPublicLiteProviderHandoffRecord,
@@ -25,9 +26,14 @@ const {
   derivePublicLiteProviderHandoffLeaseToken,
   normalizePublicLiteAcquisitionDispatchReceipt,
   normalizePublicLiteProviderHandoffRequest,
+  publicLiteProviderHandoffRetryDueAt,
   sha256Hex,
+  timestampLikeToDate,
   updatePublicLiteProviderHandoffRecord,
 } = require("./public_lite_provider_handoff_contract");
+
+const DEFAULT_PUBLIC_LITE_HANDOFF_DUE_SCAN_LIMIT = 100;
+const MAX_PUBLIC_LITE_HANDOFF_DUE_SCAN_LIMIT = 500;
 
 class PublicLiteProviderHandoffFirestoreError extends Error {
   constructor(code, message) {
@@ -47,6 +53,16 @@ function assertDb(db) {
     throw new TypeError("db must be a Firestore-compatible instance");
   }
   return db;
+}
+
+function assertDueScanLimit(value) {
+  if (!Number.isInteger(value) || value < 1 ||
+      value > MAX_PUBLIC_LITE_HANDOFF_DUE_SCAN_LIMIT) {
+    throw new TypeError(
+        "limit must be between 1 and " +
+        MAX_PUBLIC_LITE_HANDOFF_DUE_SCAN_LIMIT);
+  }
+  return value;
 }
 
 function providerHandoffRef(db, executionId) {
@@ -140,6 +156,32 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
     });
   }
 
+  async function listDueHandoffs({
+    now,
+    limit = DEFAULT_PUBLIC_LITE_HANDOFF_DUE_SCAN_LIMIT,
+  }) {
+    const dueAt = timestampLikeToDate(now, "now");
+    const normalizedLimit = assertDueScanLimit(limit);
+    const collection = db.collection(
+        PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION);
+    const snapshot = await collection
+        .where("state", "in", PUBLIC_LITE_PROVIDER_HANDOFF_DUE_STATES)
+        .where("childDispatchDueAtTimestamp", "<=", dueAt)
+        .orderBy("childDispatchDueAtTimestamp", "asc")
+        .limit(normalizedLimit)
+        .get();
+    if (!snapshot || !Array.isArray(snapshot.docs)) {
+      fail("internal", "due handoff query returned an invalid snapshot");
+    }
+    return Object.freeze(snapshot.docs.map((document) => {
+      const record = assertPublicLiteProviderHandoffRecord(document.data());
+      if (document.id !== record.executionId) {
+        fail("conflict", "due handoff path identity is invalid");
+      }
+      return record;
+    }));
+  }
+
   async function claimChildDispatch({
     executionId,
     ownerId,
@@ -150,6 +192,7 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
     const targetExecutionRef = executionRef(db, executionId);
     const normalizedOwner = assertNonEmptyString(ownerId, "ownerId", 256);
     const normalizedNow = assertIsoTimestamp(now, "now");
+    const nowMillis = Date.parse(normalizedNow);
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 ||
         maxAttempts > 20) {
       throw new TypeError("maxAttempts is invalid");
@@ -178,9 +221,13 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
         return {outcome: "terminal", record};
       }
       if (record.state === "child_dispatching" &&
-          Date.parse(record.childDispatchLeaseUntil) >
-            Date.parse(normalizedNow)) {
+          Date.parse(record.childDispatchLeaseUntil) > nowMillis) {
         return {outcome: "lease_held", record};
+      }
+      if (timestampLikeToDate(
+          record.childDispatchDueAtTimestamp,
+          "childDispatchDueAtTimestamp").getTime() > nowMillis) {
+        return {outcome: "not_due", record};
       }
 
       const attemptCount = record.childDispatchAttemptCount + 1;
@@ -190,8 +237,10 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
           childDispatchLeaseOwner: null,
           childDispatchLeaseToken: null,
           childDispatchLeaseUntil: null,
+          childDispatchDueAtTimestamp: null,
           lastChildDispatchErrorCode: "child_dispatch_attempts_exhausted",
           lastChildDispatchErrorAt: normalizedNow,
+          deadLetteredAt: normalizedNow,
           updatedAt: normalizedNow,
         });
         transaction.update(targetHandoffRef, terminal);
@@ -204,15 +253,16 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
         attemptCount,
         now: normalizedNow,
       });
-      const leaseUntil = new Date(
-          Date.parse(normalizedNow) +
-          PUBLIC_LITE_PROVIDER_HANDOFF_LEASE_MS).toISOString();
+      const leaseUntilDate = new Date(
+          nowMillis + PUBLIC_LITE_PROVIDER_HANDOFF_LEASE_MS);
+      const leaseUntil = leaseUntilDate.toISOString();
       const claimed = updatePublicLiteProviderHandoffRecord(record, {
         state: "child_dispatching",
         childDispatchAttemptCount: attemptCount,
         childDispatchLeaseOwner: normalizedOwner,
         childDispatchLeaseToken: leaseToken,
         childDispatchLeaseUntil: leaseUntil,
+        childDispatchDueAtTimestamp: leaseUntilDate,
         updatedAt: normalizedNow,
       });
       const dispatchEnvelope = buildPublicLiteDispatchEnvelope(
@@ -273,6 +323,7 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
         childDispatchLeaseOwner: null,
         childDispatchLeaseToken: null,
         childDispatchLeaseUntil: null,
+        childDispatchDueAtTimestamp: null,
         childExternalExecutionId:
           normalizedReceipt.externalExecutionId,
         childDispatchedAt: normalizedAt,
@@ -299,23 +350,32 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
     return db.runTransaction(async (transaction) => {
       const record = assertPublicLiteProviderHandoffRecord(snapshotData(
           await transaction.get(targetRef), "providerHandoff"));
-      if (record.state === (retryable ? "failed" : "dead_letter")) {
+      const terminal = !retryable ||
+        attemptCount >= PUBLIC_LITE_PROVIDER_HANDOFF_MAX_ATTEMPTS;
+      const expectedState = terminal ? "dead_letter" : "failed";
+      if (record.state === expectedState) {
         return {outcome: "idempotent_success", record};
       }
       assertChildLease(record, {ownerId, attemptCount, leaseToken});
       const updated = updatePublicLiteProviderHandoffRecord(record, {
-        state: retryable ? "failed" : "dead_letter",
+        state: expectedState,
         childDispatchLeaseOwner: null,
         childDispatchLeaseToken: null,
         childDispatchLeaseUntil: null,
+        childDispatchDueAtTimestamp: terminal ? null :
+          publicLiteProviderHandoffRetryDueAt({
+            attemptCount,
+            failedAt: normalizedAt,
+          }),
         lastChildDispatchErrorCode: String(
             failure.code || "child_dispatch_failed").slice(0, 100),
         lastChildDispatchErrorAt: normalizedAt,
+        deadLetteredAt: terminal ? normalizedAt : null,
         updatedAt: normalizedAt,
       });
       transaction.update(targetRef, updated);
       return {
-        outcome: retryable ? "retryable_failure" : "terminal_failure",
+        outcome: terminal ? "terminal_failure" : "retryable_failure",
         record: updated,
       };
     });
@@ -331,14 +391,18 @@ function createPublicLiteProviderHandoffFirestorePort(db) {
     acceptHandoff,
     claimChildDispatch,
     getHandoff,
+    listDueHandoffs,
     markChildDispatchFailed,
     markChildDispatchSucceeded,
   });
 }
 
 module.exports = Object.freeze({
+  DEFAULT_PUBLIC_LITE_HANDOFF_DUE_SCAN_LIMIT,
+  MAX_PUBLIC_LITE_HANDOFF_DUE_SCAN_LIMIT,
   PublicLiteProviderHandoffFirestoreError,
   assertChildLease,
+  assertDueScanLimit,
   assertExecutionMatchesRequest,
   createPublicLiteProviderHandoffFirestorePort,
   providerHandoffRef,

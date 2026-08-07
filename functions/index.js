@@ -142,6 +142,9 @@ const {
   buildDispatchPublicLiteRiskScanAcquisition,
 } = require("./risk_scan/v1/public_lite_provider_handoff_trigger");
 const {
+  buildReconcilePublicLiteRiskScanProviderHandoffs,
+} = require("./risk_scan/v1/public_lite_provider_handoff_reconciliation");
+const {
   buildCleanupExpiredRiskScanRuns,
 } = require("./risk_scan/v1/scheduled_cleanup");
 const {
@@ -337,6 +340,11 @@ exports.dispatchPublicLiteRiskScanAcquisition =
     buildDispatchPublicLiteRiskScanAcquisition({
       db,
       onDocumentCreated,
+      logger,
+    });
+exports.reconcilePublicLiteRiskScanProviderHandoffs =
+    buildReconcilePublicLiteRiskScanProviderHandoffs({
+      db,
       logger,
     });
 exports.cleanupExpiredRiskScanRuns =

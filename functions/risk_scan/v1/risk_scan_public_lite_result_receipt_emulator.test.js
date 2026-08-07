@@ -21,9 +21,11 @@ const {
   persistPublicLiteResultReceipt,
 } = require("./public_lite_result_receipt_firestore_port");
 const {
-  PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+  PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
   PUBLIC_LITE_PROVIDER_HANDOFF_COLLECTION,
   PUBLIC_LITE_PROVIDER_HANDOFF_REQUEST_VERSION_V1,
+  derivePublicLiteAcquisitionExternalExecutionId,
+  derivePublicLiteProviderHandoffId,
 } = require("./public_lite_provider_handoff_contract");
 const {
   createPublicLiteProviderHandoffFirestorePort,
@@ -171,11 +173,13 @@ async function createDispatchedExecution() {
     leaseToken: claim.leaseToken,
     receipt: {
       contractVersion:
-        PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+        PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
       providerCode: "n8n_public_lite",
       handoffId: accepted.record.handoffId,
       executionId: command.executionId,
-      externalExecutionId: "n8n-acquisition-1",
+      externalExecutionId:
+        derivePublicLiteAcquisitionExternalExecutionId(
+            accepted.record.handoffId),
       acceptedAt: "2026-08-04T10:04:00.000Z",
     },
     dispatchedAt: "2026-08-04T10:04:00.000Z",
@@ -183,11 +187,17 @@ async function createDispatchedExecution() {
   return command;
 }
 
+function handoffContractId(executionId) {
+  return derivePublicLiteProviderHandoffId(executionId);
+}
+
 function resultEnvelope(command, overrides = {}) {
   return {
     contractVersion: PUBLIC_LITE_RESULT_ENVELOPE_VERSION_V1,
     providerCode: "n8n_public_lite",
-    externalExecutionId: "n8n-acquisition-1",
+    externalExecutionId:
+      derivePublicLiteAcquisitionExternalExecutionId(
+          handoffContractId(command.executionId)),
     providerEventId: "provider-event-1",
     executionId: command.executionId,
     scanRunId: command.scanRunId,
@@ -250,7 +260,8 @@ test(
       assert.equal(handoffSnapshot.data().completedAt, completedAt);
       assert.equal(
           handoffSnapshot.data().childExternalExecutionId,
-          "n8n-acquisition-1");
+          derivePublicLiteAcquisitionExternalExecutionId(
+              handoffContractId(command.executionId)));
     });
 
 test("an exact provider replay is idempotent", async () => {

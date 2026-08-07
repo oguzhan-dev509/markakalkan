@@ -136,6 +136,7 @@ async function dispatchAcceptedPublicLiteProviderHandoff({
       }),
       [
         "claimed",
+        "not_due",
         "lease_held",
         "already_dispatched",
         "completed",

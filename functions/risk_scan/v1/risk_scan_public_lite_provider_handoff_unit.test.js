@@ -73,11 +73,13 @@ function acquisitionReceipt(inputRecord = record(), overrides = {}) {
   return {
     contractVersion:
       handoffContract
-          .PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+          .PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
     providerCode: "n8n_public_lite",
     handoffId: inputRecord.handoffId,
     executionId: inputRecord.executionId,
-    externalExecutionId: "child-execution-1",
+    externalExecutionId:
+      handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+          inputRecord.handoffId),
     acceptedAt: later,
     ...overrides,
   };
@@ -151,14 +153,17 @@ test("provider handoff contract versions are fixed", () => {
       handoffContract.PUBLIC_LITE_PROVIDER_HANDOFF_REQUEST_VERSION_V1,
       "risk-scan-public-lite-provider-handoff-request-v1");
   assert.equal(
-      handoffContract.PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V1,
-      "risk-scan-public-lite-provider-handoff-record-v1");
+      handoffContract.PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V2,
+      "risk-scan-public-lite-provider-handoff-record-v2");
   assert.equal(
       handoffContract.PUBLIC_LITE_PROVIDER_HANDOFF_RECEIPT_VERSION_V1,
       "risk-scan-public-lite-provider-handoff-receipt-v1");
   assert.equal(
       handoffContract.PUBLIC_LITE_ACQUISITION_COMMAND_VERSION_V1,
       "risk-scan-public-lite-acquisition-command-v1");
+  assert.equal(
+      handoffContract.PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
+      "risk-scan-public-lite-acquisition-dispatch-receipt-v2");
 });
 
 test("handoff request binds the exact dispatch envelope", () => {
@@ -269,14 +274,18 @@ test("completion accepts a result during child dispatch race", () => {
     childDispatchLeaseToken: "e".repeat(64),
     childDispatchLeaseUntil: "2026-08-04T10:06:00.000Z",
   });
+  const externalExecutionId =
+    handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+        active.handoffId);
   const completed =
     handoffContract.completePublicLiteProviderHandoffRecord(active, {
-      externalExecutionId: "child-execution-1",
+      externalExecutionId,
       completedAt: later,
       updatedAt: later,
     });
   assert.equal(completed.state, "completed");
-  assert.equal(completed.childExternalExecutionId, "child-execution-1");
+  assert.equal(completed.childExternalExecutionId, externalExecutionId);
+  assert.equal(completed.childDispatchDueAtTimestamp, null);
 });
 
 test("accept service derives acceptedAt from the server clock", async () => {
@@ -386,4 +395,59 @@ test("child trigger declares retry and dedicated secret", () => {
   assert.equal(options.document, handoffTrigger.PUBLIC_LITE_HANDOFF_DOCUMENT);
   assert.equal(options.retry, true);
   assert.equal(options.secrets.length, 1);
+});
+
+
+test("handoff record v2 is immediately due and storage-bound", () => {
+  const value = record();
+  assert.equal(
+      value.contractVersion,
+      handoffContract.PUBLIC_LITE_PROVIDER_HANDOFF_RECORD_VERSION_V2);
+  assert.equal(
+      value.storageVersion,
+      handoffContract.PUBLIC_LITE_PROVIDER_HANDOFF_STORAGE_VERSION_V2);
+  assert.equal(value.childDispatchDueAtTimestamp instanceof Date, true);
+  assert.equal(value.childDispatchDueAtTimestamp.toISOString(), now);
+  assert.equal(value.deadLetteredAt, null);
+});
+
+test("retry backoff is deterministic and bounded", () => {
+  assert.equal(
+      handoffContract.publicLiteProviderHandoffRetryDelayMs(1),
+      60000);
+  assert.equal(
+      handoffContract.publicLiteProviderHandoffRetryDelayMs(5),
+      900000);
+  assert.equal(
+      handoffContract.publicLiteProviderHandoffRetryDueAt({
+        attemptCount: 2,
+        failedAt: now,
+      }).toISOString(),
+      "2026-08-04T10:02:00.000Z");
+});
+
+test("logical child identity is deterministic from handoffId", () => {
+  const value = record();
+  const first =
+    handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+        value.handoffId);
+  const second =
+    handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+        value.handoffId);
+  assert.equal(first, second);
+  assert.equal(first, `n8n-handoff:${value.handoffId}`);
+});
+
+test("child receipt rejects another logical external identity", () => {
+  const value = record();
+  assert.throws(
+      () => handoffContract.normalizePublicLiteAcquisitionDispatchReceipt(
+          acquisitionReceipt(value, {
+            externalExecutionId: "n8n-handoff:" + "f".repeat(64),
+          }),
+          {
+            expectedHandoffId: value.handoffId,
+            expectedExecutionId: value.executionId,
+          }),
+      (error) => error.code === "failed-precondition");
 });

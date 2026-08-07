@@ -389,7 +389,7 @@ test("child acquisition command and receipt versions are stable", () => {
   );
   assert.equal(
     ACQUISITION_RECEIPT_VERSION,
-    "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+    "risk-scan-public-lite-acquisition-dispatch-receipt-v2",
   );
 });
 

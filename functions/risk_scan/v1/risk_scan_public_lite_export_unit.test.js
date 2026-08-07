@@ -21,6 +21,7 @@ const EXPECTED_EXPORTS = Object.freeze([
   "getPublicLiteRiskScanReport",
   "acceptPublicLiteRiskScanHandoff",
   "dispatchPublicLiteRiskScanAcquisition",
+  "reconcilePublicLiteRiskScanProviderHandoffs",
 ]);
 const EXPECTED_CALLABLE_EXPORTS = Object.freeze(
     EXPECTED_EXPORTS.slice(0, 3));
@@ -100,6 +101,7 @@ test("index requires each Public Lite boundary module exactly once", () => {
     "./risk_scan/v1/public_lite_callable",
     "./risk_scan/v1/public_lite_provider_handoff_boundary",
     "./risk_scan/v1/public_lite_provider_handoff_trigger",
+    "./risk_scan/v1/public_lite_provider_handoff_reconciliation",
   ]) {
     assert.equal(
         occurrenceCount(
@@ -118,6 +120,7 @@ test("index imports each Public Lite builder exactly once", () => {
     "buildGetPublicLiteRiskScanReport",
     "buildAcceptPublicLiteRiskScanHandoff",
     "buildDispatchPublicLiteRiskScanAcquisition",
+    "buildReconcilePublicLiteRiskScanProviderHandoffs",
   ]) {
     assert.equal(occurrenceCount(INDEX_SOURCE, builder), 2);
   }
@@ -156,5 +159,6 @@ test("runtime index exports all Public Lite functions", () => {
     getPublicLiteRiskScanReport: "function",
     acceptPublicLiteRiskScanHandoff: "function",
     dispatchPublicLiteRiskScanAcquisition: "function",
+    reconcilePublicLiteRiskScanProviderHandoffs: "function",
   });
 });

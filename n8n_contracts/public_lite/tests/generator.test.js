@@ -159,3 +159,23 @@ test("committed acquisition workflow equals factory output", () => {
     serializeWorkflow(buildAcquisitionWorkflow()),
   );
 });
+
+
+test("generated child workflow carries deterministic handoff identity", () => {
+  const workflow = buildAcquisitionWorkflow();
+  assert.equal(
+    workflow.meta.logicalExternalExecutionIdFormat,
+    "n8n-handoff:<handoffId>",
+  );
+  const receiptNode = workflow.nodes.find(
+    (node) => node.name === "Build Acquisition Dispatch Receipt",
+  );
+  assert.match(
+    receiptNode.parameters.jsCode,
+    /n8n-handoff:/u,
+  );
+  assert.doesNotMatch(
+    receiptNode.parameters.jsCode,
+    /n8n execution id missing/u,
+  );
+});

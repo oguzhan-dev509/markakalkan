@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## HRT-MKT-TR-1D-3D-B4-B5 — INACTIVE ACQUISITION WORKER\n\nThis child workflow acknowledges a validated acquisition command with HTTP 202 before the long marketplace path. Acquisition execution and result callback remain disabled. Do not activate until inactive import, credential binding, backend deployment, reconciliation/redrive, index/TTL operationalization, and controlled live validation complete.",
+        "content": "## HRT-MKT-TR-1D-3D-B4-B5 — INACTIVE ACQUISITION WORKER\n\nThis child workflow acknowledges a validated acquisition command with HTTP 202 before the long marketplace path. Acquisition execution and result callback remain disabled. Do not activate until inactive import, credential binding, backend deployment, reconciliation/redrive, index/TTL operationalization, and controlled live validation complete. Logical child identity is deterministic from handoffId.",
         "height": 340,
         "width": 560,
         "color": 5
@@ -50,7 +50,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst command = item && item.acquisitionCommand;\nif (!command || typeof command !== \"object\") {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: command missing\",\n  );\n}\nconst n8nExecutionId = String($execution.id || \"\").trim();\nif (!n8nExecutionId) {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: n8n execution id missing\",\n  );\n}\nconst externalExecutionId =\n  (\"n8n:\" + n8nExecutionId).slice(0, 256);\nconst acceptedAt = new Date().toISOString();\nreturn [{\n  json: {\n    acquisitionCommand: command,\n    dispatchEnvelope: command.dispatchEnvelope,\n    receipt: {\n      contractVersion:\n        \"risk-scan-public-lite-acquisition-dispatch-receipt-v1\",\n      providerCode: \"n8n_public_lite\",\n      handoffId: command.handoffId,\n      executionId: command.executionId,\n      externalExecutionId,\n      acceptedAt,\n    },\n    workerState: {\n      contractVersion:\n        \"risk-scan-public-lite-acquisition-dispatch-receipt-v1\",\n      acquisitionInstalled: true,\n      acquisitionExecutionEnabled: false,\n      resultCallbackEnabled: false,\n      activationAllowed: false,\n    },\n  },\n}];"
+        "jsCode": "const item = $input.first().json;\nconst command = item && item.acquisitionCommand;\nif (!command || typeof command !== \"object\") {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: command missing\",\n  );\n}\nconst handoffId = String(command.handoffId || \"\").trim().toLowerCase();\nif (!/^[a-f0-9]{64}$/.test(handoffId)) {\n  throw new Error(\n    \"PUBLIC_LITE_ACQUISITION_RECEIPT_REJECTED: handoffId invalid\",\n  );\n}\nconst externalExecutionId = \"n8n-handoff:\" + handoffId;\nconst acceptedAt = new Date().toISOString();\nreturn [{\n  json: {\n    acquisitionCommand: command,\n    dispatchEnvelope: command.dispatchEnvelope,\n    receipt: {\n      contractVersion:\n        \"risk-scan-public-lite-acquisition-dispatch-receipt-v2\",\n      providerCode: \"n8n_public_lite\",\n      handoffId: command.handoffId,\n      executionId: command.executionId,\n      externalExecutionId,\n      acceptedAt,\n    },\n    workerState: {\n      contractVersion:\n        \"risk-scan-public-lite-acquisition-dispatch-receipt-v2\",\n      acquisitionInstalled: true,\n      acquisitionExecutionEnabled: false,\n      resultCallbackEnabled: false,\n      activationAllowed: false,\n    },\n  },\n}];"
       },
       "id": "39d32f33-c605-5950-a3ff-ef1e950ef508",
       "name": "Build Acquisition Dispatch Receipt",
@@ -318,9 +318,10 @@
   "versionId": "24501e82-58b3-5cd1-8ed3-00eb5d7581a7",
   "meta": {
     "templateCredsSetupCompleted": false,
-    "hrtPhase": "HRT-MKT-TR-1D-3D-B4-B5",
+    "hrtPhase": "HRT-MKT-TR-1D-3D-B4-C",
     "acquisitionCommandContractVersion": "risk-scan-public-lite-acquisition-command-v1",
-    "acquisitionReceiptContractVersion": "risk-scan-public-lite-acquisition-dispatch-receipt-v1",
+    "acquisitionReceiptContractVersion": "risk-scan-public-lite-acquisition-dispatch-receipt-v2",
+    "logicalExternalExecutionIdFormat": "n8n-handoff:<handoffId>",
     "providerCode": "n8n_public_lite",
     "acquisitionInstalled": true,
     "acquisitionExecutionEnabled": false,

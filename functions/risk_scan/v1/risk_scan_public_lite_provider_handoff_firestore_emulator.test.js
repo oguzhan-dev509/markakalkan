@@ -161,6 +161,9 @@ test("durable acceptance creates one execution-scoped handoff", async () => {
   assert.equal(snapshot.exists, true);
   assert.equal(snapshot.data().state, "accepted");
   assert.equal(snapshot.data().executionId, command.executionId);
+  assert.equal(
+      snapshot.data().childDispatchDueAtTimestamp.toDate().toISOString(),
+      "2026-08-04T10:02:00.000Z");
 });
 
 test("exact durable acceptance replay is idempotent", async () => {
@@ -220,11 +223,13 @@ test("child lease and dispatch receipt persist atomically", async () => {
     receipt: {
       contractVersion:
         handoffContract
-            .PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V1,
+            .PUBLIC_LITE_ACQUISITION_DISPATCH_RECEIPT_VERSION_V2,
       providerCode: "n8n_public_lite",
       handoffId: accepted.record.handoffId,
       executionId: command.executionId,
-      externalExecutionId: "child-execution-1",
+      externalExecutionId:
+        handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+            accepted.record.handoffId),
       acceptedAt: "2026-08-04T10:04:00.000Z",
     },
     dispatchedAt: "2026-08-04T10:04:00.000Z",
@@ -234,7 +239,11 @@ test("child lease and dispatch receipt persist atomically", async () => {
     executionId: command.executionId,
   });
   assert.equal(stored.state, "child_dispatched");
-  assert.equal(stored.childExternalExecutionId, "child-execution-1");
+  assert.equal(
+      stored.childExternalExecutionId,
+      handoffContract.derivePublicLiteAcquisitionExternalExecutionId(
+          accepted.record.handoffId));
+  assert.equal(stored.childDispatchDueAtTimestamp, null);
 });
 
 test("retryable child failure can be claimed again", async () => {
