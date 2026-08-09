@@ -88,7 +88,354 @@ const ACQUISITION_WEBHOOK_ID =
   "6d61578c-2a87-5b1d-a203-451bcf443c0e";
 
 function validatorCode() {
-  return String.raw`const EXPECTED_KEYS = [
+  return String.raw`function parseHttpUrlWithoutGlobal(value, baseValue) {
+  function failUrl() {
+    throw new TypeError("invalid URL");
+  }
+
+  function punycodeEncode(input) {
+    const base = 36;
+    const tMin = 1;
+    const tMax = 26;
+    const skew = 38;
+    const damp = 700;
+    const initialBias = 72;
+    const initialN = 128;
+    const delimiter = "-";
+
+    function adapt(delta, numPoints, firstTime) {
+      delta = firstTime ? Math.floor(delta / damp) : (delta >> 1);
+      delta += Math.floor(delta / numPoints);
+      let k = 0;
+      while (delta > Math.floor(((base - tMin) * tMax) / 2)) {
+        delta = Math.floor(delta / (base - tMin));
+        k += base;
+      }
+      return k + Math.floor(
+        ((base - tMin + 1) * delta) / (delta + skew)
+      );
+    }
+
+    function digitToBasic(digit) {
+      return String.fromCharCode(
+        digit + 22 + 75 * (digit < 26 ? 1 : 0)
+      );
+    }
+
+    const codePoints = Array.from(input).map((character) =>
+      character.codePointAt(0)
+    );
+    let output = "";
+    let n = initialN;
+    let delta = 0;
+    let bias = initialBias;
+
+    for (const point of codePoints) {
+      if (point < 0x80) output += String.fromCharCode(point);
+    }
+
+    let handled = output.length;
+    const basicLength = handled;
+    if (basicLength > 0) output += delimiter;
+
+    while (handled < codePoints.length) {
+      let m = Number.MAX_SAFE_INTEGER;
+      for (const point of codePoints) {
+        if (point >= n && point < m) m = point;
+      }
+      if (!Number.isFinite(m) || m === Number.MAX_SAFE_INTEGER) failUrl();
+
+      const step = (m - n) * (handled + 1);
+      if (!Number.isSafeInteger(step) ||
+          !Number.isSafeInteger(delta + step)) failUrl();
+
+      delta += step;
+      n = m;
+
+      for (const point of codePoints) {
+        if (point < n) {
+          delta += 1;
+          if (!Number.isSafeInteger(delta)) failUrl();
+        }
+        if (point === n) {
+          let q = delta;
+          for (let k = base; ; k += base) {
+            let t;
+            if (k <= bias) t = tMin;
+            else if (k >= bias + tMax) t = tMax;
+            else t = k - bias;
+
+            if (q < t) break;
+            const code = t + ((q - t) % (base - t));
+            output += digitToBasic(code);
+            q = Math.floor((q - t) / (base - t));
+          }
+          output += digitToBasic(q);
+          bias = adapt(delta, handled + 1, handled === basicLength);
+          delta = 0;
+          handled += 1;
+        }
+      }
+      delta += 1;
+      n += 1;
+    }
+
+    return output;
+  }
+
+  function canonicalizeIpv4IfApplicable(hostname) {
+    const labels = hostname.split(".");
+    const numericLike = labels.every((label) =>
+      /^[0-9]+$/u.test(label) || /^0x[0-9a-f]+$/iu.test(label)
+    );
+    if (!numericLike) return null;
+
+    if (labels.length !== 4) failUrl();
+    const canonical = [];
+    for (const label of labels) {
+      if (!/^[0-9]+$/u.test(label)) failUrl();
+      if (label.length > 1 && label.startsWith("0")) failUrl();
+      const value = Number(label);
+      if (!Number.isInteger(value) || value < 0 || value > 255) failUrl();
+      canonical.push(String(value));
+    }
+    return canonical.join(".");
+  }
+
+  function canonicalizeHostname(rawHostname) {
+    let hostname = String(rawHostname || "").trim();
+    if (!hostname) failUrl();
+
+    if (hostname.startsWith("[") && hostname.endsWith("]")) {
+      const inner = hostname.slice(1, -1);
+      if (!inner || /[^0-9a-fA-F:.]/u.test(inner)) failUrl();
+      return "[" + inner.toLowerCase() + "]";
+    }
+
+    if (/%/u.test(hostname)) {
+      try {
+        hostname = decodeURIComponent(hostname);
+      } catch {
+        failUrl();
+      }
+    }
+
+    hostname = hostname.toLowerCase();
+    if (/[\s\\/?#@:]/u.test(hostname)) failUrl();
+
+    const trailingDot = hostname.endsWith(".");
+    const core = trailingDot ? hostname.slice(0, -1) : hostname;
+    if (!core) failUrl();
+
+    const ipv4 = canonicalizeIpv4IfApplicable(core);
+    if (ipv4 !== null) return ipv4 + (trailingDot ? "." : "");
+
+    const labels = core.split(".");
+    const canonicalLabels = [];
+    for (const label of labels) {
+      if (!label) failUrl();
+      let next = label;
+      if (/[^\x00-\x7F]/u.test(next)) {
+        next = "xn--" + punycodeEncode(next);
+      }
+      if (!/^[a-z0-9-]+$/u.test(next)) failUrl();
+      if (next.startsWith("-") || next.endsWith("-")) failUrl();
+      if (next.length > 63) failUrl();
+      canonicalLabels.push(next);
+    }
+
+    const canonical = canonicalLabels.join(".") + (trailingDot ? "." : "");
+    if (canonical.length > 254) failUrl();
+    return canonical;
+  }
+
+  function canonicalizePort(rawPort, scheme) {
+    let port = String(rawPort || "").trim();
+    if (!port) return "";
+    if (!/^[0-9]{1,5}$/u.test(port)) failUrl();
+
+    const numeric = Number(port);
+    if (!Number.isInteger(numeric) || numeric < 0 || numeric > 65535) failUrl();
+
+    port = String(numeric);
+    if ((scheme === "https" && numeric === 443) ||
+        (scheme === "http" && numeric === 80)) return "";
+    return port;
+  }
+
+  function normalizedDotToken(segment) {
+    return segment.toLowerCase().replace(/%2e/gu, ".");
+  }
+
+  function normalizePathname(rawPathname) {
+    let pathname = String(rawPathname || "");
+    if (!pathname) pathname = "/";
+    if (!pathname.startsWith("/")) failUrl();
+
+    // Intentional fail-closed restriction.
+    if (pathname.includes("\\")) failUrl();
+
+    const sourceSegments = pathname.split("/");
+    const outputSegments = [];
+    for (let index = 0; index < sourceSegments.length; index += 1) {
+      const segment = sourceSegments[index];
+      if (index === 0) {
+        outputSegments.push("");
+        continue;
+      }
+
+      const token = normalizedDotToken(segment);
+      if (token === ".") continue;
+      if (token === "..") {
+        if (outputSegments.length > 1) outputSegments.pop();
+        continue;
+      }
+      outputSegments.push(segment);
+    }
+
+    if (pathname.endsWith("/.") ||
+        pathname.endsWith("/..") ||
+        /\/(?:%2e|\.%2e|%2e\.|%2e%2e)$/iu.test(pathname)) {
+      if (outputSegments[outputSegments.length - 1] !== "") {
+        outputSegments.push("");
+      }
+    }
+
+    let normalized = outputSegments.join("/");
+    if (!normalized.startsWith("/")) normalized = "/" + normalized;
+    return normalized || "/";
+  }
+
+  function splitAbsolute(rawValue) {
+    const raw = String(rawValue || "").trim();
+
+    // Intentional fail-closed restriction.
+    if (raw.includes("\\")) failUrl();
+
+    const match = /^(https?):\/\/([\s\S]*)$/iu.exec(raw);
+    if (!match) failUrl();
+
+    const scheme = match[1].toLowerCase();
+    const remainder = match[2];
+
+    let boundary = remainder.length;
+    for (const marker of ["/", "?", "#"]) {
+      const index = remainder.indexOf(marker);
+      if (index >= 0 && index < boundary) boundary = index;
+    }
+
+    const authority = remainder.slice(0, boundary);
+    let suffix = remainder.slice(boundary);
+    if (!authority || authority.includes("@")) failUrl();
+
+    let hostnameRaw = "";
+    let portRaw = "";
+    if (authority.startsWith("[")) {
+      const close = authority.indexOf("]");
+      if (close <= 1) failUrl();
+      hostnameRaw = authority.slice(0, close + 1);
+      const tail = authority.slice(close + 1);
+      if (tail) {
+        if (!tail.startsWith(":")) failUrl();
+        portRaw = tail.slice(1);
+      }
+    } else {
+      const colon = authority.lastIndexOf(":");
+      if (colon >= 0) {
+        if (authority.slice(0, colon).includes(":")) failUrl();
+        hostnameRaw = authority.slice(0, colon);
+        portRaw = authority.slice(colon + 1);
+      } else {
+        hostnameRaw = authority;
+      }
+    }
+
+    const hostname = canonicalizeHostname(hostnameRaw);
+    const port = canonicalizePort(portRaw, scheme);
+
+    let hash = "";
+    const hashIndex = suffix.indexOf("#");
+    if (hashIndex >= 0) {
+      hash = suffix.slice(hashIndex);
+      suffix = suffix.slice(0, hashIndex);
+    }
+
+    let search = "";
+    const searchIndex = suffix.indexOf("?");
+    if (searchIndex >= 0) {
+      search = suffix.slice(searchIndex);
+      suffix = suffix.slice(0, searchIndex);
+    }
+
+    const pathname = normalizePathname(suffix || "/");
+    return {scheme, hostname, port, pathname, search, hash};
+  }
+
+  function originOf(state) {
+    return state.scheme + "://" + state.hostname +
+      (state.port ? ":" + state.port : "");
+  }
+
+  function resolve(valueRaw, baseRaw) {
+    const valueText = String(valueRaw || "").trim();
+
+    if (/^https?:\/\//iu.test(valueText)) return valueText;
+    if (valueText.includes("\\")) failUrl();
+    if (baseRaw === undefined || baseRaw === null) failUrl();
+
+    const base = splitAbsolute(baseRaw);
+    const origin = originOf(base);
+
+    if (valueText.startsWith("//")) return base.scheme + ":" + valueText;
+    if (valueText.startsWith("/")) return origin + valueText;
+    if (valueText.startsWith("?")) return origin + base.pathname + valueText;
+    if (valueText.startsWith("#")) {
+      return origin + base.pathname + base.search + valueText;
+    }
+
+    const slash = base.pathname.lastIndexOf("/");
+    const directory = slash >= 0 ? base.pathname.slice(0, slash + 1) : "/";
+    return origin + directory + valueText;
+  }
+
+  const state = splitAbsolute(resolve(value, baseValue));
+
+  function href() {
+    return originOf(state) + state.pathname + state.search + state.hash;
+  }
+
+  return {
+    get protocol() { return state.scheme + ":"; },
+    get username() { return ""; },
+    get password() { return ""; },
+    get hostname() { return state.hostname; },
+    set hostname(valueInput) {
+      state.hostname = canonicalizeHostname(valueInput);
+    },
+    get port() { return state.port; },
+    set port(valueInput) {
+      state.port = canonicalizePort(valueInput, state.scheme);
+    },
+    get pathname() { return state.pathname; },
+    set pathname(valueInput) {
+      state.pathname = normalizePathname(valueInput);
+    },
+    get search() { return state.search; },
+    set search(valueInput) {
+      const next = String(valueInput || "");
+      state.search = next && !next.startsWith("?") ? "?" + next : next;
+    },
+    get hash() { return state.hash; },
+    set hash(valueInput) {
+      const next = String(valueInput || "");
+      state.hash = next && !next.startsWith("#") ? "#" + next : next;
+    },
+    get href() { return href(); },
+    toString() { return href(); },
+  };
+}
+
+const EXPECTED_KEYS = [
   "accessTier",
   "channelCodes",
   "contractVersion",
@@ -141,9 +488,14 @@ function fail(message) {
 }
 
 function plain(value) {
-  if (value === null || typeof value !== "object") return false;
+  if (value === null ||
+      typeof value !== "object" ||
+      Array.isArray(value)) {
+    return false;
+  }
   const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  return prototype === null ||
+    Object.getPrototypeOf(prototype) === null;
 }
 
 function exactKeys(value, expected, label) {
@@ -239,7 +591,7 @@ const officialHost = text(
   raw.target.officialHost, "target.officialHost", 512)
   .toLowerCase()
   .replace(/\.$/, "");
-const officialUrl = new URL(text(
+const officialUrl = parseHttpUrlWithoutGlobal(text(
   raw.target.officialWebsiteCanonicalUrl,
   "target.officialWebsiteCanonicalUrl",
   4096,
@@ -353,9 +705,14 @@ function fail(message) {
 }
 
 function plain(value) {
-  if (value === null || typeof value !== "object") return false;
+  if (value === null ||
+      typeof value !== "object" ||
+      Array.isArray(value)) {
+    return false;
+  }
   const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  return prototype === null ||
+    Object.getPrototypeOf(prototype) === null;
 }
 
 function exactKeys(value, expected, label) {
@@ -492,7 +849,354 @@ return [{
 }
 
 function acquisitionCommandValidatorCode() {
-  return String.raw`const COMMAND_KEYS = [
+  return String.raw`function parseHttpUrlWithoutGlobal(value, baseValue) {
+  function failUrl() {
+    throw new TypeError("invalid URL");
+  }
+
+  function punycodeEncode(input) {
+    const base = 36;
+    const tMin = 1;
+    const tMax = 26;
+    const skew = 38;
+    const damp = 700;
+    const initialBias = 72;
+    const initialN = 128;
+    const delimiter = "-";
+
+    function adapt(delta, numPoints, firstTime) {
+      delta = firstTime ? Math.floor(delta / damp) : (delta >> 1);
+      delta += Math.floor(delta / numPoints);
+      let k = 0;
+      while (delta > Math.floor(((base - tMin) * tMax) / 2)) {
+        delta = Math.floor(delta / (base - tMin));
+        k += base;
+      }
+      return k + Math.floor(
+        ((base - tMin + 1) * delta) / (delta + skew)
+      );
+    }
+
+    function digitToBasic(digit) {
+      return String.fromCharCode(
+        digit + 22 + 75 * (digit < 26 ? 1 : 0)
+      );
+    }
+
+    const codePoints = Array.from(input).map((character) =>
+      character.codePointAt(0)
+    );
+    let output = "";
+    let n = initialN;
+    let delta = 0;
+    let bias = initialBias;
+
+    for (const point of codePoints) {
+      if (point < 0x80) output += String.fromCharCode(point);
+    }
+
+    let handled = output.length;
+    const basicLength = handled;
+    if (basicLength > 0) output += delimiter;
+
+    while (handled < codePoints.length) {
+      let m = Number.MAX_SAFE_INTEGER;
+      for (const point of codePoints) {
+        if (point >= n && point < m) m = point;
+      }
+      if (!Number.isFinite(m) || m === Number.MAX_SAFE_INTEGER) failUrl();
+
+      const step = (m - n) * (handled + 1);
+      if (!Number.isSafeInteger(step) ||
+          !Number.isSafeInteger(delta + step)) failUrl();
+
+      delta += step;
+      n = m;
+
+      for (const point of codePoints) {
+        if (point < n) {
+          delta += 1;
+          if (!Number.isSafeInteger(delta)) failUrl();
+        }
+        if (point === n) {
+          let q = delta;
+          for (let k = base; ; k += base) {
+            let t;
+            if (k <= bias) t = tMin;
+            else if (k >= bias + tMax) t = tMax;
+            else t = k - bias;
+
+            if (q < t) break;
+            const code = t + ((q - t) % (base - t));
+            output += digitToBasic(code);
+            q = Math.floor((q - t) / (base - t));
+          }
+          output += digitToBasic(q);
+          bias = adapt(delta, handled + 1, handled === basicLength);
+          delta = 0;
+          handled += 1;
+        }
+      }
+      delta += 1;
+      n += 1;
+    }
+
+    return output;
+  }
+
+  function canonicalizeIpv4IfApplicable(hostname) {
+    const labels = hostname.split(".");
+    const numericLike = labels.every((label) =>
+      /^[0-9]+$/u.test(label) || /^0x[0-9a-f]+$/iu.test(label)
+    );
+    if (!numericLike) return null;
+
+    if (labels.length !== 4) failUrl();
+    const canonical = [];
+    for (const label of labels) {
+      if (!/^[0-9]+$/u.test(label)) failUrl();
+      if (label.length > 1 && label.startsWith("0")) failUrl();
+      const value = Number(label);
+      if (!Number.isInteger(value) || value < 0 || value > 255) failUrl();
+      canonical.push(String(value));
+    }
+    return canonical.join(".");
+  }
+
+  function canonicalizeHostname(rawHostname) {
+    let hostname = String(rawHostname || "").trim();
+    if (!hostname) failUrl();
+
+    if (hostname.startsWith("[") && hostname.endsWith("]")) {
+      const inner = hostname.slice(1, -1);
+      if (!inner || /[^0-9a-fA-F:.]/u.test(inner)) failUrl();
+      return "[" + inner.toLowerCase() + "]";
+    }
+
+    if (/%/u.test(hostname)) {
+      try {
+        hostname = decodeURIComponent(hostname);
+      } catch {
+        failUrl();
+      }
+    }
+
+    hostname = hostname.toLowerCase();
+    if (/[\s\\/?#@:]/u.test(hostname)) failUrl();
+
+    const trailingDot = hostname.endsWith(".");
+    const core = trailingDot ? hostname.slice(0, -1) : hostname;
+    if (!core) failUrl();
+
+    const ipv4 = canonicalizeIpv4IfApplicable(core);
+    if (ipv4 !== null) return ipv4 + (trailingDot ? "." : "");
+
+    const labels = core.split(".");
+    const canonicalLabels = [];
+    for (const label of labels) {
+      if (!label) failUrl();
+      let next = label;
+      if (/[^\x00-\x7F]/u.test(next)) {
+        next = "xn--" + punycodeEncode(next);
+      }
+      if (!/^[a-z0-9-]+$/u.test(next)) failUrl();
+      if (next.startsWith("-") || next.endsWith("-")) failUrl();
+      if (next.length > 63) failUrl();
+      canonicalLabels.push(next);
+    }
+
+    const canonical = canonicalLabels.join(".") + (trailingDot ? "." : "");
+    if (canonical.length > 254) failUrl();
+    return canonical;
+  }
+
+  function canonicalizePort(rawPort, scheme) {
+    let port = String(rawPort || "").trim();
+    if (!port) return "";
+    if (!/^[0-9]{1,5}$/u.test(port)) failUrl();
+
+    const numeric = Number(port);
+    if (!Number.isInteger(numeric) || numeric < 0 || numeric > 65535) failUrl();
+
+    port = String(numeric);
+    if ((scheme === "https" && numeric === 443) ||
+        (scheme === "http" && numeric === 80)) return "";
+    return port;
+  }
+
+  function normalizedDotToken(segment) {
+    return segment.toLowerCase().replace(/%2e/gu, ".");
+  }
+
+  function normalizePathname(rawPathname) {
+    let pathname = String(rawPathname || "");
+    if (!pathname) pathname = "/";
+    if (!pathname.startsWith("/")) failUrl();
+
+    // Intentional fail-closed restriction.
+    if (pathname.includes("\\")) failUrl();
+
+    const sourceSegments = pathname.split("/");
+    const outputSegments = [];
+    for (let index = 0; index < sourceSegments.length; index += 1) {
+      const segment = sourceSegments[index];
+      if (index === 0) {
+        outputSegments.push("");
+        continue;
+      }
+
+      const token = normalizedDotToken(segment);
+      if (token === ".") continue;
+      if (token === "..") {
+        if (outputSegments.length > 1) outputSegments.pop();
+        continue;
+      }
+      outputSegments.push(segment);
+    }
+
+    if (pathname.endsWith("/.") ||
+        pathname.endsWith("/..") ||
+        /\/(?:%2e|\.%2e|%2e\.|%2e%2e)$/iu.test(pathname)) {
+      if (outputSegments[outputSegments.length - 1] !== "") {
+        outputSegments.push("");
+      }
+    }
+
+    let normalized = outputSegments.join("/");
+    if (!normalized.startsWith("/")) normalized = "/" + normalized;
+    return normalized || "/";
+  }
+
+  function splitAbsolute(rawValue) {
+    const raw = String(rawValue || "").trim();
+
+    // Intentional fail-closed restriction.
+    if (raw.includes("\\")) failUrl();
+
+    const match = /^(https?):\/\/([\s\S]*)$/iu.exec(raw);
+    if (!match) failUrl();
+
+    const scheme = match[1].toLowerCase();
+    const remainder = match[2];
+
+    let boundary = remainder.length;
+    for (const marker of ["/", "?", "#"]) {
+      const index = remainder.indexOf(marker);
+      if (index >= 0 && index < boundary) boundary = index;
+    }
+
+    const authority = remainder.slice(0, boundary);
+    let suffix = remainder.slice(boundary);
+    if (!authority || authority.includes("@")) failUrl();
+
+    let hostnameRaw = "";
+    let portRaw = "";
+    if (authority.startsWith("[")) {
+      const close = authority.indexOf("]");
+      if (close <= 1) failUrl();
+      hostnameRaw = authority.slice(0, close + 1);
+      const tail = authority.slice(close + 1);
+      if (tail) {
+        if (!tail.startsWith(":")) failUrl();
+        portRaw = tail.slice(1);
+      }
+    } else {
+      const colon = authority.lastIndexOf(":");
+      if (colon >= 0) {
+        if (authority.slice(0, colon).includes(":")) failUrl();
+        hostnameRaw = authority.slice(0, colon);
+        portRaw = authority.slice(colon + 1);
+      } else {
+        hostnameRaw = authority;
+      }
+    }
+
+    const hostname = canonicalizeHostname(hostnameRaw);
+    const port = canonicalizePort(portRaw, scheme);
+
+    let hash = "";
+    const hashIndex = suffix.indexOf("#");
+    if (hashIndex >= 0) {
+      hash = suffix.slice(hashIndex);
+      suffix = suffix.slice(0, hashIndex);
+    }
+
+    let search = "";
+    const searchIndex = suffix.indexOf("?");
+    if (searchIndex >= 0) {
+      search = suffix.slice(searchIndex);
+      suffix = suffix.slice(0, searchIndex);
+    }
+
+    const pathname = normalizePathname(suffix || "/");
+    return {scheme, hostname, port, pathname, search, hash};
+  }
+
+  function originOf(state) {
+    return state.scheme + "://" + state.hostname +
+      (state.port ? ":" + state.port : "");
+  }
+
+  function resolve(valueRaw, baseRaw) {
+    const valueText = String(valueRaw || "").trim();
+
+    if (/^https?:\/\//iu.test(valueText)) return valueText;
+    if (valueText.includes("\\")) failUrl();
+    if (baseRaw === undefined || baseRaw === null) failUrl();
+
+    const base = splitAbsolute(baseRaw);
+    const origin = originOf(base);
+
+    if (valueText.startsWith("//")) return base.scheme + ":" + valueText;
+    if (valueText.startsWith("/")) return origin + valueText;
+    if (valueText.startsWith("?")) return origin + base.pathname + valueText;
+    if (valueText.startsWith("#")) {
+      return origin + base.pathname + base.search + valueText;
+    }
+
+    const slash = base.pathname.lastIndexOf("/");
+    const directory = slash >= 0 ? base.pathname.slice(0, slash + 1) : "/";
+    return origin + directory + valueText;
+  }
+
+  const state = splitAbsolute(resolve(value, baseValue));
+
+  function href() {
+    return originOf(state) + state.pathname + state.search + state.hash;
+  }
+
+  return {
+    get protocol() { return state.scheme + ":"; },
+    get username() { return ""; },
+    get password() { return ""; },
+    get hostname() { return state.hostname; },
+    set hostname(valueInput) {
+      state.hostname = canonicalizeHostname(valueInput);
+    },
+    get port() { return state.port; },
+    set port(valueInput) {
+      state.port = canonicalizePort(valueInput, state.scheme);
+    },
+    get pathname() { return state.pathname; },
+    set pathname(valueInput) {
+      state.pathname = normalizePathname(valueInput);
+    },
+    get search() { return state.search; },
+    set search(valueInput) {
+      const next = String(valueInput || "");
+      state.search = next && !next.startsWith("?") ? "?" + next : next;
+    },
+    get hash() { return state.hash; },
+    set hash(valueInput) {
+      const next = String(valueInput || "");
+      state.hash = next && !next.startsWith("#") ? "#" + next : next;
+    },
+    get href() { return href(); },
+    toString() { return href(); },
+  };
+}
+
+const COMMAND_KEYS = [
   "attempt",
   "contractVersion",
   "dispatchEnvelope",
@@ -556,9 +1260,14 @@ function fail(message) {
 }
 
 function plain(value) {
-  if (value === null || typeof value !== "object") return false;
+  if (value === null ||
+      typeof value !== "object" ||
+      Array.isArray(value)) {
+    return false;
+  }
   const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  return prototype === null ||
+    Object.getPrototypeOf(prototype) === null;
 }
 
 function exactKeys(value, expected, label) {
@@ -680,7 +1389,7 @@ const officialHost = text(
   "target.officialHost",
   512,
 ).toLowerCase().replace(/\.$/u, "");
-const officialUrl = new URL(text(
+const officialUrl = parseHttpUrlWithoutGlobal(text(
   dispatchRaw.target.officialWebsiteCanonicalUrl,
   "target.officialWebsiteCanonicalUrl",
   4096,
@@ -877,7 +1586,354 @@ return [{json: item}];`;
 }
 
 function marketplaceNormalizerCode() {
-  return String.raw`const response = $input.first().json;
+  return String.raw`function parseHttpUrlWithoutGlobal(value, baseValue) {
+  function failUrl() {
+    throw new TypeError("invalid URL");
+  }
+
+  function punycodeEncode(input) {
+    const base = 36;
+    const tMin = 1;
+    const tMax = 26;
+    const skew = 38;
+    const damp = 700;
+    const initialBias = 72;
+    const initialN = 128;
+    const delimiter = "-";
+
+    function adapt(delta, numPoints, firstTime) {
+      delta = firstTime ? Math.floor(delta / damp) : (delta >> 1);
+      delta += Math.floor(delta / numPoints);
+      let k = 0;
+      while (delta > Math.floor(((base - tMin) * tMax) / 2)) {
+        delta = Math.floor(delta / (base - tMin));
+        k += base;
+      }
+      return k + Math.floor(
+        ((base - tMin + 1) * delta) / (delta + skew)
+      );
+    }
+
+    function digitToBasic(digit) {
+      return String.fromCharCode(
+        digit + 22 + 75 * (digit < 26 ? 1 : 0)
+      );
+    }
+
+    const codePoints = Array.from(input).map((character) =>
+      character.codePointAt(0)
+    );
+    let output = "";
+    let n = initialN;
+    let delta = 0;
+    let bias = initialBias;
+
+    for (const point of codePoints) {
+      if (point < 0x80) output += String.fromCharCode(point);
+    }
+
+    let handled = output.length;
+    const basicLength = handled;
+    if (basicLength > 0) output += delimiter;
+
+    while (handled < codePoints.length) {
+      let m = Number.MAX_SAFE_INTEGER;
+      for (const point of codePoints) {
+        if (point >= n && point < m) m = point;
+      }
+      if (!Number.isFinite(m) || m === Number.MAX_SAFE_INTEGER) failUrl();
+
+      const step = (m - n) * (handled + 1);
+      if (!Number.isSafeInteger(step) ||
+          !Number.isSafeInteger(delta + step)) failUrl();
+
+      delta += step;
+      n = m;
+
+      for (const point of codePoints) {
+        if (point < n) {
+          delta += 1;
+          if (!Number.isSafeInteger(delta)) failUrl();
+        }
+        if (point === n) {
+          let q = delta;
+          for (let k = base; ; k += base) {
+            let t;
+            if (k <= bias) t = tMin;
+            else if (k >= bias + tMax) t = tMax;
+            else t = k - bias;
+
+            if (q < t) break;
+            const code = t + ((q - t) % (base - t));
+            output += digitToBasic(code);
+            q = Math.floor((q - t) / (base - t));
+          }
+          output += digitToBasic(q);
+          bias = adapt(delta, handled + 1, handled === basicLength);
+          delta = 0;
+          handled += 1;
+        }
+      }
+      delta += 1;
+      n += 1;
+    }
+
+    return output;
+  }
+
+  function canonicalizeIpv4IfApplicable(hostname) {
+    const labels = hostname.split(".");
+    const numericLike = labels.every((label) =>
+      /^[0-9]+$/u.test(label) || /^0x[0-9a-f]+$/iu.test(label)
+    );
+    if (!numericLike) return null;
+
+    if (labels.length !== 4) failUrl();
+    const canonical = [];
+    for (const label of labels) {
+      if (!/^[0-9]+$/u.test(label)) failUrl();
+      if (label.length > 1 && label.startsWith("0")) failUrl();
+      const value = Number(label);
+      if (!Number.isInteger(value) || value < 0 || value > 255) failUrl();
+      canonical.push(String(value));
+    }
+    return canonical.join(".");
+  }
+
+  function canonicalizeHostname(rawHostname) {
+    let hostname = String(rawHostname || "").trim();
+    if (!hostname) failUrl();
+
+    if (hostname.startsWith("[") && hostname.endsWith("]")) {
+      const inner = hostname.slice(1, -1);
+      if (!inner || /[^0-9a-fA-F:.]/u.test(inner)) failUrl();
+      return "[" + inner.toLowerCase() + "]";
+    }
+
+    if (/%/u.test(hostname)) {
+      try {
+        hostname = decodeURIComponent(hostname);
+      } catch {
+        failUrl();
+      }
+    }
+
+    hostname = hostname.toLowerCase();
+    if (/[\s\\/?#@:]/u.test(hostname)) failUrl();
+
+    const trailingDot = hostname.endsWith(".");
+    const core = trailingDot ? hostname.slice(0, -1) : hostname;
+    if (!core) failUrl();
+
+    const ipv4 = canonicalizeIpv4IfApplicable(core);
+    if (ipv4 !== null) return ipv4 + (trailingDot ? "." : "");
+
+    const labels = core.split(".");
+    const canonicalLabels = [];
+    for (const label of labels) {
+      if (!label) failUrl();
+      let next = label;
+      if (/[^\x00-\x7F]/u.test(next)) {
+        next = "xn--" + punycodeEncode(next);
+      }
+      if (!/^[a-z0-9-]+$/u.test(next)) failUrl();
+      if (next.startsWith("-") || next.endsWith("-")) failUrl();
+      if (next.length > 63) failUrl();
+      canonicalLabels.push(next);
+    }
+
+    const canonical = canonicalLabels.join(".") + (trailingDot ? "." : "");
+    if (canonical.length > 254) failUrl();
+    return canonical;
+  }
+
+  function canonicalizePort(rawPort, scheme) {
+    let port = String(rawPort || "").trim();
+    if (!port) return "";
+    if (!/^[0-9]{1,5}$/u.test(port)) failUrl();
+
+    const numeric = Number(port);
+    if (!Number.isInteger(numeric) || numeric < 0 || numeric > 65535) failUrl();
+
+    port = String(numeric);
+    if ((scheme === "https" && numeric === 443) ||
+        (scheme === "http" && numeric === 80)) return "";
+    return port;
+  }
+
+  function normalizedDotToken(segment) {
+    return segment.toLowerCase().replace(/%2e/gu, ".");
+  }
+
+  function normalizePathname(rawPathname) {
+    let pathname = String(rawPathname || "");
+    if (!pathname) pathname = "/";
+    if (!pathname.startsWith("/")) failUrl();
+
+    // Intentional fail-closed restriction.
+    if (pathname.includes("\\")) failUrl();
+
+    const sourceSegments = pathname.split("/");
+    const outputSegments = [];
+    for (let index = 0; index < sourceSegments.length; index += 1) {
+      const segment = sourceSegments[index];
+      if (index === 0) {
+        outputSegments.push("");
+        continue;
+      }
+
+      const token = normalizedDotToken(segment);
+      if (token === ".") continue;
+      if (token === "..") {
+        if (outputSegments.length > 1) outputSegments.pop();
+        continue;
+      }
+      outputSegments.push(segment);
+    }
+
+    if (pathname.endsWith("/.") ||
+        pathname.endsWith("/..") ||
+        /\/(?:%2e|\.%2e|%2e\.|%2e%2e)$/iu.test(pathname)) {
+      if (outputSegments[outputSegments.length - 1] !== "") {
+        outputSegments.push("");
+      }
+    }
+
+    let normalized = outputSegments.join("/");
+    if (!normalized.startsWith("/")) normalized = "/" + normalized;
+    return normalized || "/";
+  }
+
+  function splitAbsolute(rawValue) {
+    const raw = String(rawValue || "").trim();
+
+    // Intentional fail-closed restriction.
+    if (raw.includes("\\")) failUrl();
+
+    const match = /^(https?):\/\/([\s\S]*)$/iu.exec(raw);
+    if (!match) failUrl();
+
+    const scheme = match[1].toLowerCase();
+    const remainder = match[2];
+
+    let boundary = remainder.length;
+    for (const marker of ["/", "?", "#"]) {
+      const index = remainder.indexOf(marker);
+      if (index >= 0 && index < boundary) boundary = index;
+    }
+
+    const authority = remainder.slice(0, boundary);
+    let suffix = remainder.slice(boundary);
+    if (!authority || authority.includes("@")) failUrl();
+
+    let hostnameRaw = "";
+    let portRaw = "";
+    if (authority.startsWith("[")) {
+      const close = authority.indexOf("]");
+      if (close <= 1) failUrl();
+      hostnameRaw = authority.slice(0, close + 1);
+      const tail = authority.slice(close + 1);
+      if (tail) {
+        if (!tail.startsWith(":")) failUrl();
+        portRaw = tail.slice(1);
+      }
+    } else {
+      const colon = authority.lastIndexOf(":");
+      if (colon >= 0) {
+        if (authority.slice(0, colon).includes(":")) failUrl();
+        hostnameRaw = authority.slice(0, colon);
+        portRaw = authority.slice(colon + 1);
+      } else {
+        hostnameRaw = authority;
+      }
+    }
+
+    const hostname = canonicalizeHostname(hostnameRaw);
+    const port = canonicalizePort(portRaw, scheme);
+
+    let hash = "";
+    const hashIndex = suffix.indexOf("#");
+    if (hashIndex >= 0) {
+      hash = suffix.slice(hashIndex);
+      suffix = suffix.slice(0, hashIndex);
+    }
+
+    let search = "";
+    const searchIndex = suffix.indexOf("?");
+    if (searchIndex >= 0) {
+      search = suffix.slice(searchIndex);
+      suffix = suffix.slice(0, searchIndex);
+    }
+
+    const pathname = normalizePathname(suffix || "/");
+    return {scheme, hostname, port, pathname, search, hash};
+  }
+
+  function originOf(state) {
+    return state.scheme + "://" + state.hostname +
+      (state.port ? ":" + state.port : "");
+  }
+
+  function resolve(valueRaw, baseRaw) {
+    const valueText = String(valueRaw || "").trim();
+
+    if (/^https?:\/\//iu.test(valueText)) return valueText;
+    if (valueText.includes("\\")) failUrl();
+    if (baseRaw === undefined || baseRaw === null) failUrl();
+
+    const base = splitAbsolute(baseRaw);
+    const origin = originOf(base);
+
+    if (valueText.startsWith("//")) return base.scheme + ":" + valueText;
+    if (valueText.startsWith("/")) return origin + valueText;
+    if (valueText.startsWith("?")) return origin + base.pathname + valueText;
+    if (valueText.startsWith("#")) {
+      return origin + base.pathname + base.search + valueText;
+    }
+
+    const slash = base.pathname.lastIndexOf("/");
+    const directory = slash >= 0 ? base.pathname.slice(0, slash + 1) : "/";
+    return origin + directory + valueText;
+  }
+
+  const state = splitAbsolute(resolve(value, baseValue));
+
+  function href() {
+    return originOf(state) + state.pathname + state.search + state.hash;
+  }
+
+  return {
+    get protocol() { return state.scheme + ":"; },
+    get username() { return ""; },
+    get password() { return ""; },
+    get hostname() { return state.hostname; },
+    set hostname(valueInput) {
+      state.hostname = canonicalizeHostname(valueInput);
+    },
+    get port() { return state.port; },
+    set port(valueInput) {
+      state.port = canonicalizePort(valueInput, state.scheme);
+    },
+    get pathname() { return state.pathname; },
+    set pathname(valueInput) {
+      state.pathname = normalizePathname(valueInput);
+    },
+    get search() { return state.search; },
+    set search(valueInput) {
+      const next = String(valueInput || "");
+      state.search = next && !next.startsWith("?") ? "?" + next : next;
+    },
+    get hash() { return state.hash; },
+    set hash(valueInput) {
+      const next = String(valueInput || "");
+      state.hash = next && !next.startsWith("#") ? "#" + next : next;
+    },
+    get href() { return href(); },
+    toString() { return href(); },
+  };
+}
+
+const response = $input.first().json;
 const context = $("Build Marketplace Limited Acquisition Plan")
   .first().json;
 const plan = context && context.acquisitionPlan;
@@ -931,7 +1987,7 @@ function stripTags(value) {
 function normalizeUrl(value) {
   let parsed;
   try {
-    parsed = new URL(value, finalUrl);
+    parsed = parseHttpUrlWithoutGlobal(value, finalUrl);
   } catch {
     return null;
   }
@@ -993,7 +2049,7 @@ if (classed.status === "completed") {
     const titleMatch = attributes.match(
       /\b(?:title|aria-label)\s*=\s*(?:"([^"]+)"|'([^']+)')/iu,
     );
-    const parsed = new URL(canonicalUrl);
+    const parsed = parseHttpUrlWithoutGlobal(canonicalUrl);
     const title = stripTags(
       titleMatch && (titleMatch[1] || titleMatch[2]) ||
       match[6] || parsed.pathname,

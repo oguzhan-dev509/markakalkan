@@ -1112,3 +1112,135 @@ test(
   );
   },
 );
+test("realm-safe plain-object gates accept cross-realm records and reject arrays", () => {
+  const vm = require("node:vm");
+  const factory = require("../src/workflow_factory");
+  const expectedPlain = "function plain(value) {\n  if (value === null ||\n      typeof value !== \"object\" ||\n      Array.isArray(value)) {\n    return false;\n  }\n  const prototype = Object.getPrototypeOf(value);\n  return prototype === null ||\n    Object.getPrototypeOf(prototype) === null;\n}";
+
+  const parent = factory.buildWorkflow();
+  const child = factory.buildAcquisitionWorkflow();
+  const targetCodes = [
+    parent.nodes.find(
+      (node) => node.name === "Validate Public Lite Dispatch",
+    ).parameters.jsCode,
+    parent.nodes.find(
+      (node) => node.name === "Build Durable Dispatch Receipt",
+    ).parameters.jsCode,
+    child.nodes.find(
+      (node) => node.name === "Validate Acquisition Handoff Command",
+    ).parameters.jsCode,
+  ];
+
+  for (const code of targetCodes) {
+    assert.equal(code.includes(expectedPlain), true);
+    assert.equal(code.includes("prototype === Object.prototype"), false);
+  }
+
+  function evaluatePlain(input) {
+    return vm.runInNewContext(
+      "(" + expectedPlain + ")(input)",
+      {input},
+      {timeout: 1000},
+    );
+  }
+
+  const crossRealmRecord = vm.runInNewContext("({value: 1})", {});
+  const nullPrototypeRecord = Object.create(null);
+  nullPrototypeRecord.value = 1;
+  const crossRealmArray = vm.runInNewContext("[1, 2]", {});
+  class NonRecordClass {}
+
+  assert.equal(evaluatePlain(crossRealmRecord), true);
+  assert.equal(evaluatePlain(nullPrototypeRecord), true);
+  assert.equal(evaluatePlain(crossRealmArray), false);
+  assert.equal(evaluatePlain(new NonRecordClass()), false);
+});
+
+test("URL-global-independent helper preserves supported WHATWG semantics and fail-closed restrictions", () => {
+  const vm = require("node:vm");
+  const factory = require("../src/workflow_factory");
+  const parent = factory.buildWorkflow();
+  const child = factory.buildAcquisitionWorkflow();
+
+  const urlNodes = [
+    parent.nodes.find(
+      (node) => node.name === "Validate Public Lite Dispatch",
+    ).parameters.jsCode,
+    child.nodes.find(
+      (node) => node.name === "Validate Acquisition Handoff Command",
+    ).parameters.jsCode,
+    child.nodes.find(
+      (node) => node.name === "Normalize Marketplace Limited Result",
+    ).parameters.jsCode,
+  ];
+
+  for (const code of urlNodes) {
+    assert.doesNotMatch(code, /\bnew\s+URL\s*\(/u);
+    assert.match(code, /function\s+parseHttpUrlWithoutGlobal\s*\(/u);
+  }
+
+  const validatorCodeValue = urlNodes[0];
+  const markerIndex = validatorCodeValue.indexOf("\n\nconst EXPECTED_KEYS");
+  assert.ok(markerIndex > 0);
+  const helperSource = validatorCodeValue.slice(0, markerIndex);
+
+  assert.equal(vm.runInNewContext("typeof URL", {}), "undefined");
+
+  const helper = vm.runInNewContext(
+    "(() => {\n" + helperSource +
+      "\nreturn parseHttpUrlWithoutGlobal;\n})()",
+    {},
+    {timeout: 1000},
+  );
+
+  function snapshotUrl(value) {
+    return {
+      protocol: value.protocol,
+      hostname: value.hostname,
+      port: value.port,
+      pathname: value.pathname,
+      search: value.search,
+      hash: value.hash,
+      username: value.username,
+      password: value.password,
+      href: value.toString(),
+    };
+  }
+
+  const supported = [
+    ["HTTPS://Example.COM:443/a/../b?x=1#frag", undefined],
+    ["http://example.com:80/", undefined],
+    ["../c?q=a%20b#f", "https://example.com/a/b/"],
+  ];
+
+  for (const [value, base] of supported) {
+    const expected = base === undefined ?
+      new URL(value) :
+      new URL(value, base);
+    const actual = base === undefined ?
+      helper(value) :
+      helper(value, base);
+    assert.deepEqual(snapshotUrl(actual), snapshotUrl(expected));
+  }
+
+  const actual = helper("https://example.com/a/b?x=1#old");
+  const expected = new URL("https://example.com/a/b?x=1#old");
+  actual.hostname = "sub.example.com";
+  expected.hostname = "sub.example.com";
+  actual.port = "8443";
+  expected.port = "8443";
+  actual.pathname = "/c/d";
+  expected.pathname = "/c/d";
+  actual.search = "?q=1&x=2";
+  expected.search = "?q=1&x=2";
+  actual.hash = "#frag";
+  expected.hash = "#frag";
+  assert.deepEqual(snapshotUrl(actual), snapshotUrl(expected));
+
+  assert.throws(
+    () => helper("https://user:pass@example.com/"),
+  );
+  assert.throws(
+    () => helper("ftp://example.com/"),
+  );
+});
