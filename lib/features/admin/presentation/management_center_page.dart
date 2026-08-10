@@ -647,6 +647,7 @@ class _ManagementModuleCard extends StatelessWidget {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
@@ -672,7 +673,6 @@ class _ManagementModuleCard extends StatelessWidget {
             description,
             style: const TextStyle(color: Color(0xFF687580), height: 1.5),
           ),
-          const Spacer(),
           Padding(
             padding: const EdgeInsets.only(top: 18),
             child: Row(
@@ -699,6 +699,22 @@ class _ManagementModuleCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Test-only public bridge to exercise the exact production module card
+/// under runtime layout constraints without widening the widget itself.
+Widget buildManagementModuleCardForTesting({
+  required String title,
+  required String description,
+  required IconData icon,
+  String actionLabel = 'Sıradaki aşamada etkinleştirilecek',
+}) {
+  return _ManagementModuleCard(
+    title: title,
+    description: description,
+    icon: icon,
+    actionLabel: actionLabel,
+  );
 }
 
 class _AccessMessage extends StatelessWidget {

@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/sponsor_content/data/sponsor_content_service.dart';
@@ -5,7 +8,23 @@ import 'package:markakalkan/features/sponsor_content/models/sponsor_content_entr
 
 typedef SponsorContentLoader = Future<List<SponsorContentEntry>> Function();
 typedef SponsorContentSaver =
-    Future<String> Function(SponsorContentEntry entry);
+    Future<String> Function(
+      SponsorContentEntry entry,
+      SponsorLogoUpload? logoUpload,
+      bool removeLogo,
+    );
+
+class _SponsorEditorResult {
+  const _SponsorEditorResult({
+    required this.entry,
+    required this.logoUpload,
+    required this.removeLogo,
+  });
+
+  final SponsorContentEntry entry;
+  final SponsorLogoUpload? logoUpload;
+  final bool removeLogo;
+}
 
 class SponsorContentAdminPage extends StatefulWidget {
   const SponsorContentAdminPage({super.key, this.loadEntries, this.saveEntry});
@@ -65,19 +84,27 @@ class _SponsorContentAdminPageState extends State<SponsorContentAdminPage> {
   }
 
   Future<void> _openEditor({SponsorContentEntry? entry}) async {
-    final draft = await showDialog<SponsorContentEntry>(
+    final result = await showDialog<_SponsorEditorResult>(
       context: context,
       builder: (context) => _SponsorEditorDialog(initial: entry),
     );
-    if (draft == null || !mounted) return;
+    if (result == null || !mounted) return;
 
-    await _save(draft);
+    await _save(
+      result.entry,
+      logoUpload: result.logoUpload,
+      removeLogo: result.removeLogo,
+    );
   }
 
-  Future<void> _save(SponsorContentEntry entry) async {
+  Future<void> _save(
+    SponsorContentEntry entry, {
+    SponsorLogoUpload? logoUpload,
+    bool removeLogo = false,
+  }) async {
     setState(() => _saving = true);
     try {
-      await _saver(entry);
+      await _saver(entry, logoUpload, removeLogo);
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -529,7 +556,12 @@ class _SponsorEditorDialogState extends State<_SponsorEditorDialog> {
     'other': 'Diğer',
   };
 
+  static const _maxLogoBytes = 2 * 1024 * 1024;
+
   final _formKey = GlobalKey<FormState>();
+
+  SponsorLogoUpload? _pickedLogo;
+  bool _removeLogo = false;
 
   late final TextEditingController _name;
   late final TextEditingController _website;
@@ -596,6 +628,160 @@ class _SponsorEditorDialogState extends State<_SponsorEditorDialog> {
     return DateTime.tryParse(text) == null ? 'Geçerli tarih girin.' : null;
   }
 
+  String? _mimeTypeForLogo(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return null;
+  }
+
+  void _showLogoMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _pickLogo() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const <String>['png', 'jpg', 'jpeg', 'webp'],
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty || !mounted) return;
+
+    final file = result.files.single;
+    final Uint8List? bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      _showLogoMessage('Logo dosyası okunamadı.');
+      return;
+    }
+    if (bytes.length > _maxLogoBytes) {
+      _showLogoMessage('Logo en fazla 2 MB olabilir.');
+      return;
+    }
+
+    final mimeType = _mimeTypeForLogo(file.name);
+    if (mimeType == null) {
+      _showLogoMessage('Yalnız PNG, JPEG veya WebP logo yüklenebilir.');
+      return;
+    }
+
+    setState(() {
+      _pickedLogo = SponsorLogoUpload(
+        bytes: bytes,
+        fileName: file.name,
+        mimeType: mimeType,
+      );
+      _removeLogo = false;
+      _logoUrl.clear();
+      if (_logoAlt.text.trim().isEmpty && _name.text.trim().isNotEmpty) {
+        _logoAlt.text = '${_name.text.trim()} logosu';
+      }
+    });
+  }
+
+  void _removeSelectedLogo() {
+    setState(() {
+      _pickedLogo = null;
+      _removeLogo = true;
+      _logoUrl.clear();
+    });
+  }
+
+  Widget _logoUploadPanel() {
+    final picked = _pickedLogo;
+    final hasExistingUrl =
+        !_removeLogo && picked == null && _logoUrl.text.trim().isNotEmpty;
+
+    return Container(
+      key: const ValueKey<String>('sponsor-editor-logo-upload'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD8E1E7)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 92,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F8FA),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: picked == null
+                ? Icon(
+                    hasExistingUrl
+                        ? Icons.image_outlined
+                        : Icons.add_photo_alternate_outlined,
+                    size: 32,
+                  )
+                : Image.memory(
+                    picked.bytes,
+                    fit: BoxFit.contain,
+                    width: 92,
+                    height: 72,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.broken_image_outlined, size: 32),
+                  ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  picked != null
+                      ? picked.fileName
+                      : hasExistingUrl
+                      ? 'Mevcut logo tanımlı'
+                      : 'Henüz logo seçilmedi',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'PNG, JPEG veya WebP • en fazla 2 MB',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey<String>('sponsor-editor-logo-pick'),
+                      onPressed: _pickLogo,
+                      icon: const Icon(Icons.upload_file_outlined),
+                      label: Text(
+                        picked == null ? 'Logo seç' : 'Logoyu değiştir',
+                      ),
+                    ),
+                    if (picked != null || hasExistingUrl)
+                      TextButton.icon(
+                        key: const ValueKey<String>(
+                          'sponsor-editor-logo-remove',
+                        ),
+                        onPressed: _removeSelectedLogo,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Logoyu kaldır'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _submit() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -622,20 +808,24 @@ class _SponsorEditorDialogState extends State<_SponsorEditorDialog> {
 
     final initial = widget.initial;
     Navigator.of(context).pop(
-      SponsorContentEntry(
-        id: initial?.id ?? '',
-        displayName: _name.text.trim(),
-        categoryCode: _categoryCode,
-        categoryLabel: _categoryLabels[_categoryCode] ?? 'Diğer',
-        websiteUrl: _website.text.trim(),
-        logoUrl: _logoUrl.text.trim(),
-        logoAlt: _logoAlt.text.trim(),
-        displayOrder: order,
-        status: _status,
-        startsAt: startsAt,
-        endsAt: endsAt,
-        createdAt: initial?.createdAt,
-        updatedAt: initial?.updatedAt,
+      _SponsorEditorResult(
+        entry: SponsorContentEntry(
+          id: initial?.id ?? '',
+          displayName: _name.text.trim(),
+          categoryCode: _categoryCode,
+          categoryLabel: _categoryLabels[_categoryCode] ?? 'Diğer',
+          websiteUrl: _website.text.trim(),
+          logoUrl: _logoUrl.text.trim(),
+          logoAlt: _logoAlt.text.trim(),
+          displayOrder: order,
+          status: _status,
+          startsAt: startsAt,
+          endsAt: endsAt,
+          createdAt: initial?.createdAt,
+          updatedAt: initial?.updatedAt,
+        ),
+        logoUpload: _pickedLogo,
+        removeLogo: _removeLogo,
       ),
     );
   }
@@ -688,15 +878,24 @@ class _SponsorEditorDialogState extends State<_SponsorEditorDialog> {
                   validator: _httpsUrl,
                 ),
                 const SizedBox(height: 12),
+                _logoUploadPanel(),
+                const SizedBox(height: 12),
                 TextFormField(
                   key: const ValueKey<String>('sponsor-editor-logo-url'),
                   controller: _logoUrl,
+                  enabled: _pickedLogo == null,
                   decoration: const InputDecoration(
-                    labelText: 'Logo adresi (HTTPS)',
+                    labelText: 'Gelişmiş: Logo adresi (HTTPS)',
                     helperText:
-                        'Dosya yükleme ayrıca etkinleştirilecek; şimdilik HTTPS URL.',
+                        'Dosya yüklemek yerine mevcut bir HTTPS logo adresi '
+                        'kullanmanız gerekirse bu alanı kullanın.',
                   ),
                   validator: _httpsUrl,
+                  onChanged: (value) {
+                    if (value.trim().isNotEmpty && _removeLogo) {
+                      setState(() => _removeLogo = false);
+                    }
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

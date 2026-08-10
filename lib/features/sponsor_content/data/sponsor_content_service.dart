@@ -1,5 +1,29 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:markakalkan/features/sponsor_content/models/sponsor_content_entry.dart';
+
+class SponsorLogoUpload {
+  const SponsorLogoUpload({
+    required this.bytes,
+    required this.fileName,
+    required this.mimeType,
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final String mimeType;
+
+  Map<String, dynamic> toPayload() {
+    return <String, dynamic>{
+      'fileName': fileName.trim(),
+      'mimeType': mimeType.trim().toLowerCase(),
+      'sizeBytes': bytes.length,
+      'base64Data': base64Encode(bytes),
+    };
+  }
+}
 
 class SponsorContentService {
   SponsorContentService({FirebaseFunctions? functions})
@@ -24,10 +48,22 @@ class SponsorContentService {
     return _entries(result.data);
   }
 
-  Future<String> upsertForAdmin(SponsorContentEntry entry) async {
+  Future<String> upsertForAdmin(
+    SponsorContentEntry entry,
+    SponsorLogoUpload? logoUpload,
+    bool removeLogo,
+  ) async {
+    final payload = entry.toAdminPayload();
+    if (logoUpload != null) {
+      payload['logoUpload'] = logoUpload.toPayload();
+    }
+    if (removeLogo) {
+      payload['removeLogo'] = true;
+    }
+
     final result = await _functions
         .httpsCallable('upsertSponsorContentForAdmin')
-        .call<Map<String, dynamic>>(entry.toAdminPayload());
+        .call<Map<String, dynamic>>(payload);
 
     return (result.data['sponsorId'] ?? '').toString().trim();
   }

@@ -36,6 +36,9 @@ void main() {
     expect(source, contains("'listPublicSponsorContent'"));
     expect(source, contains("'listSponsorContentForAdmin'"));
     expect(source, contains("'upsertSponsorContentForAdmin'"));
+    expect(source, contains("'logoUpload'"));
+    expect(source, contains("'removeLogo'"));
+    expect(source, contains('base64Encode(bytes)'));
   });
 
   test('backend is server-only and super-admin writes are enforced', () {
@@ -71,5 +74,28 @@ void main() {
     expect(index, contains('exports.listPublicSponsorContent'));
     expect(index, contains('exports.listSponsorContentForAdmin'));
     expect(index, contains('exports.upsertSponsorContentForAdmin'));
+  });
+  test('sponsor logo upload stays server-managed and rules-neutral', () {
+    final backend = File(
+      'functions/sponsor_content/v1/sponsor_content.js',
+    ).readAsStringSync();
+    final adminPage = File(
+      'lib/features/admin/presentation/sponsor_content_admin_page.dart',
+    ).readAsStringSync();
+    final storageRules = File('storage.rules').readAsStringSync();
+
+    expect(backend, contains('SPONSOR_LOGO_MAX_BYTES = 2 * 1024 * 1024'));
+    expect(backend, contains('admin.storage().bucket()'));
+    expect(backend, contains('firebaseStorageDownloadTokens'));
+    expect(backend, contains('platform/sponsors/'));
+    expect(backend, contains('normalizeSponsorLogoMutation'));
+    expect(adminPage, contains('FilePicker.pickFiles'));
+    expect(adminPage, contains("['png', 'jpg', 'jpeg', 'webp']"));
+    expect(adminPage, contains('Image.memory('));
+    expect(
+      adminPage,
+      isNot(contains('Dosya yükleme ayrıca etkinleştirilecek')),
+    );
+    expect(storageRules, isNot(contains('platform/sponsors/')));
   });
 }

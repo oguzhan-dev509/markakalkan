@@ -29,7 +29,7 @@ void main() {
       MaterialApp(
         home: SponsorContentAdminPage(
           loadEntries: () async => <SponsorContentEntry>[sample()],
-          saveEntry: (entry) async => entry.id,
+          saveEntry: (entry, logoUpload, removeLogo) async => entry.id,
         ),
       ),
     );
@@ -65,7 +65,7 @@ void main() {
       MaterialApp(
         home: SponsorContentAdminPage(
           loadEntries: () async => <SponsorContentEntry>[sample()],
-          saveEntry: (entry) async {
+          saveEntry: (entry, logoUpload, removeLogo) async {
             saved = entry;
             return entry.id;
           },
@@ -91,7 +91,7 @@ void main() {
       MaterialApp(
         home: SponsorContentAdminPage(
           loadEntries: () async => const <SponsorContentEntry>[],
-          saveEntry: (entry) async => 'new-id',
+          saveEntry: (entry, logoUpload, removeLogo) async => 'new-id',
         ),
       ),
     );
@@ -104,8 +104,18 @@ void main() {
 
     expect(find.text('Yeni sponsor ekle'), findsOneWidget);
     expect(
+      find.byKey(const ValueKey<String>('sponsor-editor-logo-upload')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('sponsor-editor-logo-pick')),
+      findsOneWidget,
+    );
+    expect(find.text('PNG, JPEG veya WebP • en fazla 2 MB'), findsOneWidget);
+    expect(
       find.byKey(const ValueKey<String>('sponsor-editor-logo-url')),
       findsOneWidget,
     );
+    expect(find.text('Gelişmiş: Logo adresi (HTTPS)'), findsOneWidget);
   });
 }

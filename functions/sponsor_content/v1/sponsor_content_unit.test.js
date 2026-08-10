@@ -5,7 +5,9 @@ const {
   COLLECTION,
   EVENTS,
   SCHEMA_VERSION,
+  SPONSOR_LOGO_MAX_BYTES,
   normalizeSponsorPayload,
+  normalizeSponsorLogoMutation,
   isPubliclyVisible,
   publicProjection,
 } = require("./sponsor_content");
@@ -102,4 +104,66 @@ test("public projection excludes internal actor fields", () => {
   assert.equal(projection.displayName, "Örnek");
   assert.equal("createdByUid" in projection, false);
   assert.equal("updatedByEmail" in projection, false);
+});
+
+test("normalizes PNG logo upload bytes", () => {
+  const bytes = Buffer.from([
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+  ]);
+  const result = normalizeSponsorLogoMutation({
+    logoUpload: {
+      fileName: "logo.png",
+      mimeType: "image/png",
+      sizeBytes: bytes.length,
+      base64Data: bytes.toString("base64"),
+    },
+  });
+
+  assert.equal(result.removeLogo, false);
+  assert.equal(result.upload.fileName, "logo.png");
+  assert.equal(result.upload.mimeType, "image/png");
+  assert.deepEqual(result.upload.bytes, bytes);
+});
+
+test("rejects spoofed sponsor logo MIME", () => {
+  const bytes = Buffer.from("not-a-png");
+  assert.throws(
+      () => normalizeSponsorLogoMutation({
+        logoUpload: {
+          fileName: "logo.png",
+          mimeType: "image/png",
+          sizeBytes: bytes.length,
+          base64Data: bytes.toString("base64"),
+        },
+      }),
+      (error) => error instanceof HttpsError &&
+        error.code === "invalid-argument",
+  );
+});
+
+test("rejects sponsor logo larger than 2 MiB", () => {
+  const bytes = Buffer.alloc(SPONSOR_LOGO_MAX_BYTES + 1, 0x00);
+  bytes.set(
+      [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+      0,
+  );
+
+  assert.throws(
+      () => normalizeSponsorLogoMutation({
+        logoUpload: {
+          fileName: "logo.png",
+          mimeType: "image/png",
+          sizeBytes: bytes.length,
+          base64Data: bytes.toString("base64"),
+        },
+      }),
+      (error) => error instanceof HttpsError &&
+        error.code === "invalid-argument",
+  );
+});
+
+test("normalizes explicit sponsor logo removal", () => {
+  const result = normalizeSponsorLogoMutation({removeLogo: true});
+  assert.equal(result.removeLogo, true);
+  assert.equal(result.upload, null);
 });
