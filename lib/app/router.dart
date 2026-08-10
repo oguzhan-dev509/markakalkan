@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:markakalkan/features/admin/presentation/management_center_page.dart';
+import 'package:markakalkan/features/admin/presentation/sponsor_content_admin_page.dart';
 import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
 import 'package:markakalkan/features/admin/presentation/counterfeit_twin_review_queue_page.dart';
 import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
@@ -74,6 +75,12 @@ abstract final class AppRouter {
   static Future<void> openManagementCenter(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const ManagementCenterPage()),
+    );
+  }
+
+  static Future<void> openSponsorContentAdmin(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SponsorContentAdminPage()),
     );
   }
 

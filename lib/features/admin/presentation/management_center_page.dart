@@ -251,6 +251,24 @@ class _AuthorizedManagementCenter extends StatelessWidget {
                       ),
                       GestureDetector(
                         key: const ValueKey<String>(
+                          'sponsor-content-admin-action',
+                        ),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => AppRouter.openSponsorContentAdmin(context),
+                        child: SizedBox(
+                          width: cardWidth,
+                          child: const _ManagementModuleCard(
+                            title: 'Sponsor / İş Ortakları',
+                            description:
+                                'Sponsorları, logoları, yayın durumunu, '
+                                'sıralamayı ve tarih aralıklarını yönetin.',
+                            icon: Icons.handshake_outlined,
+                            actionLabel: 'Sponsor yönetimini aç',
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        key: const ValueKey<String>(
                           'counterfeit-twin-admin-review-action',
                         ),
                         behavior: HitTestBehavior.opaque,

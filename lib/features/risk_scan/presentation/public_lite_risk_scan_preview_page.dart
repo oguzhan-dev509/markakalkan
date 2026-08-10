@@ -9,6 +9,7 @@ import 'package:markakalkan/features/risk_scan/data/public_lite_risk_scan_reposi
 import 'package:markakalkan/features/subscriptions/domain/subscription_request_models.dart';
 import 'package:markakalkan/features/subscriptions/presentation/broad_digital_scan_subscription_page.dart';
 import 'package:markakalkan/features/risk_scan/presentation/public_lite_risk_scan_controller.dart';
+import 'package:markakalkan/features/risk_scan/presentation/public_lite_sponsor_footer_section.dart';
 
 const Key publicLiteRiskScanBrandFieldKey = Key('publicLiteRiskScanBrandField');
 const Key publicLiteRiskScanWebsiteFieldKey = Key(
@@ -274,6 +275,8 @@ final class _PublicLiteRiskScanPreviewPageState
                             ],
                           ),
                         ),
+                        const SizedBox(height: 28),
+                        const PublicLiteSponsorFooterSection(),
                       ],
                     ),
                   ),

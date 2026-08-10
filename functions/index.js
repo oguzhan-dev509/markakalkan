@@ -186,6 +186,12 @@ const {
   buildAppendCaseEvidenceChainEvent,
 } = require("./case_evidence_center/v1");
 
+const {
+  buildListPublicSponsorContent,
+  buildListSponsorContentForAdmin,
+  buildUpsertSponsorContentForAdmin,
+} = require("./sponsor_content/v1/sponsor_content");
+
 setGlobalOptions({
   region: "europe-west3",
   maxInstances: 3,
@@ -512,3 +518,12 @@ const {
 exports.createSubscriptionServiceRequest =
   hrtSubBuildCreateSubscriptionServiceRequestCallable();
 // END HRT-SUB-1A SUBSCRIPTION REQUEST CALLABLE EXPORT
+
+exports.listPublicSponsorContent =
+    buildListPublicSponsorContent({db});
+
+exports.listSponsorContentForAdmin =
+    buildListSponsorContentForAdmin({db});
+
+exports.upsertSponsorContentForAdmin =
+    buildUpsertSponsorContentForAdmin({db, admin});
