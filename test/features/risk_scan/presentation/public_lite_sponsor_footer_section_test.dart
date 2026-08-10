@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,30 +60,47 @@ Future<void> pumpAt(
 }
 
 void main() {
-  testWidgets('empty data preserves approved six-slot fallback on desktop', (
-    tester,
-  ) async {
-    await pumpAt(
-      tester,
-      size: const Size(1440, 1200),
-      loader: () async => const <SponsorContentEntry>[],
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'empty data animates the approved six fallback slots on desktop',
+    (tester) async {
+      await pumpAt(
+        tester,
+        size: const Size(1440, 1200),
+        loader: () async => const <SponsorContentEntry>[],
+      );
+      await tester.pump();
+      await tester.pump();
 
-    expect(find.byKey(publicLiteSponsorFooterSectionKey), findsOneWidget);
-    expect(find.byKey(publicLiteSponsorStripKey), findsOneWidget);
-    expect(find.text('İş Ortaklarımız / Sponsorlarımız'), findsOneWidget);
-    expect(
-      find.text('Markanızı korumak için güç birliği yapıyoruz'),
-      findsOneWidget,
-    );
-    expect(find.text('Sponsor alanı'), findsNWidgets(6));
-    expect(find.text('Tüm iş ortaklarımızı görüntüle'), findsOneWidget);
-    expect(find.text('Siz de burada yer almak ister misiniz?'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.byKey(publicLiteSponsorFooterSectionKey), findsOneWidget);
+      expect(find.byKey(publicLiteSponsorStripKey), findsOneWidget);
+      expect(
+        find.byKey(const Key('publicLiteFallbackSponsorRail')),
+        findsOneWidget,
+      );
+      expect(find.text('İş Ortaklarımız / Sponsorlarımız'), findsOneWidget);
+      expect(
+        find.text('Markanızı korumak için güç birliği yapıyoruz'),
+        findsOneWidget,
+      );
+      expect(find.text('Sponsor alanı'), findsNWidgets(12));
+      expect(find.text('Tüm iş ortaklarımızı görüntüle'), findsOneWidget);
+      expect(
+        find.text('Siz de burada yer almak ister misiniz?'),
+        findsOneWidget,
+      );
 
-  testWidgets('empty data fallback remains overflow-free on mobile', (
+      final target = find.byKey(const Key('publicLiteFallbackSponsor-0-0'));
+      expect(target, findsOneWidget);
+      final before = tester.getTopLeft(target).dx;
+      await tester.pump(const Duration(seconds: 1));
+      final after = tester.getTopLeft(target).dx;
+
+      expect(after, lessThan(before));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('empty data animated fallback remains overflow-free on mobile', (
     tester,
   ) async {
     await pumpAt(
@@ -90,9 +108,70 @@ void main() {
       size: const Size(390, 1200),
       loader: () async => const <SponsorContentEntry>[],
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
+    expect(
+      find.byKey(const Key('publicLiteFallbackSponsorRail')),
+      findsOneWidget,
+    );
+    expect(find.text('Sponsor alanı'), findsNWidgets(12));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced motion keeps fallback slots static', (tester) async {
+    await pumpAt(
+      tester,
+      size: const Size(1200, 900),
+      reducedMotion: true,
+      loader: () async => const <SponsorContentEntry>[],
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('publicLiteFallbackSponsorRail')),
+      findsNothing,
+    );
     expect(find.text('Sponsor alanı'), findsNWidgets(6));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('fallback rail pauses on hover and resumes after pointer exit', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      size: const Size(1200, 900),
+      loader: () async => const <SponsorContentEntry>[],
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final rail = find.byKey(const Key('publicLiteFallbackSponsorRail'));
+    final target = find.byKey(const Key('publicLiteFallbackSponsor-0-0'));
+    expect(rail, findsOneWidget);
+    expect(target, findsOneWidget);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(rail));
+    await tester.pump();
+
+    final pausedBefore = tester.getTopLeft(target).dx;
+    await tester.pump(const Duration(seconds: 1));
+    final pausedAfter = tester.getTopLeft(target).dx;
+    expect(pausedAfter, closeTo(pausedBefore, 0.01));
+
+    await mouse.moveTo(Offset.zero);
+    await tester.pump();
+
+    final resumeBefore = tester.getTopLeft(target).dx;
+    await tester.pump(const Duration(seconds: 1));
+    final resumeAfter = tester.getTopLeft(target).dx;
+
+    expect(resumeAfter, lessThan(resumeBefore));
     expect(tester.takeException(), isNull);
   });
 
@@ -176,7 +255,11 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Sponsor alanı'), findsNWidgets(6));
+    expect(find.text('Sponsor alanı'), findsNWidgets(12));
+    expect(
+      find.byKey(const Key('publicLiteFallbackSponsorRail')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('publicLiteSponsorRail')), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -189,7 +272,8 @@ void main() {
       size: const Size(900, 900),
       loader: () async => const <SponsorContentEntry>[],
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     await tester.tap(find.byKey(publicLitePartnersButtonKey));
     await tester.pump();
@@ -219,7 +303,29 @@ void main() {
     expect(source, contains('disableAnimations'));
     expect(source, contains('accessibleNavigation'));
     expect(source, contains('entries.length >= 3'));
+    expect(source, contains('fallbackSlots.length >= 3'));
+    expect(source, contains('class _FallbackSponsorRail'));
+    expect(source, contains("Key('publicLiteFallbackSponsorRail')"));
   });
+
+  test(
+    'fallback motion uses layout-safe one-row rail with calibrated height',
+    () {
+      final source = File(
+        'lib/features/risk_scan/presentation/'
+        'public_lite_sponsor_footer_section.dart',
+      ).readAsStringSync();
+
+      expect(
+        source,
+        contains(
+          'final cardWidth = constraints.maxWidth >= 900 ? 220.0 : 190.0;',
+        ),
+      );
+      expect(source, contains('const railHeight = 132.0;'));
+      expect(source, isNot(contains('const cardHeight = 118.0;')));
+    },
+  );
 
   test('color polish contract uses distinct sponsor accents', () {
     final source = File(
@@ -245,7 +351,8 @@ void main() {
       size: const Size(1200, 900),
       loader: () async => const <SponsorContentEntry>[],
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     for (final text in <String>[
       'Turkcell',
@@ -259,5 +366,7 @@ void main() {
     ]) {
       expect(find.text(text), findsNothing);
     }
+
+    expect(tester.takeException(), isNull);
   });
 }

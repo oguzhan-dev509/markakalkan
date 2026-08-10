@@ -263,13 +263,18 @@ class _SponsorContentArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (entries.isEmpty) {
-      return _FallbackSponsorGrid(slots: fallbackSlots);
-    }
-
     final media = MediaQuery.maybeOf(context);
     final reducedMotion =
         media?.disableAnimations == true || media?.accessibleNavigation == true;
+
+    if (entries.isEmpty) {
+      final shouldAnimateFallback = fallbackSlots.length >= 3 && !reducedMotion;
+      if (!shouldAnimateFallback) {
+        return _FallbackSponsorGrid(slots: fallbackSlots);
+      }
+      return _FallbackSponsorRail(slots: fallbackSlots);
+    }
+
     final shouldAnimate = entries.length >= 3 && !reducedMotion;
 
     if (!shouldAnimate) {
@@ -313,6 +318,134 @@ class _FallbackSponsorGrid extends StatelessWidget {
                 ),
               ),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _FallbackSponsorRail extends StatefulWidget {
+  const _FallbackSponsorRail({required this.slots});
+
+  final List<_SponsorSlot> slots;
+
+  @override
+  State<_FallbackSponsorRail> createState() => _FallbackSponsorRailState();
+}
+
+class _FallbackSponsorRailState extends State<_FallbackSponsorRail>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _paused = false;
+
+  Duration get _period =>
+      Duration(seconds: (widget.slots.length * 9).clamp(32, 90).toInt());
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: _period)..repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FallbackSponsorRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.slots.length != widget.slots.length) {
+      _controller.duration = _period;
+      if (!_paused) {
+        _controller.repeat();
+      }
+    }
+  }
+
+  void _pause() {
+    if (_paused) return;
+    _paused = true;
+    _controller.stop(canceled: false);
+  }
+
+  void _resume() {
+    if (!_paused) return;
+    _paused = false;
+    _controller.repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth = constraints.maxWidth >= 900 ? 220.0 : 190.0;
+        const gap = 14.0;
+        const railHeight = 132.0;
+        final groupWidth = widget.slots.length * (cardWidth + gap);
+
+        Widget buildGroup(int groupIndex) {
+          return SizedBox(
+            width: groupWidth,
+            child: Row(
+              children: [
+                for (var index = 0; index < widget.slots.length; index++) ...[
+                  SizedBox(
+                    width: cardWidth,
+                    child: _SponsorSlotCard(
+                      key: Key('publicLiteFallbackSponsor-$index-$groupIndex'),
+                      slot: widget.slots[index],
+                    ),
+                  ),
+                  const SizedBox(width: gap),
+                ],
+              ],
+            ),
+          );
+        }
+
+        return Semantics(
+          container: true,
+          label: 'Sponsor alanları hareketli listesi',
+          child: MouseRegion(
+            onEnter: (_) => _pause(),
+            onExit: (_) => _resume(),
+            child: Focus(
+              onFocusChange: (focused) {
+                if (focused) {
+                  _pause();
+                } else {
+                  _resume();
+                }
+              },
+              child: SizedBox(
+                key: const Key('publicLiteFallbackSponsorRail'),
+                height: railHeight,
+                child: ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.centerLeft,
+                    minWidth: 0,
+                    maxWidth: double.infinity,
+                    child: SizedBox(
+                      width: groupWidth * 2,
+                      height: railHeight,
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, child) {
+                          return Transform.translate(
+                            offset: Offset(-_controller.value * groupWidth, 0),
+                            child: child,
+                          );
+                        },
+                        child: Row(children: [buildGroup(0), buildGroup(1)]),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         );
       },
     );

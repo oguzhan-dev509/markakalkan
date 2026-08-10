@@ -295,13 +295,18 @@ Future<PublicLiteRiskScanController> _pumpPreview(
 
   await tester.pumpWidget(
     MaterialApp(
-      home: PublicLiteRiskScanPreviewPage(
-        controller: controller,
-        requestIdFactory: () => '11111111-1111-4111-8111-111111111111',
-        clientNonceFactory: () => 'nonce-1',
-        isAuthenticated: isAuthenticated,
-        openSubscriptionLogin: openSubscriptionLogin,
-        openBroadDigitalScanSubscription: openBroadDigitalScanSubscription,
+      home: MediaQuery(
+        data: MediaQueryData.fromView(
+          tester.view,
+        ).copyWith(disableAnimations: true, accessibleNavigation: true),
+        child: PublicLiteRiskScanPreviewPage(
+          controller: controller,
+          requestIdFactory: () => '11111111-1111-4111-8111-111111111111',
+          clientNonceFactory: () => 'nonce-1',
+          isAuthenticated: isAuthenticated,
+          openSubscriptionLogin: openSubscriptionLogin,
+          openBroadDigitalScanSubscription: openBroadDigitalScanSubscription,
+        ),
       ),
     ),
   );
