@@ -674,6 +674,7 @@ class _DynamicSponsorCard extends StatelessWidget {
                   ? Image.network(
                       entry.logoUrl,
                       fit: BoxFit.contain,
+                      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                       semanticLabel: entry.logoAlt.trim().isEmpty
                           ? '${entry.displayName} logosu'
                           : entry.logoAlt,

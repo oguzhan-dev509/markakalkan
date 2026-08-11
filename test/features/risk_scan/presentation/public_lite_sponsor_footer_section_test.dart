@@ -369,4 +369,21 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  test(
+    'network sponsor logos enable HTML fallback when byte fetch is CORS-blocked',
+    () {
+      final source = File(
+        'lib/features/risk_scan/presentation/'
+        'public_lite_sponsor_footer_section.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('Image.network('));
+      expect(
+        source,
+        contains('webHtmlElementStrategy: WebHtmlElementStrategy.fallback'),
+      );
+      expect(source, contains('errorBuilder:'));
+    },
+  );
 }
