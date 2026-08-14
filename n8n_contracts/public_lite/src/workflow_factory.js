@@ -568,9 +568,60 @@ function safe(value, label, depth) {
   return output;
 }
 
+function normalizeWebhookJson(value, depth, state) {
+  if (depth > 8) fail("webhook body nesting too deep");
+  state.count += 1;
+  if (state.count > 5000) fail("webhook body is too complex");
+
+  if (value === null ||
+      typeof value === "string" ||
+      typeof value === "boolean") {
+    if (typeof value === "string" &&
+        Buffer.byteLength(value, "utf8") > 32768) {
+      fail("webhook body string is too large");
+    }
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      fail("webhook body contains an invalid number");
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length > 500) {
+      fail("webhook body array is too large");
+    }
+    return value.map(
+      (item) => normalizeWebhookJson(item, depth + 1, state));
+  }
+
+  if (typeof value !== "object") {
+    fail("webhook body contains an unsupported value");
+  }
+
+  const keys = Object.keys(value);
+  if (keys.length > 500) {
+    fail("webhook body has too many keys");
+  }
+
+  const output = Object.create(null);
+  for (const key of keys) {
+    if (Buffer.byteLength(key, "utf8") > 180) {
+      fail("webhook body key is too long");
+    }
+    output[key] = normalizeWebhookJson(
+      value[key], depth + 1, state);
+  }
+  return output;
+}
+
 const incoming = $input.first().json;
-const raw = incoming && plain(incoming.body) ?
-  incoming.body : incoming;
+const raw = incoming &&
+    Object.prototype.hasOwnProperty.call(incoming, "body") ?
+  normalizeWebhookJson(incoming.body, 0, {count: 0}) : incoming;
 exactKeys(raw, EXPECTED_KEYS, "dispatchEnvelope");
 if (raw.contractVersion !==
     "risk-scan-public-lite-dispatch-envelope-v1" ||
@@ -1340,9 +1391,60 @@ function safe(value, label, depth) {
   return output;
 }
 
+function normalizeWebhookJson(value, depth, state) {
+  if (depth > 8) fail("webhook body nesting too deep");
+  state.count += 1;
+  if (state.count > 5000) fail("webhook body is too complex");
+
+  if (value === null ||
+      typeof value === "string" ||
+      typeof value === "boolean") {
+    if (typeof value === "string" &&
+        Buffer.byteLength(value, "utf8") > 32768) {
+      fail("webhook body string is too large");
+    }
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      fail("webhook body contains an invalid number");
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length > 500) {
+      fail("webhook body array is too large");
+    }
+    return value.map(
+      (item) => normalizeWebhookJson(item, depth + 1, state));
+  }
+
+  if (typeof value !== "object") {
+    fail("webhook body contains an unsupported value");
+  }
+
+  const keys = Object.keys(value);
+  if (keys.length > 500) {
+    fail("webhook body has too many keys");
+  }
+
+  const output = Object.create(null);
+  for (const key of keys) {
+    if (Buffer.byteLength(key, "utf8") > 180) {
+      fail("webhook body key is too long");
+    }
+    output[key] = normalizeWebhookJson(
+      value[key], depth + 1, state);
+  }
+  return output;
+}
+
 const incoming = $input.first().json;
-const raw = incoming && plain(incoming.body) ?
-  incoming.body : incoming;
+const raw = incoming &&
+    Object.prototype.hasOwnProperty.call(incoming, "body") ?
+  normalizeWebhookJson(incoming.body, 0, {count: 0}) : incoming;
 exactKeys(raw, COMMAND_KEYS, "acquisitionCommand");
 if (raw.contractVersion !==
     "risk-scan-public-lite-acquisition-command-v1") {

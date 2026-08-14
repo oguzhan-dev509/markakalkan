@@ -1244,3 +1244,96 @@ test("URL-global-independent helper preserves supported WHATWG semantics and fai
     () => helper("ftp://example.com/"),
   );
 });
+// R0G-BE-V5 ingress normalization regression block
+const hrtBeV5Test = require("node:test");
+const hrtBeV5Assert = require("node:assert/strict");
+const hrtBeV5Vm = require("node:vm");
+const hrtBeV5Fs = require("node:fs");
+const hrtBeV5Path = require("node:path");
+const {webcrypto: hrtBeV5Webcrypto} = require("node:crypto");
+const {TextEncoder: HrtBeV5TextEncoder} = require("node:util");
+
+function hrtBeV5Workflow(fileName) {
+  return JSON.parse(hrtBeV5Fs.readFileSync(
+    hrtBeV5Path.join(__dirname, "..", "workflows", fileName), "utf8"));
+}
+function hrtBeV5NodeCode(workflow, name) {
+  const matches = workflow.nodes.filter((node) => node.name === name);
+  hrtBeV5Assert.equal(matches.length, 1);
+  hrtBeV5Assert.equal(typeof matches[0].parameters.jsCode, "string");
+  return matches[0].parameters.jsCode;
+}
+function hrtBeV5HostRecord() {
+  const base = Object.create(null);
+  const middle = Object.create(base);
+  return Object.create(middle);
+}
+function hrtBeV5HostifyDeep(value) {
+  if (Array.isArray(value)) return value.map((item) => hrtBeV5HostifyDeep(item));
+  if (value !== null && typeof value === "object") {
+    const output = hrtBeV5HostRecord();
+    for (const key of Object.keys(value)) output[key] = hrtBeV5HostifyDeep(value[key]);
+    return output;
+  }
+  return value;
+}
+function hrtBeV5HostWrapper(body) {
+  const wrapper = hrtBeV5HostRecord();
+  wrapper.body = body;
+  const headers = hrtBeV5HostRecord();
+  headers["content-type"] = "application/json";
+  wrapper.headers = headers;
+  wrapper.query = hrtBeV5HostRecord();
+  return wrapper;
+}
+function hrtBeV5Clone(value) { return JSON.parse(JSON.stringify(value)); }
+function hrtBeV5Execute(code, input) {
+  const context = {
+    Buffer, TextEncoder: HrtBeV5TextEncoder, URL, crypto: hrtBeV5Webcrypto,
+    $input: {first() { return {json: input}; }},
+    $execution: {id: "r0g-be-v5-local-test"},
+    $workflow: {id: "r0g-be-v5-local-workflow"},
+    $: (nodeName) => ({first() { throw new Error("unexpected node lookup: " + nodeName); }}),
+  };
+  return hrtBeV5Vm.runInNewContext(`(async()=>{\n${code}\n})()`, context, {timeout: 5000});
+}
+function hrtBeV5Codes() {
+  const parent = hrtBeV5Workflow("MarkaKalkan Public Lite Risk Scan Gateway - V1.json");
+  const child = hrtBeV5Workflow("MarkaKalkan Public Lite Risk Scan Acquisition Worker - V1.json");
+  return {
+    parent: hrtBeV5NodeCode(parent, "Validate Public Lite Dispatch"),
+    child: hrtBeV5NodeCode(child, "Validate Acquisition Handoff Command"),
+  };
+}
+
+hrtBeV5Test("ingress normalization accepts host-shaped parent and child webhook records", async () => {
+  const codes = hrtBeV5Codes();
+  const parentInput = hrtBeV5HostWrapper(hrtBeV5HostifyDeep(hrtBeV5Clone(validDispatch)));
+  const childInput = hrtBeV5HostWrapper(hrtBeV5HostifyDeep(hrtBeV5Clone(validAcquisitionCommand())));
+  const parentOutput = await hrtBeV5Execute(codes.parent, parentInput);
+  const childOutput = await hrtBeV5Execute(codes.child, childInput);
+  hrtBeV5Assert.equal(parentOutput.length, 1);
+  hrtBeV5Assert.equal(childOutput.length, 1);
+});
+
+hrtBeV5Test("ingress normalization preserves strict direct class-instance rejection", async () => {
+  const codes = hrtBeV5Codes();
+  class HrtBeV5DispatchClass {}
+  class HrtBeV5CommandClass {}
+  const dispatch = Object.assign(new HrtBeV5DispatchClass(), hrtBeV5Clone(validDispatch));
+  const command = Object.assign(new HrtBeV5CommandClass(), hrtBeV5Clone(validAcquisitionCommand()));
+  await hrtBeV5Assert.rejects(() => hrtBeV5Execute(codes.parent, dispatch), /dispatchEnvelope must be an object/u);
+  await hrtBeV5Assert.rejects(() => hrtBeV5Execute(codes.child, command), /acquisitionCommand must be an object/u);
+});
+
+hrtBeV5Test("ingress normalization rejects hostile non-envelope webhook bodies safely", async () => {
+  const {parent} = hrtBeV5Codes();
+  const protoPayload = hrtBeV5Clone(validDispatch);
+  Object.defineProperty(protoPayload, "__proto__", {value: {polluted: true}, enumerable: true, configurable: true, writable: true});
+  const cyclic = hrtBeV5Clone(validDispatch); cyclic.extra = cyclic;
+  for (const body of [new Date(0), new Map([["a", 1]]), [1, 2, 3], protoPayload, cyclic]) {
+    await hrtBeV5Assert.rejects(() => hrtBeV5Execute(parent, hrtBeV5HostWrapper(body)));
+  }
+  hrtBeV5Assert.equal(Object.prototype.polluted, undefined);
+  hrtBeV5Assert.equal(({}).polluted, undefined);
+});
