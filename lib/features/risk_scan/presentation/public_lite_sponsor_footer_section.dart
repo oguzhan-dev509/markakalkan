@@ -775,302 +775,207 @@ class _SponsorSlotCard extends StatelessWidget {
 class _PublicFooter extends StatelessWidget {
   const _PublicFooter();
 
-  static const _platform = <String>[
-    'Sahte İkiz Radarı',
-    'Yaratım Öncelik Sicili',
-    'Risk tarama hizmeti',
-    'Tüm modüller',
-  ];
-
-  static const _resources = <String>[
-    'Resmî kurumlar',
-    'Kılavuzlar',
-    'Sık sorulan sorular',
-    'Blog',
-  ];
-
-  static const _company = <String>[
-    'Hakkımızda',
-    'İletişim',
-    'Kariyer',
-    'Basın odası',
-  ];
-
-  static const _legal = <String>[
-    'Kullanım koşulları',
-    'Gizlilik politikası',
-    'Çerez politikası',
-    'KVKK Aydınlatma Metni',
-  ];
+  static const _navy = Color(0xFF102A43);
+  static const _navyDeep = Color(0xFF0B1F33);
+  static const _accent = Color(0xFF2F80ED);
+  static const _muted = Color(0xFFB9C7D5);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 860;
+    return Semantics(
+      container: true,
+      label: 'MarkaKalkan yasal bağlantıları',
+      child: Container(
+        key: const Key('publicLiteCompactLegalFooter'),
+        decoration: const BoxDecoration(
+          color: _navyDeep,
+          border: Border(
+            top: BorderSide(
+              color: _accent,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 760;
 
-            final brand = _BrandFooterBlock(
-              textColor: colorScheme.onSurfaceVariant,
-            );
-            final links = Wrap(
-              spacing: 34,
-              runSpacing: 24,
-              children: const [
-                _FooterColumn(title: 'Platform', items: _platform),
-                _FooterColumn(title: 'Kaynaklar', items: _resources),
-                _FooterColumn(title: 'Şirket', items: _company),
-                _FooterColumn(title: 'Yasal', items: _legal),
-              ],
-            );
-            const security = _SecurityPostureCard();
+              final brand = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _navy,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.shield_outlined,
+                      color: Colors.white,
+                      size: 19,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'MarkaKalkan',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                ],
+              );
 
-            if (compact) {
+              final legal = Wrap(
+                spacing: 9,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: const [
+                  _CompactLegalLabel('Kullanım koşulları'),
+                  _CompactLegalDot(),
+                  _CompactLegalLabel('Gizlilik politikası'),
+                  _CompactLegalDot(),
+                  _CompactLegalLabel('Çerez politikası'),
+                  _CompactLegalDot(),
+                  _CompactLegalLabel('KVKK Aydınlatma Metni'),
+                ],
+              );
+
+              final language = Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.language_outlined,
+                      color: _muted,
+                      size: 16,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Türkçe',
+                      style: TextStyle(
+                        color: _muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    brand,
+                    const SizedBox(height: 16),
+                    legal,
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '© 2026 MarkaKalkan. Tüm hakları saklıdır.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: _muted,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        language,
+                      ],
+                    ),
+                  ],
+                );
+              }
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  brand,
-                  const SizedBox(height: 26),
-                  links,
-                  const SizedBox(height: 26),
-                  security,
+                  Row(
+                    children: [
+                      brand,
+                      const Spacer(),
+                      language,
+                    ],
+                  ),
+                  const SizedBox(height: 17),
+                  Container(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.10),
+                  ),
+                  const SizedBox(height: 15),
+                  Row(
+                    children: [
+                      Expanded(child: legal),
+                      const SizedBox(width: 24),
+                      Text(
+                        '© 2026 MarkaKalkan. Tüm hakları saklıdır.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _muted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 230, child: brand),
-                const SizedBox(width: 30),
-                Expanded(child: links),
-                const SizedBox(width: 26),
-                const SizedBox(width: 230, child: _SecurityPostureCard()),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 26),
-        Divider(color: colorScheme.outlineVariant),
-        const SizedBox(height: 13),
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 16,
-          runSpacing: 12,
-          children: [
-            Text(
-              '© 2026 MarkaKalkan. Tüm hakları saklıdır.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.outlineVariant),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.language_outlined, size: 17),
-                    SizedBox(width: 7),
-                    Text('Türkçe'),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _BrandFooterBlock extends StatelessWidget {
-  const _BrandFooterBlock({required this.textColor});
-
-  final Color textColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: colorScheme.primaryContainer,
-              ),
-              child: Icon(Icons.shield_outlined, color: colorScheme.primary),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'MarkaKalkan',
-                  maxLines: 1,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Markanızı korumak, sahtecilikle mücadele etmek ve dijital '
-          'dünyada güvenliğinizi güçlendirmek için tasarlandı.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: textColor,
-            height: 1.5,
+            },
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _FooterColumn extends StatelessWidget {
-  const _FooterColumn({required this.title, required this.items});
-
-  final String title;
-  final List<String> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return SizedBox(
-      width: 150,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          for (final item in items) ...[
-            Text(
-              item,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ],
       ),
     );
   }
 }
 
-class _SecurityPostureCard extends StatelessWidget {
-  const _SecurityPostureCard();
+class _CompactLegalLabel extends StatelessWidget {
+  const _CompactLegalLabel(this.label);
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outlineVariant),
-        color: colorScheme.surfaceContainerLowest,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Güvenlik ve gizlilik yaklaşımı',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 13),
-          const _SecurityRow(
-            icon: Icons.lock_outline,
-            title: 'Güvenli tasarım',
-            subtitle: 'Erişim ve veri minimizasyonu',
-          ),
-          const SizedBox(height: 12),
-          const _SecurityRow(
-            icon: Icons.policy_outlined,
-            title: 'Gizlilik ilkeleri',
-            subtitle: 'KVKK ve GDPR odaklı yaklaşım',
-          ),
-        ],
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Colors.white.withValues(alpha: 0.88),
+        fontWeight: FontWeight.w600,
       ),
     );
   }
 }
 
-class _SecurityRow extends StatelessWidget {
-  const _SecurityRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
+class _CompactLegalDot extends StatelessWidget {
+  const _CompactLegalDot();
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 22, color: colorScheme.primary),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return Text(
+      '•',
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.32),
+        fontSize: 11,
+      ),
     );
   }
 }

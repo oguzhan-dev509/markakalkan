@@ -1869,20 +1869,506 @@ class _ProtectionItem extends StatelessWidget {
 }
 
 class _Footer extends StatelessWidget {
+  const _Footer();
+
+  static const _background = Color(0xFF071B2C);
+  static const _panel = Color(0xFF102A43);
+  static const _accent = Color(0xFF2F80ED);
+  static const _muted = Color(0xFFB9C7D5);
+  static const _soft = Color(0xFFE8EEF4);
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: MarkaKalkanTheme.navy,
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 26),
-      child: const Center(
-        child: Text(
-          'MarkaKalkan • Dijital Ürün Kimliği ve Marka Koruma Platformu',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Color(0xFFB8C7CF)),
+      key: const Key('homeCorporateFooter'),
+      decoration: const BoxDecoration(
+        color: _background,
+        border: Border(
+          top: BorderSide(
+            color: _accent,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 40, 28, 26),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 860;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _HomeTrustSecurityPanel(),
+                    const SizedBox(height: 34),
+                    if (compact)
+                      const _HomeCorporateFooterCompact()
+                    else
+                      const _HomeCorporateFooterWide(),
+                    const SizedBox(height: 30),
+                    Container(
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.10),
+                    ),
+                    const SizedBox(height: 18),
+                    const _HomeCorporateFooterBottom(),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+class _HomeTrustSecurityPanel extends StatelessWidget {
+  const _HomeTrustSecurityPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      key: const Key('homeTrustSecurityPanel'),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: _Footer._panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.10),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+
+          final intro = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Güvenlik ve gizlilik yaklaşımı',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'MarkaKalkan, güvenliği ve veri minimizasyonunu ürün '
+                'mimarisinin temel bileşenleri olarak ele alır.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _Footer._muted,
+                  height: 1.55,
+                ),
+              ),
+            ],
+          );
+
+          const principles = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HomeTrustChip('Güvenli tasarım'),
+              _HomeTrustChip('Erişim ve veri minimizasyonu'),
+              _HomeTrustChip('Gizlilik ilkeleri'),
+              _HomeTrustChip('KVKK ve GDPR odaklı yaklaşım'),
+            ],
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                intro,
+                const SizedBox(height: 18),
+                principles,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(flex: 5, child: intro),
+              const SizedBox(width: 34),
+              const Expanded(flex: 5, child: principles),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HomeTrustChip extends StatelessWidget {
+  const _HomeTrustChip(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 11,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.11),
+        ),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: _Footer._soft,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCorporateFooterWide extends StatelessWidget {
+  const _HomeCorporateFooterWide();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Expanded(
+          flex: 6,
+          child: _HomeCorporateBrandBlock(),
+        ),
+        const SizedBox(width: 42),
+        Expanded(
+          flex: 10,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _HomePlatformColumn()),
+              const SizedBox(width: 24),
+              const Expanded(
+                child: _HomeFooterColumn(
+                  title: 'Kaynaklar',
+                  items: [
+                    _HomeFooterItemData('Resmî kurumlar'),
+                    _HomeFooterItemData('Kılavuzlar'),
+                    _HomeFooterItemData('Sık sorulan sorular'),
+                    _HomeFooterItemData('Blog'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              const Expanded(
+                child: _HomeFooterColumn(
+                  title: 'Şirket',
+                  items: [
+                    _HomeFooterItemData('Hakkımızda'),
+                    _HomeFooterItemData('İletişim'),
+                    _HomeFooterItemData('Kariyer'),
+                    _HomeFooterItemData('Basın odası'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              const Expanded(
+                child: _HomeFooterColumn(
+                  title: 'Yasal',
+                  items: [
+                    _HomeFooterItemData('Kullanım koşulları'),
+                    _HomeFooterItemData('Gizlilik politikası'),
+                    _HomeFooterItemData('Çerez politikası'),
+                    _HomeFooterItemData('KVKK Aydınlatma Metni'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeCorporateFooterCompact extends StatelessWidget {
+  const _HomeCorporateFooterCompact();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _HomeCorporateBrandBlock(),
+        SizedBox(height: 30),
+        _HomePlatformColumn(),
+        SizedBox(height: 26),
+        _HomeFooterColumn(
+          title: 'Kaynaklar',
+          items: [
+            _HomeFooterItemData('Resmî kurumlar'),
+            _HomeFooterItemData('Kılavuzlar'),
+            _HomeFooterItemData('Sık sorulan sorular'),
+            _HomeFooterItemData('Blog'),
+          ],
+        ),
+        SizedBox(height: 26),
+        _HomeFooterColumn(
+          title: 'Şirket',
+          items: [
+            _HomeFooterItemData('Hakkımızda'),
+            _HomeFooterItemData('İletişim'),
+            _HomeFooterItemData('Kariyer'),
+            _HomeFooterItemData('Basın odası'),
+          ],
+        ),
+        SizedBox(height: 26),
+        _HomeFooterColumn(
+          title: 'Yasal',
+          items: [
+            _HomeFooterItemData('Kullanım koşulları'),
+            _HomeFooterItemData('Gizlilik politikası'),
+            _HomeFooterItemData('Çerez politikası'),
+            _HomeFooterItemData('KVKK Aydınlatma Metni'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeCorporateBrandBlock extends StatelessWidget {
+  const _HomeCorporateBrandBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _Footer._panel,
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
+              ),
+              child: const Icon(
+                Icons.shield_outlined,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'MarkaKalkan',
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Markanızı korumak, sahtecilikle mücadele etmek ve dijital '
+          'dünyada güvenliğinizi güçlendirmek için tasarlandı.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: _Footer._muted,
+            height: 1.6,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomePlatformColumn extends StatelessWidget {
+  const _HomePlatformColumn();
+
+  @override
+  Widget build(BuildContext context) {
+    return _HomeFooterColumn(
+      title: 'Platform',
+      items: [
+        _HomeFooterItemData(
+          'Sahte İkiz Radarı',
+          onTap: () => AppRouter.openCounterfeitTwinPublicRadar(context),
+        ),
+        _HomeFooterItemData(
+          'Yaratım Öncelik Sicili',
+          onTap: () => AppRouter.openIpCreationPriorityRegistry(context),
+        ),
+        _HomeFooterItemData(
+          'Risk tarama hizmeti',
+          onTap: () => AppRouter.openPublicLiteRiskScan(context),
+        ),
+        const _HomeFooterItemData('Tüm modüller'),
+      ],
+    );
+  }
+}
+
+class _HomeFooterColumn extends StatelessWidget {
+  const _HomeFooterColumn({
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<_HomeFooterItemData> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 13),
+        for (final item in items) ...[
+          _HomeFooterLink(item: item),
+          const SizedBox(height: 9),
+        ],
+      ],
+    );
+  }
+}
+
+class _HomeFooterLink extends StatelessWidget {
+  const _HomeFooterLink({
+    required this.item,
+  });
+
+  final _HomeFooterItemData item;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Text(
+      item.label,
+      style: TextStyle(
+        color: item.onTap == null
+            ? _Footer._muted
+            : Colors.white.withValues(alpha: 0.92),
+        fontSize: 13,
+        fontWeight: item.onTap == null
+            ? FontWeight.w500
+            : FontWeight.w600,
+        height: 1.35,
+      ),
+    );
+
+    if (item.onTap == null) {
+      return label;
+    }
+
+    return Semantics(
+      link: true,
+      button: true,
+      label: item.label,
+      child: InkWell(
+        onTap: item.onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: label),
+              const SizedBox(width: 5),
+              const Icon(
+                Icons.arrow_outward_rounded,
+                size: 13,
+                color: _Footer._accent,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCorporateFooterBottom extends StatelessWidget {
+  const _HomeCorporateFooterBottom();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 700;
+
+        final copyright = Text(
+          '© 2026 MarkaKalkan. Tüm hakları saklıdır.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: _Footer._muted,
+          ),
+        );
+
+        final platform = Text(
+          'Dijital Ürün Kimliği ve Marka Koruma Platformu',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: _Footer._muted,
+          ),
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              copyright,
+              const SizedBox(height: 7),
+              platform,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: copyright),
+            const SizedBox(width: 24),
+            platform,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HomeFooterItemData {
+  const _HomeFooterItemData(
+    this.label, {
+    this.onTap,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
 }
 
 class _FeatureData {
