@@ -123,6 +123,13 @@ class HomeSolutionFamiliesSection extends StatelessWidget {
             destination: _Destination.brandDetective,
           ),
           _ModuleData(
+            icon: Icons.local_shipping_outlined,
+            title: 'Kaçakçılık, Taklit ve Gümrük Güvenliği',
+            description:
+                'Markanızı sınırda, gümrük süreçlerinde ve resmî kurumlar nezdinde koruyun.',
+            destination: _Destination.customsSecurity,
+          ),
+          _ModuleData(
             icon: Icons.fact_check_outlined,
             title: 'Vaka ve Delil Merkezi',
             description:
@@ -436,6 +443,8 @@ class _ModuleTileState extends State<_ModuleTile> {
         return AppRouter.openCounterfeitTwinRegistry(context);
       case _Destination.brandDetective:
         return AppRouter.openBrandDetectiveHub(context);
+      case _Destination.customsSecurity:
+        return AppRouter.openCustomsSecurityHub(context);
       case _Destination.caseEvidence:
         return AppRouter.openVakaKanitRaporu(context);
       case _Destination.supplySecurity:
@@ -562,6 +571,7 @@ enum _Destination {
   publicRadar,
   counterfeitRegistry,
   brandDetective,
+  customsSecurity,
   caseEvidence,
   supplySecurity,
   traceability,
