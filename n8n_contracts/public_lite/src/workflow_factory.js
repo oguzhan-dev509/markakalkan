@@ -666,40 +666,44 @@ const expiresAt = iso(raw.expiresAt, "expiresAt");
 if (Date.parse(expiresAt) <= Date.parse(requestedAt)) {
   fail("dispatch is expired");
 }
-const envelope = safe({
-  contractVersion:
-    "risk-scan-public-lite-dispatch-envelope-v1",
-  executionId,
-  scanRunId,
-  scanMode: "quick",
-  accessTier: "publicLite",
-  identityMode: "anonymous",
-  target: {
-    brandNameNormalized: text(
-      raw.target.brandNameNormalized,
-      "target.brandNameNormalized",
-      300,
-    ),
-    officialHost,
-    officialWebsiteCanonicalUrl: officialUrl.toString(),
-    targetFingerprintSha256: sha(
-      raw.target.targetFingerprintSha256,
-      "target.targetFingerprintSha256",
-    ),
-  },
-  channelCodes: [...CHANNELS],
-  requestedAt,
-  expiresAt,
-  trace: {
-    sourceEventId: text(
-      raw.trace.sourceEventId, "trace.sourceEventId", 512),
-    requestId: text(raw.trace.requestId, "trace.requestId", 180),
-    requestFingerprintSha256: sha(
-      raw.trace.requestFingerprintSha256,
-      "trace.requestFingerprintSha256",
-    ),
-  },
-}, "dispatchEnvelope", 0);
+const canonicalTarget = Object.create(null);
+canonicalTarget.brandNameNormalized = text(
+  raw.target.brandNameNormalized,
+  "target.brandNameNormalized",
+  300,
+);
+canonicalTarget.officialHost = officialHost;
+canonicalTarget.officialWebsiteCanonicalUrl = officialUrl.toString();
+canonicalTarget.targetFingerprintSha256 = sha(
+  raw.target.targetFingerprintSha256,
+  "target.targetFingerprintSha256",
+);
+
+const canonicalTrace = Object.create(null);
+canonicalTrace.sourceEventId = text(
+  raw.trace.sourceEventId, "trace.sourceEventId", 512);
+canonicalTrace.requestId = text(
+  raw.trace.requestId, "trace.requestId", 180);
+canonicalTrace.requestFingerprintSha256 = sha(
+  raw.trace.requestFingerprintSha256,
+  "trace.requestFingerprintSha256",
+);
+
+const canonicalEnvelope = Object.create(null);
+canonicalEnvelope.contractVersion =
+  "risk-scan-public-lite-dispatch-envelope-v1";
+canonicalEnvelope.executionId = executionId;
+canonicalEnvelope.scanRunId = scanRunId;
+canonicalEnvelope.scanMode = "quick";
+canonicalEnvelope.accessTier = "publicLite";
+canonicalEnvelope.identityMode = "anonymous";
+canonicalEnvelope.target = canonicalTarget;
+canonicalEnvelope.channelCodes = [...CHANNELS];
+canonicalEnvelope.requestedAt = requestedAt;
+canonicalEnvelope.expiresAt = expiresAt;
+canonicalEnvelope.trace = canonicalTrace;
+
+const envelope = safe(canonicalEnvelope, "dispatchEnvelope", 0);
 return [{json: {dispatchEnvelope: envelope}}];`;
 }
 

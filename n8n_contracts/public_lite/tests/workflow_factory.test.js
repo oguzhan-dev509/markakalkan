@@ -1337,3 +1337,58 @@ hrtBeV5Test("ingress normalization rejects hostile non-envelope webhook bodies s
   hrtBeV5Assert.equal(Object.prototype.polluted, undefined);
   hrtBeV5Assert.equal(({}).polluted, undefined);
 });
+// R0G-BE-V5.24 parent canonical null-prototype regression block
+hrtBeV5Test(
+    "parent canonical envelope survives skewed object prototype identity without relaxing raw input gate",
+    async () => {
+      const {parent} = hrtBeV5Codes();
+      const parentInput = hrtBeV5HostWrapper(
+          hrtBeV5HostifyDeep(hrtBeV5Clone(validDispatch)));
+
+      const nativeObject = Object;
+      const sentinelBase = {};
+      const sentinel = Object.create(sentinelBase);
+      const skewedObject = {
+        create: nativeObject.create.bind(nativeObject),
+        keys: nativeObject.keys.bind(nativeObject),
+        getPrototypeOf(value) {
+          const prototype = Reflect.getPrototypeOf(value);
+          if (prototype === null) return null;
+          if (Reflect.getPrototypeOf(prototype) === null) {
+            return sentinel;
+          }
+          return prototype;
+        },
+        prototype: nativeObject.prototype,
+      };
+
+      const context = {
+        Buffer,
+        TextEncoder: HrtBeV5TextEncoder,
+        URL,
+        crypto: hrtBeV5Webcrypto,
+        Object: skewedObject,
+        $input: {first() { return {json: parentInput}; }},
+        $execution: {id: "r0g-be-v5-24-local-test"},
+        $workflow: {id: "r0g-be-v5-24-local-workflow"},
+        $: (nodeName) => ({
+          first() {
+            throw new Error("unexpected node lookup: " + nodeName);
+          },
+        }),
+      };
+
+      const output = await hrtBeV5Vm.runInNewContext(
+          `(async()=>{\n${parent}\n})()`,
+          context,
+          {timeout: 5000});
+
+      hrtBeV5Assert.equal(output.length, 1);
+      hrtBeV5Assert.equal(
+          output[0].json.dispatchEnvelope.contractVersion,
+          "risk-scan-public-lite-dispatch-envelope-v1");
+      hrtBeV5Assert.equal(
+          output[0].json.dispatchEnvelope.scanRunId,
+          validDispatch.scanRunId);
+    },
+);
