@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
+import 'package:markakalkan/features/intervention_legal/data/intervention_legal_command_repository.dart';
 import 'package:markakalkan/features/intervention_legal/presentation/intervention_legal_hub_page.dart';
 import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 
@@ -376,6 +377,284 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'injected workspace without command repository remains command-disabled',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final workspace = _Mhl3b3WorkspaceRepository(_snapshot());
+
+      await tester.pumpWidget(
+        MaterialApp(home: InterventionLegalHubPage(repository: workspace)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(workspace.callCount, 1);
+      expect(
+        find.byKey(const ValueKey<String>('legal-matter-command-panel-lm-1')),
+        findsNothing,
+      );
+      expect(find.text('Hukuki işlemler'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'existing matter command surface renders without executing a command',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final workspace = _Mhl3b3WorkspaceRepository(_snapshot());
+      final commands = _Mhl3b3RecordingCommandRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: workspace,
+            commandRepository: commands,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('legal-matter-command-panel-lm-1')),
+        findsOneWidget,
+      );
+      expect(commands.totalCalls, 0);
+      expect(find.text('Yeni hukuki dosya'), findsNothing);
+      expect(workspace.callCount, 1);
+    },
+  );
+
+  testWidgets(
+    'matter transition executes only after explicit submit and reloads workspace',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final workspace = _Mhl3b3WorkspaceRepository(_snapshot());
+      final commands = _Mhl3b3RecordingCommandRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: workspace,
+            commandRepository: commands,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final statusField = find.byKey(
+        const ValueKey<String>('mhl-transition-status-lm-1'),
+      );
+      await tester.ensureVisible(statusField);
+      await tester.tap(statusField);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .byKey(
+              const ValueKey<String>(
+                'mhl-transition-option-lm-1-evidence_required',
+              ),
+            )
+            .last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('mhl-transition-reason-lm-1')),
+        'evidence_gap_identified',
+      );
+
+      expect(commands.transitionCalls, 0);
+
+      final submit = find.byKey(
+        const ValueKey<String>('mhl-transition-submit-lm-1'),
+      );
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(commands.transitionCalls, 1);
+      expect(commands.lastTransitionContext?.legalMatterId, 'lm-1');
+      expect(commands.lastTransitionContext?.expectedVersion, 2);
+      expect(commands.lastTransitionInput?.nextStatus, 'evidence_required');
+      expect(
+        commands.lastTransitionInput?.reasonCode,
+        'evidence_gap_identified',
+      );
+      expect(workspace.callCount, 2);
+      expect(commands.createMatterCalls, 0);
+    },
+  );
+
+  testWidgets(
+    'approval request uses matter id and version only after explicit submit',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final workspace = _Mhl3b3WorkspaceRepository(_snapshot());
+      final commands = _Mhl3b3RecordingCommandRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: workspace,
+            commandRepository: commands,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final typeField = find.byKey(
+        const ValueKey<String>('mhl-approval-type-lm-1'),
+      );
+      await tester.ensureVisible(typeField);
+      await tester.tap(typeField);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .byKey(
+              const ValueKey<String>(
+                'mhl-approval-type-option-lm-1-client_action_authorization',
+              ),
+            )
+            .last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('mhl-approval-reason-lm-1')),
+        'external_action_required',
+      );
+
+      expect(commands.approvalRequestCalls, 0);
+
+      final submit = find.byKey(
+        const ValueKey<String>('mhl-approval-submit-lm-1'),
+      );
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(commands.approvalRequestCalls, 1);
+      expect(commands.lastApprovalRequestContext?.legalMatterId, 'lm-1');
+      expect(
+        commands.lastApprovalRequestContext?.expectedLegalMatterVersion,
+        2,
+      );
+      expect(
+        commands.lastApprovalRequestInput?.approvalType,
+        'client_action_authorization',
+      );
+      expect(
+        commands.lastApprovalRequestInput?.requestReasonCode,
+        'external_action_required',
+      );
+      expect(workspace.callCount, 2);
+      expect(commands.createMatterCalls, 0);
+    },
+  );
+
+  testWidgets(
+    'approval decision is pending-only and requires immutable confirmation',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+
+      final approvedWorkspace = _Mhl3b3WorkspaceRepository(_snapshot());
+      final approvedCommands = _Mhl3b3RecordingCommandRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            key: const ValueKey<String>('approved-workspace'),
+            repository: approvedWorkspace,
+            commandRepository: approvedCommands,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('mhl-approval-evaluate-lar-1')),
+        findsNothing,
+      );
+      expect(approvedCommands.approvalDecisionCalls, 0);
+
+      final pendingWorkspace = _Mhl3b3WorkspaceRepository(
+        _snapshot(approvalStatus: 'pending'),
+      );
+      final pendingCommands = _Mhl3b3RecordingCommandRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            key: const ValueKey<String>('pending-workspace'),
+            repository: pendingWorkspace,
+            commandRepository: pendingCommands,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final evaluate = find.byKey(
+        const ValueKey<String>('mhl-approval-evaluate-lar-1'),
+      );
+      await tester.ensureVisible(evaluate);
+      expect(evaluate, findsOneWidget);
+      await tester.tap(evaluate);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('değiştirilemez kayıt'), findsOneWidget);
+      expect(pendingCommands.approvalDecisionCalls, 0);
+
+      final decisionField = find.byKey(
+        const ValueKey<String>('mhl-decision-value-lar-1'),
+      );
+      await tester.tap(decisionField);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mhl-decision-option-approved')).last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('mhl-decision-reason-lar-1')),
+        'client_confirmed',
+      );
+
+      expect(pendingCommands.approvalDecisionCalls, 0);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mhl-decision-confirm-lar-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(pendingCommands.approvalDecisionCalls, 1);
+      expect(
+        pendingCommands.lastApprovalDecisionContext?.approvalRequestId,
+        'lar-1',
+      );
+      expect(
+        pendingCommands.lastApprovalDecisionContext?.legalMatterId,
+        'lm-1',
+      );
+      expect(
+        pendingCommands.lastApprovalDecisionContext?.approvalType,
+        'client_action_authorization',
+      );
+      expect(
+        pendingCommands
+            .lastApprovalDecisionContext
+            ?.expectedApprovalRequestVersion,
+        2,
+      );
+      expect(pendingCommands.lastApprovalDecisionInput?.decision, 'approved');
+      expect(
+        pendingCommands.lastApprovalDecisionInput?.decisionReasonCode,
+        'client_confirmed',
+      );
+      expect(pendingWorkspace.callCount, 2);
+      expect(pendingCommands.createMatterCalls, 0);
+    },
+  );
 }
 
 Future<void> _setDeterministicTestSurface(WidgetTester tester) async {
@@ -443,12 +722,14 @@ final class _RetryWorkspaceRepository
   }
 }
 
-InterventionLegalWorkspaceSnapshot _snapshot() {
+InterventionLegalWorkspaceSnapshot _snapshot({
+  String approvalStatus = 'approved',
+}) {
   final request = InterventionLegalApprovalRequestSummary(
     approvalRequestId: 'lar-1',
     legalMatterId: 'lm-1',
     approvalType: 'client_action_authorization',
-    status: 'approved',
+    status: approvalStatus,
     version: 2,
     requestSequence: 2,
     requestReasonCode: 'legal_action_authorization_required',
@@ -510,4 +791,99 @@ InterventionLegalWorkspaceSnapshot _snapshot() {
     ),
     matters: [matter],
   );
+}
+
+final class _Mhl3b3WorkspaceRepository
+    implements InterventionLegalWorkspaceRepository {
+  _Mhl3b3WorkspaceRepository(this.snapshot);
+
+  final InterventionLegalWorkspaceSnapshot snapshot;
+  int callCount = 0;
+
+  @override
+  Future<InterventionLegalWorkspaceSnapshot> loadWorkspace({
+    int limit = 20,
+  }) async {
+    callCount += 1;
+    return snapshot;
+  }
+}
+
+final class _Mhl3b3RecordingCommandRepository
+    implements InterventionLegalCommandRepository {
+  int createMatterCalls = 0;
+  int transitionCalls = 0;
+  int approvalRequestCalls = 0;
+  int approvalDecisionCalls = 0;
+
+  InterventionLegalMatterVersionContext? lastTransitionContext;
+  InterventionLegalTransitionInput? lastTransitionInput;
+  InterventionLegalApprovalRequestContext? lastApprovalRequestContext;
+  InterventionLegalApprovalRequestInput? lastApprovalRequestInput;
+  InterventionLegalApprovalDecisionContext? lastApprovalDecisionContext;
+  InterventionLegalApprovalDecisionInput? lastApprovalDecisionInput;
+
+  int get totalCalls =>
+      createMatterCalls +
+      transitionCalls +
+      approvalRequestCalls +
+      approvalDecisionCalls;
+
+  @override
+  Future<InterventionLegalCommandResponse> createLegalMatter({
+    required InterventionLegalCreateMatterContext context,
+    required InterventionLegalCreateMatterInput input,
+  }) async {
+    createMatterCalls += 1;
+    return const InterventionLegalCommandResponse(
+      resultType: 'legal_matter',
+      idempotentReplay: false,
+      data: <String, dynamic>{},
+    );
+  }
+
+  @override
+  Future<InterventionLegalCommandResponse> transitionLegalMatter({
+    required InterventionLegalMatterVersionContext context,
+    required InterventionLegalTransitionInput input,
+  }) async {
+    transitionCalls += 1;
+    lastTransitionContext = context;
+    lastTransitionInput = input;
+    return const InterventionLegalCommandResponse(
+      resultType: 'legal_matter',
+      idempotentReplay: false,
+      data: <String, dynamic>{},
+    );
+  }
+
+  @override
+  Future<InterventionLegalCommandResponse> createApprovalRequest({
+    required InterventionLegalApprovalRequestContext context,
+    required InterventionLegalApprovalRequestInput input,
+  }) async {
+    approvalRequestCalls += 1;
+    lastApprovalRequestContext = context;
+    lastApprovalRequestInput = input;
+    return const InterventionLegalCommandResponse(
+      resultType: 'legal_approval_request',
+      idempotentReplay: false,
+      data: <String, dynamic>{},
+    );
+  }
+
+  @override
+  Future<InterventionLegalCommandResponse> recordApprovalDecision({
+    required InterventionLegalApprovalDecisionContext context,
+    required InterventionLegalApprovalDecisionInput input,
+  }) async {
+    approvalDecisionCalls += 1;
+    lastApprovalDecisionContext = context;
+    lastApprovalDecisionInput = input;
+    return const InterventionLegalCommandResponse(
+      resultType: 'legal_approval_decision',
+      idempotentReplay: false,
+      data: <String, dynamic>{},
+    );
+  }
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
+import 'package:markakalkan/features/intervention_legal/data/intervention_legal_command_repository.dart';
 import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 
 typedef InterventionLegalLoginOpener =
@@ -17,6 +18,7 @@ class InterventionLegalHubPage extends StatefulWidget {
   const InterventionLegalHubPage({
     super.key,
     this.repository,
+    this.commandRepository,
     this.authenticationChanges,
     this.loginOpener,
     this.authenticationResolver,
@@ -24,6 +26,7 @@ class InterventionLegalHubPage extends StatefulWidget {
   });
 
   final InterventionLegalWorkspaceRepository? repository;
+  final InterventionLegalCommandRepository? commandRepository;
   final Stream<bool>? authenticationChanges;
   final InterventionLegalLoginOpener? loginOpener;
   final InterventionLegalAuthenticationResolver? authenticationResolver;
@@ -36,6 +39,7 @@ class InterventionLegalHubPage extends StatefulWidget {
 
 class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
   late final InterventionLegalWorkspaceRepository _repository;
+  late final InterventionLegalCommandRepository? _commandRepository;
 
   StreamSubscription<bool>? _authenticationSubscription;
   InterventionLegalWorkspaceSnapshot? _snapshot;
@@ -51,6 +55,11 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
     _repository =
         widget.repository ?? CallableInterventionLegalWorkspaceRepository();
 
+    _commandRepository =
+        widget.commandRepository ??
+        (widget.repository == null
+            ? CallableInterventionLegalCommandRepository()
+            : null);
     final injectedAuthenticationChanges = widget.authenticationChanges;
     if (injectedAuthenticationChanges != null) {
       _observeAuthentication(injectedAuthenticationChanges);
@@ -342,6 +351,8 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
                 child: _WorkspaceBody(
                   snapshot: snapshot!,
                   refreshError: _error == null ? null : _errorMessage(_error!),
+                  commandRepository: _commandRepository,
+                  onCommandCompleted: _reload,
                 ),
               ),
       ),
@@ -350,11 +361,18 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
 }
 
 class _WorkspaceBody extends StatelessWidget {
-  const _WorkspaceBody({required this.snapshot, this.refreshError});
+  const _WorkspaceBody({
+    required this.snapshot,
+    this.refreshError,
+    required this.commandRepository,
+    required this.onCommandCompleted,
+  });
 
   final InterventionLegalWorkspaceSnapshot snapshot;
   final String? refreshError;
 
+  final InterventionLegalCommandRepository? commandRepository;
+  final Future<void> Function() onCommandCompleted;
   @override
   Widget build(BuildContext context) {
     final matters = snapshot.matters;
@@ -400,7 +418,11 @@ class _WorkspaceBody extends StatelessWidget {
           ...matters.map(
             (matter) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _LegalMatterCard(matter: matter),
+              child: _LegalMatterCard(
+                matter: matter,
+                commandRepository: commandRepository,
+                onCommandCompleted: onCommandCompleted,
+              ),
             ),
           ),
       ],
@@ -660,16 +682,23 @@ class _SummaryGrid extends StatelessWidget {
 }
 
 class _LegalMatterCard extends StatelessWidget {
-  const _LegalMatterCard({required this.matter});
+  const _LegalMatterCard({
+    required this.matter,
+    required this.commandRepository,
+    required this.onCommandCompleted,
+  });
 
   final InterventionLegalMatterSummary matter;
+  final InterventionLegalCommandRepository? commandRepository;
+  final Future<void> Function() onCommandCompleted;
 
   @override
   Widget build(BuildContext context) {
     final title =
         matter.title ?? 'Hukuki dosya ${_shortId(matter.legalMatterId)}';
 
-    return Card(
+    final activeCommandRepository = commandRepository;
+    final matterCard = Card(
       key: ValueKey<String>('legal-matter-${matter.legalMatterId}'),
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -751,6 +780,24 @@ class _LegalMatterCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        matterCard,
+        if (activeCommandRepository != null) ...[
+          const SizedBox(height: 12),
+          _InterventionLegalMatterCommandPanel(
+            key: ValueKey<String>(
+              'legal-matter-actions-${matter.legalMatterId}',
+            ),
+            matter: matter,
+            repository: activeCommandRepository,
+            onCompleted: onCommandCompleted,
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1104,4 +1151,648 @@ String _shortId(String value) {
     return value;
   }
   return '${value.substring(0, 8)}…';
+}
+
+const Map<String, List<String>> _legalMatterUiTransitions =
+    <String, List<String>>{
+      'intake_pending': <String>['legal_review', 'cancelled'],
+      'legal_review': <String>[
+        'evidence_required',
+        'strategy_preparation',
+        'cancelled',
+      ],
+      'evidence_required': <String>['legal_review', 'cancelled'],
+      'strategy_preparation': <String>[
+        'awaiting_authorization',
+        'legal_review',
+        'cancelled',
+      ],
+      'awaiting_authorization': <String>[
+        'approved',
+        'strategy_preparation',
+        'cancelled',
+      ],
+      'approved': <String>['in_preparation', 'cancelled'],
+      'in_preparation': <String>[
+        'submitted',
+        'in_progress',
+        'awaiting_authorization',
+        'cancelled',
+      ],
+      'submitted': <String>[
+        'in_progress',
+        'awaiting_response',
+        'escalated',
+        'resolved',
+      ],
+      'in_progress': <String>['awaiting_response', 'escalated', 'resolved'],
+      'awaiting_response': <String>['in_progress', 'escalated', 'resolved'],
+      'escalated': <String>['in_progress', 'awaiting_response', 'resolved'],
+      'resolved': <String>['closed', 'in_progress'],
+      'closed': <String>['in_progress', 'archived'],
+      'cancelled': <String>['archived'],
+      'archived': <String>[],
+    };
+
+const List<String> _legalApprovalTypes = <String>[
+  'lawyer_legal_approval',
+  'client_action_authorization',
+  'client_budget_authorization',
+];
+
+String _legalMatterTransitionLabel(String status) {
+  return switch (status) {
+    'intake_pending' => 'Kabul bekliyor',
+    'legal_review' => 'Hukuki inceleme',
+    'evidence_required' => 'Ek delil gerekli',
+    'strategy_preparation' => 'Müdahale stratejisi hazırlanıyor',
+    'awaiting_authorization' => 'Yetkilendirme bekliyor',
+    'approved' => 'Onaylandı',
+    'in_preparation' => 'İşlem hazırlanıyor',
+    'submitted' => 'Resmî işleme sunuldu',
+    'in_progress' => 'İşlem devam ediyor',
+    'awaiting_response' => 'Cevap bekleniyor',
+    'escalated' => 'Üst aşamaya taşındı',
+    'resolved' => 'Sonuçlandı',
+    'closed' => 'Kapatıldı',
+    'cancelled' => 'İptal edildi',
+    'archived' => 'Arşivlendi',
+    _ => status,
+  };
+}
+
+String _legalApprovalTypeLabel(String value) {
+  return switch (value) {
+    'lawyer_legal_approval' => 'Avukat hukuki onayı',
+    'client_action_authorization' => 'Müşteri işlem yetkilendirmesi',
+    'client_budget_authorization' => 'Müşteri bütçe yetkilendirmesi',
+    _ => value,
+  };
+}
+
+String _legalDecisionLabel(String value) {
+  return switch (value) {
+    'approved' => 'Onayla',
+    'rejected' => 'Reddet',
+    _ => value,
+  };
+}
+
+final class _InterventionLegalMatterCommandPanel extends StatefulWidget {
+  const _InterventionLegalMatterCommandPanel({
+    super.key,
+    required this.matter,
+    required this.repository,
+    required this.onCompleted,
+  });
+
+  final InterventionLegalMatterSummary matter;
+  final InterventionLegalCommandRepository repository;
+  final Future<void> Function() onCompleted;
+
+  @override
+  State<_InterventionLegalMatterCommandPanel> createState() =>
+      _InterventionLegalMatterCommandPanelState();
+}
+
+final class _InterventionLegalMatterCommandPanelState
+    extends State<_InterventionLegalMatterCommandPanel> {
+  final TextEditingController _transitionReasonController =
+      TextEditingController();
+  final TextEditingController _transitionNoteController =
+      TextEditingController();
+  final TextEditingController _approvalReasonController =
+      TextEditingController();
+  final TextEditingController _approvalNoteController = TextEditingController();
+
+  String? _selectedTransition;
+  String? _selectedApprovalType;
+  bool _busy = false;
+
+  List<String> get _allowedTransitions =>
+      _legalMatterUiTransitions[widget.matter.status] ?? const <String>[];
+
+  List<InterventionLegalApprovalRequestSummary> get _pendingApprovals => widget
+      .matter
+      .approvalRequests
+      .where((request) => request.status == 'pending')
+      .toList(growable: false);
+
+  @override
+  void didUpdateWidget(
+    covariant _InterventionLegalMatterCommandPanel oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.matter.status != widget.matter.status ||
+        oldWidget.matter.version != widget.matter.version) {
+      _selectedTransition = null;
+      _transitionReasonController.clear();
+      _transitionNoteController.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _transitionReasonController.dispose();
+    _transitionNoteController.dispose();
+    _approvalReasonController.dispose();
+    _approvalNoteController.dispose();
+    super.dispose();
+  }
+
+  void _message(String text) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  String _functionsErrorMessage(FirebaseFunctionsException error) {
+    if (error.code == 'aborted') {
+      return 'Çalışma alanı değişti. Güncel sürümü yükleyip işlemi yeniden '
+          'değerlendirin. Otomatik tekrar yapılmadı.';
+    }
+    if (error.code == 'permission-denied') {
+      return 'Bu hukuki işlem için yetkiniz bulunmuyor.';
+    }
+    if (error.code == 'failed-precondition') {
+      return 'İşlem mevcut hukuki durum için uygun değil.';
+    }
+    if (error.code == 'unauthenticated') {
+      return 'Oturum doğrulanamadı. Marka Girişi ile oturumu yenileyin.';
+    }
+    return 'Hukuki işlem tamamlanamadı (${error.code}).';
+  }
+
+  Future<void> _runCommand(
+    Future<InterventionLegalCommandResponse> Function() command, {
+    required String successMessage,
+  }) async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await command();
+      await widget.onCompleted();
+      if (!mounted) {
+        return;
+      }
+      _message(successMessage);
+    } on FirebaseFunctionsException catch (error) {
+      _message(_functionsErrorMessage(error));
+    } on ArgumentError catch (error) {
+      _message(error.message?.toString() ?? 'İşlem alanlarını kontrol edin.');
+    } catch (_) {
+      _message('Hukuki işlem tamamlanamadı.');
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _submitTransition() async {
+    final nextStatus = _selectedTransition;
+    final reasonCode = _transitionReasonController.text.trim();
+    if (nextStatus == null || reasonCode.isEmpty) {
+      _message('Sıradaki durum ve geçiş gerekçesi zorunludur.');
+      return;
+    }
+    await _runCommand(
+      () => widget.repository.transitionLegalMatter(
+        context: InterventionLegalMatterVersionContext(
+          legalMatterId: widget.matter.legalMatterId,
+          expectedVersion: widget.matter.version,
+        ),
+        input: InterventionLegalTransitionInput(
+          nextStatus: nextStatus,
+          reasonCode: reasonCode,
+          note: _transitionNoteController.text,
+        ),
+      ),
+      successMessage: 'Hukuki dosya durumu güncellendi.',
+    );
+  }
+
+  Future<void> _submitApprovalRequest() async {
+    final approvalType = _selectedApprovalType;
+    final reasonCode = _approvalReasonController.text.trim();
+    if (approvalType == null || reasonCode.isEmpty) {
+      _message('Onay türü ve talep gerekçesi zorunludur.');
+      return;
+    }
+    await _runCommand(
+      () => widget.repository.createApprovalRequest(
+        context: InterventionLegalApprovalRequestContext(
+          legalMatterId: widget.matter.legalMatterId,
+          expectedLegalMatterVersion: widget.matter.version,
+        ),
+        input: InterventionLegalApprovalRequestInput(
+          approvalType: approvalType,
+          requestReasonCode: reasonCode,
+          requestNote: _approvalNoteController.text,
+        ),
+      ),
+      successMessage: 'Onay / yetki talebi oluşturuldu.',
+    );
+  }
+
+  Future<void> _evaluateApproval(
+    InterventionLegalApprovalRequestSummary request,
+  ) async {
+    if (_busy || request.status != 'pending') {
+      return;
+    }
+
+    final draft = await showDialog<_ApprovalDecisionDraft>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => _ApprovalDecisionDialog(request: request),
+    );
+    if (draft == null || !mounted) {
+      return;
+    }
+
+    await _runCommand(
+      () => widget.repository.recordApprovalDecision(
+        context: InterventionLegalApprovalDecisionContext(
+          approvalRequestId: request.approvalRequestId,
+          legalMatterId: request.legalMatterId,
+          approvalType: request.approvalType,
+          expectedApprovalRequestVersion: request.version,
+        ),
+        input: InterventionLegalApprovalDecisionInput(
+          decision: draft.decision,
+          decisionReasonCode: draft.reasonCode,
+          decisionNote: draft.note,
+        ),
+      ),
+      successMessage: 'Değiştirilemez onay kararı kaydedildi.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final allowedTransitions = _allowedTransitions;
+    final pendingApprovals = _pendingApprovals;
+
+    return Card(
+      key: ValueKey<String>(
+        'legal-matter-command-panel-${widget.matter.legalMatterId}',
+      ),
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Hukuki işlemler',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Kimlik ve sürüm bilgileri çalışma alanından alınır. '
+              'Kartı açmak veya seçim yapmak tek başına işlem çalıştırmaz.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Sıradaki doğru işlem',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (allowedTransitions.isEmpty)
+              const Text('Bu hukuki dosya için yeni durum geçişi bulunmuyor.')
+            else ...[
+              DropdownButtonFormField<String>(
+                key: ValueKey<String>(
+                  'mhl-transition-status-${widget.matter.legalMatterId}',
+                ),
+                initialValue: _selectedTransition,
+                decoration: const InputDecoration(
+                  labelText: 'Sıradaki durum',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final status in allowedTransitions)
+                    DropdownMenuItem<String>(
+                      key: ValueKey<String>(
+                        'mhl-transition-option-'
+                        '${widget.matter.legalMatterId}-$status',
+                      ),
+                      value: status,
+                      child: Text(_legalMatterTransitionLabel(status)),
+                    ),
+                ],
+                onChanged: _busy
+                    ? null
+                    : (value) => setState(() => _selectedTransition = value),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                key: ValueKey<String>(
+                  'mhl-transition-reason-${widget.matter.legalMatterId}',
+                ),
+                controller: _transitionReasonController,
+                enabled: !_busy,
+                decoration: const InputDecoration(
+                  labelText: 'Geçiş gerekçe kodu',
+                  helperText: 'Dil bağımsız operasyon kodu kullanın.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                key: ValueKey<String>(
+                  'mhl-transition-note-${widget.matter.legalMatterId}',
+                ),
+                controller: _transitionNoteController,
+                enabled: !_busy,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Not (isteğe bağlı)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  key: ValueKey<String>(
+                    'mhl-transition-submit-${widget.matter.legalMatterId}',
+                  ),
+                  onPressed: _busy ? null : _submitTransition,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  label: const Text('Durum geçişini uygula'),
+                ),
+              ),
+            ],
+            const Divider(height: 32),
+            Text(
+              'Onay / yetki talebi oluştur',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              key: ValueKey<String>(
+                'mhl-approval-type-${widget.matter.legalMatterId}',
+              ),
+              initialValue: _selectedApprovalType,
+              decoration: const InputDecoration(
+                labelText: 'Onay / yetki türü',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final approvalType in _legalApprovalTypes)
+                  DropdownMenuItem<String>(
+                    key: ValueKey<String>(
+                      'mhl-approval-type-option-'
+                      '${widget.matter.legalMatterId}-$approvalType',
+                    ),
+                    value: approvalType,
+                    child: Text(_legalApprovalTypeLabel(approvalType)),
+                  ),
+              ],
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() => _selectedApprovalType = value),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: ValueKey<String>(
+                'mhl-approval-reason-${widget.matter.legalMatterId}',
+              ),
+              controller: _approvalReasonController,
+              enabled: !_busy,
+              decoration: const InputDecoration(
+                labelText: 'Talep gerekçe kodu',
+                helperText: 'Dil bağımsız operasyon kodu kullanın.',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: ValueKey<String>(
+                'mhl-approval-note-${widget.matter.legalMatterId}',
+              ),
+              controller: _approvalNoteController,
+              enabled: !_busy,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Talep notu (isteğe bağlı)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                key: ValueKey<String>(
+                  'mhl-approval-submit-${widget.matter.legalMatterId}',
+                ),
+                onPressed: _busy ? null : _submitApprovalRequest,
+                icon: const Icon(Icons.verified_user_outlined),
+                label: const Text('Onay talebi oluştur'),
+              ),
+            ),
+            if (pendingApprovals.isNotEmpty) ...[
+              const Divider(height: 32),
+              Text(
+                'Değerlendirme bekleyen onay talepleri',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final request in pendingApprovals)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(_legalApprovalTypeLabel(request.approvalType)),
+                  subtitle: Text(
+                    'Talep sürümü ${request.version} · '
+                    '${request.requestReasonCode}',
+                  ),
+                  trailing: OutlinedButton(
+                    key: ValueKey<String>(
+                      'mhl-approval-evaluate-${request.approvalRequestId}',
+                    ),
+                    onPressed: _busy ? null : () => _evaluateApproval(request),
+                    child: const Text('Onay talebini değerlendir'),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _ApprovalDecisionDraft {
+  const _ApprovalDecisionDraft({
+    required this.decision,
+    required this.reasonCode,
+    required this.note,
+  });
+
+  final String decision;
+  final String reasonCode;
+  final String note;
+}
+
+final class _ApprovalDecisionDialog extends StatefulWidget {
+  const _ApprovalDecisionDialog({required this.request});
+
+  final InterventionLegalApprovalRequestSummary request;
+
+  @override
+  State<_ApprovalDecisionDialog> createState() =>
+      _ApprovalDecisionDialogState();
+}
+
+final class _ApprovalDecisionDialogState
+    extends State<_ApprovalDecisionDialog> {
+  final TextEditingController _reasonController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+
+  String? _decision;
+  String? _validationMessage;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final decision = _decision;
+    final reason = _reasonController.text.trim();
+    if (decision == null || reason.isEmpty) {
+      setState(() {
+        _validationMessage = 'Karar ve karar gerekçe kodu zorunludur.';
+      });
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _ApprovalDecisionDraft(
+        decision: decision,
+        reasonCode: reason,
+        note: _noteController.text,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: ValueKey<String>(
+        'mhl-approval-decision-dialog-${widget.request.approvalRequestId}',
+      ),
+      title: const Text('Onay talebini değerlendir'),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Bu karar denetim zincirine değiştirilemez kayıt olarak '
+                'eklenecektir. Kaydetmeden önce karar ve gerekçeyi kontrol edin.',
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: ValueKey<String>(
+                  'mhl-decision-value-${widget.request.approvalRequestId}',
+                ),
+                initialValue: _decision,
+                decoration: const InputDecoration(
+                  labelText: 'Karar',
+                  border: OutlineInputBorder(),
+                ),
+                items: const <String>['approved', 'rejected']
+                    .map(
+                      (value) => DropdownMenuItem<String>(
+                        key: ValueKey<String>('mhl-decision-option-$value'),
+                        value: value,
+                        child: Text(_legalDecisionLabel(value)),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) => setState(() => _decision = value),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                key: ValueKey<String>(
+                  'mhl-decision-reason-${widget.request.approvalRequestId}',
+                ),
+                controller: _reasonController,
+                decoration: const InputDecoration(
+                  labelText: 'Karar gerekçe kodu',
+                  helperText: 'Dil bağımsız operasyon kodu kullanın.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                key: ValueKey<String>(
+                  'mhl-decision-note-${widget.request.approvalRequestId}',
+                ),
+                controller: _noteController,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Karar notu (isteğe bağlı)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (_validationMessage != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _validationMessage!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: ValueKey<String>(
+            'mhl-decision-confirm-${widget.request.approvalRequestId}',
+          ),
+          onPressed: _confirm,
+          child: const Text('Onayla ve kaydet'),
+        ),
+      ],
+    );
+  }
 }
