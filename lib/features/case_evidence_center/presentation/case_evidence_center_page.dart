@@ -985,10 +985,12 @@ class _CaseCard extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            TextButton(
-              key: ValueKey('case-code-${item.id}'),
+            Text(item.caseNumber, key: ValueKey('case-code-${item.id}')),
+            OutlinedButton.icon(
+              key: ValueKey('open-case-detail-${item.id}'),
               onPressed: onOpen,
-              child: Text(item.caseNumber),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Vaka detayını aç'),
             ),
             _Pill(label: _statusLabel(item.status)),
             _Pill(label: _priorityLabel(item.priority)),

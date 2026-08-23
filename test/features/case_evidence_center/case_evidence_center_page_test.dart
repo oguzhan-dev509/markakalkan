@@ -298,9 +298,20 @@ void main() {
     );
     await tester.ensureVisible(listedCode);
     await tester.pumpAndSettle();
-    final listedButton = listedCode.hitTestable();
-    expect(listedButton, findsOneWidget);
-    await tester.tap(listedButton);
+    expect(listedCode, findsOneWidget);
+    expect(tester.widget(listedCode), isA<Text>());
+    expect(find.byType(CaseEvidenceDetailPage), findsNothing);
+
+    final explicitCaseDetailAction = find.byKey(
+      const ValueKey('open-case-detail-case-1'),
+    );
+    await tester.ensureVisible(explicitCaseDetailAction);
+    await tester.pumpAndSettle();
+    expect(explicitCaseDetailAction.hitTestable(), findsOneWidget);
+    expect(find.text('Vaka detayını aç'), findsOneWidget);
+    expect(find.byType(CaseEvidenceDetailPage), findsNothing);
+
+    await tester.tap(explicitCaseDetailAction.hitTestable());
     await tester.pumpAndSettle();
     detail = tester.widget<CaseEvidenceDetailPage>(
       find.byType(CaseEvidenceDetailPage),
