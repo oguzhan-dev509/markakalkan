@@ -295,6 +295,8 @@ function createService({db, clock = {now: () => new Date().toISOString()}}) {
         contractVersion: "case-evidence-detail-v1",
         case: {
           id: snapshot.id,
+          tenantId: context.tenantId,
+          canonicalBrandId: context.brandId,
           caseCode: record.caseNumber,
           title: record.title,
           summary: record.summary,

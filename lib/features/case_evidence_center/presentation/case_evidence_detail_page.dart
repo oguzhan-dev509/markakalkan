@@ -30,6 +30,8 @@ class CallableCaseEvidenceDetailRepository
 class CaseEvidenceDetail {
   const CaseEvidenceDetail({
     required this.caseId,
+    required this.tenantId,
+    required this.canonicalBrandId,
     required this.caseCode,
     required this.title,
     required this.summary,
@@ -42,6 +44,8 @@ class CaseEvidenceDetail {
     required this.audits,
   });
   final String caseId;
+  final String tenantId;
+  final String canonicalBrandId;
   final String caseCode;
   final String title;
   final String summary;
@@ -62,6 +66,8 @@ class CaseEvidenceDetail {
     final item = _detailMap(map['case']);
     return CaseEvidenceDetail(
       caseId: _detailString(item, 'id'),
+      tenantId: _detailString(item, 'tenantId'),
+      canonicalBrandId: _detailString(item, 'canonicalBrandId'),
       caseCode: _detailString(item, 'caseCode'),
       title: _detailString(item, 'title'),
       summary: _detailString(item, 'summary'),
@@ -89,6 +95,7 @@ class CaseEvidenceDetailPage extends StatefulWidget {
     this.repository,
     this.evidenceDetailOpener,
     this.reviewTaskFormOpener,
+    this.interventionLegalOpener,
   });
   final String caseId;
   final CaseEvidenceDetailRepository? repository;
@@ -96,6 +103,13 @@ class CaseEvidenceDetailPage extends StatefulWidget {
   evidenceDetailOpener;
   final Future<void> Function(BuildContext context, String caseId)?
   reviewTaskFormOpener;
+  final Future<void> Function(
+    BuildContext context, {
+    required String tenantId,
+    required String canonicalBrandId,
+    required String caseId,
+  })?
+  interventionLegalOpener;
   @override
   State<CaseEvidenceDetailPage> createState() => _CaseEvidenceDetailPageState();
 }
@@ -152,6 +166,29 @@ class _CaseEvidenceDetailPageState extends State<CaseEvidenceDetailPage> {
     Wrap(
       spacing: 8,
       children: [
+        FilledButton.icon(
+          key: const ValueKey('case-start-legal-intervention'),
+          onPressed: () {
+            final opener = widget.interventionLegalOpener;
+            if (opener != null) {
+              opener(
+                context,
+                tenantId: detail.tenantId,
+                canonicalBrandId: detail.canonicalBrandId,
+                caseId: detail.caseId,
+              );
+              return;
+            }
+            AppRouter.openInterventionLegalHub(
+              context,
+              tenantId: detail.tenantId,
+              canonicalBrandId: detail.canonicalBrandId,
+              caseId: detail.caseId,
+            );
+          },
+          icon: const Icon(Icons.gavel),
+          label: const Text('Hukuki süreci başlat'),
+        ),
         OutlinedButton.icon(
           key: const ValueKey('case-add-party'),
           onPressed: () => AppRouter.openCasePartiesRelationships(context),

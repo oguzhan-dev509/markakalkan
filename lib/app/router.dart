@@ -437,11 +437,38 @@ abstract final class AppRouter {
     );
   }
 
-  static Future<void> openInterventionLegalHub(BuildContext context) {
+  static Future<void> openInterventionLegalHub(
+    BuildContext context, {
+    String? tenantId,
+    String? canonicalBrandId,
+    String? caseId,
+  }) {
+    final hasAnyCreateMatterContext =
+        tenantId != null || canonicalBrandId != null || caseId != null;
+    final hasCompleteCreateMatterContext =
+        tenantId != null &&
+        tenantId.trim().isNotEmpty &&
+        canonicalBrandId != null &&
+        canonicalBrandId.trim().isNotEmpty &&
+        caseId != null &&
+        caseId.trim().isNotEmpty;
+    if (hasAnyCreateMatterContext && !hasCompleteCreateMatterContext) {
+      throw ArgumentError(
+        'Intervention legal case handoff requires tenantId, canonicalBrandId and caseId together.',
+      );
+    }
+    final createMatterHandoff = hasCompleteCreateMatterContext
+        ? InterventionLegalCreateMatterHandoff(
+            tenantId: tenantId,
+            canonicalBrandId: canonicalBrandId,
+            caseId: caseId,
+          )
+        : null;
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/intervention-legal'),
-        builder: (_) => const InterventionLegalHubPage(),
+        builder: (_) =>
+            InterventionLegalHubPage(createMatterHandoff: createMatterHandoff),
       ),
     );
   }

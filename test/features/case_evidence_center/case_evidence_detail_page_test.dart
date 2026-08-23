@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -21,6 +22,10 @@ CaseEvidenceDetail detail({
   'writesPerformed': 0,
   'case': {
     'id': 'internal-case-id',
+
+    'tenantId': 'tenant-1',
+
+    'canonicalBrandId': 'brand-1',
     'caseCode': 'VK-2026-ABC12345',
     'title': 'Şüpheli ilan',
     'summary': summary,
@@ -200,4 +205,22 @@ void main() {
       expect(find.text('technical'), findsNothing);
     });
   }
+
+  test('MHL-3C-3 case detail trusted legal handoff contract', () {
+    final source = File(
+      'lib/features/case_evidence_center/presentation/case_evidence_detail_page.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('required this.tenantId'));
+    expect(source, contains('required this.canonicalBrandId'));
+    expect(source, contains("_detailString(item, 'tenantId')"));
+    expect(source, contains("_detailString(item, 'canonicalBrandId')"));
+    expect(source, contains("ValueKey('case-start-legal-intervention')"));
+    expect(source, contains('AppRouter.openInterventionLegalHub('));
+    expect(source, contains('tenantId: detail.tenantId'));
+    expect(source, contains('canonicalBrandId: detail.canonicalBrandId'));
+    expect(source, contains('caseId: detail.caseId'));
+    expect(source, isNot(contains('createInterventionLegalMatter')));
+    expect(source, isNot(contains('FirebaseFirestore')));
+  });
 }

@@ -195,6 +195,8 @@ test("detail reads tenant and brand scoped records in safe chronological contrac
   const db = new FakeDb(detailCollections());
   db.collections.case_audit_events.push({id: "audit-timestamp", data: {caseId: "case-1", tenantId: "tenant-1", canonicalBrandId: "brand-1", action: "case.timestamp", occurredAt: {toDate: () => new Date("2026-07-22T10:07:00.000Z")}}});
   const result = await createService({db, clock}).detail({contractVersion: "case-evidence-detail-request-v1", caseId: "case-1"}, {uid: "user-1"});
+  assert.equal(result.case.tenantId, "tenant-1");
+  assert.equal(result.case.canonicalBrandId, "brand-1");
   assert.equal(result.contractVersion, "case-evidence-detail-v1");
   assert.equal(result.case.caseCode, "VK-2026-ABC12345");
   assert.deepEqual(result.evidenceReferences.map((item) => item.title), ["İlk delil", "İkinci delil"]);

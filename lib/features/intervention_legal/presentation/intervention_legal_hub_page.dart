@@ -14,11 +14,24 @@ typedef InterventionLegalLoginOpener =
 typedef InterventionLegalAuthenticationResolver =
     Future<bool> Function(bool forceRefresh);
 
+final class InterventionLegalCreateMatterHandoff {
+  const InterventionLegalCreateMatterHandoff({
+    required this.tenantId,
+    required this.canonicalBrandId,
+    required this.caseId,
+  });
+
+  final String tenantId;
+  final String canonicalBrandId;
+  final String caseId;
+}
+
 class InterventionLegalHubPage extends StatefulWidget {
   const InterventionLegalHubPage({
     super.key,
     this.repository,
     this.commandRepository,
+    this.createMatterHandoff,
     this.authenticationChanges,
     this.loginOpener,
     this.authenticationResolver,
@@ -27,6 +40,7 @@ class InterventionLegalHubPage extends StatefulWidget {
 
   final InterventionLegalWorkspaceRepository? repository;
   final InterventionLegalCommandRepository? commandRepository;
+  final InterventionLegalCreateMatterHandoff? createMatterHandoff;
   final Stream<bool>? authenticationChanges;
   final InterventionLegalLoginOpener? loginOpener;
   final InterventionLegalAuthenticationResolver? authenticationResolver;
@@ -350,6 +364,7 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
                 onRefresh: _reload,
                 child: _WorkspaceBody(
                   snapshot: snapshot!,
+                  createMatterHandoff: widget.createMatterHandoff,
                   refreshError: _error == null ? null : _errorMessage(_error!),
                   commandRepository: _commandRepository,
                   onCommandCompleted: _reload,
@@ -363,12 +378,14 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
 class _WorkspaceBody extends StatelessWidget {
   const _WorkspaceBody({
     required this.snapshot,
+    this.createMatterHandoff,
     this.refreshError,
     required this.commandRepository,
     required this.onCommandCompleted,
   });
 
   final InterventionLegalWorkspaceSnapshot snapshot;
+  final InterventionLegalCreateMatterHandoff? createMatterHandoff;
   final String? refreshError;
 
   final InterventionLegalCommandRepository? commandRepository;
@@ -412,6 +429,14 @@ class _WorkspaceBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
+        if (createMatterHandoff != null && commandRepository != null) ...[
+          _CreateLegalMatterPanel(
+            handoff: createMatterHandoff!,
+            repository: commandRepository!,
+            onCompleted: onCommandCompleted,
+          ),
+          const SizedBox(height: 16),
+        ],
         if (matters.isEmpty)
           const _EmptyState()
         else
@@ -677,6 +702,222 @@ class _SummaryGrid extends StatelessWidget {
               .toList(growable: false),
         );
       },
+    );
+  }
+}
+
+class _CreateLegalMatterPanel extends StatefulWidget {
+  const _CreateLegalMatterPanel({
+    required this.handoff,
+    required this.repository,
+    required this.onCompleted,
+  });
+
+  final InterventionLegalCreateMatterHandoff handoff;
+  final InterventionLegalCommandRepository repository;
+  final Future<void> Function() onCompleted;
+
+  @override
+  State<_CreateLegalMatterPanel> createState() =>
+      _CreateLegalMatterPanelState();
+}
+
+class _CreateLegalMatterPanelState extends State<_CreateLegalMatterPanel> {
+  final TextEditingController _jurisdictionController = TextEditingController();
+  final TextEditingController _matterScopeController = TextEditingController();
+  final TextEditingController _countryController = TextEditingController();
+  final TextEditingController _priorityController = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
+
+  bool _confirmed = false;
+  bool _submitting = false;
+  bool _completed = false;
+  String? _message;
+
+  @override
+  void dispose() {
+    _jurisdictionController.dispose();
+    _matterScopeController.dispose();
+    _countryController.dispose();
+    _priorityController.dispose();
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  String? _optional(TextEditingController controller) {
+    final value = controller.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  Future<void> _submit() async {
+    if (_submitting || _completed) return;
+
+    final jurisdictionCode = _jurisdictionController.text.trim();
+    final matterScopeCode = _matterScopeController.text.trim();
+    final countryCode = _countryController.text.trim();
+
+    if (jurisdictionCode.isEmpty ||
+        matterScopeCode.isEmpty ||
+        countryCode.isEmpty) {
+      setState(() {
+        _message = 'Yargı alanı, müdahale kapsamı ve ülke kodu zorunludur.';
+      });
+      return;
+    }
+
+    if (!_confirmed) {
+      setState(() {
+        _message =
+            'Yeni hukuki dosyanın bu vaka bağlamıyla oluşturulacağını onaylayın.';
+      });
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _message = null;
+    });
+
+    try {
+      await widget.repository.createLegalMatter(
+        context: InterventionLegalCreateMatterContext(
+          tenantId: widget.handoff.tenantId,
+          canonicalBrandId: widget.handoff.canonicalBrandId,
+          caseId: widget.handoff.caseId,
+        ),
+        input: InterventionLegalCreateMatterInput(
+          jurisdictionCode: jurisdictionCode,
+          matterScopeCode: matterScopeCode,
+          countryCode: countryCode,
+          priorityCode: _optional(_priorityController),
+          title: _optional(_titleController),
+        ),
+      );
+      await widget.onCompleted();
+      if (!mounted) return;
+      setState(() {
+        _completed = true;
+        _message = 'Hukuki dosya oluşturuldu.';
+      });
+    } on Exception {
+      if (!mounted) return;
+      setState(() {
+        _message =
+            'İşlem tamamlanamadı. Bilgileri kontrol edip yeniden deneyin.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const ValueKey('create-legal-matter-panel'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Yeni hukuki dosya',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Vaka ve marka bağlamı doğrulanmış çalışma alanından gelir ve değiştirilemez. '
+              'Alanları doldurmak veya seçim yapmak tek başına işlem çalıştırmaz.',
+            ),
+            const SizedBox(height: 12),
+            SelectableText('Vaka kimliği: ${widget.handoff.caseId}'),
+            SelectableText('Marka kimliği: ${widget.handoff.canonicalBrandId}'),
+            SelectableText('Tenant kimliği: ${widget.handoff.tenantId}'),
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('create-matter-jurisdiction-code'),
+              controller: _jurisdictionController,
+              enabled: !_submitting && !_completed,
+              decoration: const InputDecoration(
+                labelText: 'Yargı alanı kodu',
+                helperText: 'Dil bağımsız operasyon kodu kullanın.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('create-matter-scope-code'),
+              controller: _matterScopeController,
+              enabled: !_submitting && !_completed,
+              decoration: const InputDecoration(
+                labelText: 'Müdahale kapsamı kodu',
+                helperText: 'Dil bağımsız operasyon kodu kullanın.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('create-matter-country-code'),
+              controller: _countryController,
+              enabled: !_submitting && !_completed,
+              decoration: const InputDecoration(
+                labelText: 'Ülke kodu',
+                helperText: 'Sözleşmenin kabul ettiği ülke kodunu kullanın.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('create-matter-priority-code'),
+              controller: _priorityController,
+              enabled: !_submitting && !_completed,
+              decoration: const InputDecoration(
+                labelText: 'Öncelik kodu (isteğe bağlı)',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('create-matter-title'),
+              controller: _titleController,
+              enabled: !_submitting && !_completed,
+              decoration: const InputDecoration(
+                labelText: 'Dosya başlığı (isteğe bağlı)',
+              ),
+            ),
+            const SizedBox(height: 8),
+            CheckboxListTile(
+              key: const ValueKey('create-matter-confirm'),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _confirmed,
+              onChanged: _submitting || _completed
+                  ? null
+                  : (value) => setState(() => _confirmed = value ?? false),
+              title: const Text(
+                'Bu doğrulanmış vaka bağlamıyla yeni hukuki dosya oluşturulacağını onaylıyorum.',
+              ),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 8),
+              Text(_message!),
+            ],
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              key: const ValueKey('create-legal-matter-submit'),
+              onPressed: _submitting || _completed || !_confirmed
+                  ? null
+                  : _submit,
+              icon: _submitting
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.gavel),
+              label: Text(
+                _submitting ? 'Oluşturuluyor…' : 'Hukuki dosyayı oluştur',
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -655,6 +656,26 @@ void main() {
       expect(pendingCommands.createMatterCalls, 0);
     },
   );
+
+  test('MHL-3C-3 create matter handoff surface contract', () {
+    final source = File(
+      'lib/features/intervention_legal/presentation/intervention_legal_hub_page.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('InterventionLegalCreateMatterHandoff'));
+    expect(
+      source,
+      contains('createMatterHandoff != null && commandRepository != null'),
+    );
+    expect(source, contains('class _CreateLegalMatterPanel'));
+    expect(source, contains('InterventionLegalCreateMatterContext('));
+    expect(source, contains('InterventionLegalCreateMatterInput('));
+    expect(source, contains('await widget.repository.createLegalMatter('));
+    expect(source, contains("ValueKey('create-matter-confirm')"));
+    expect(source, contains("ValueKey('create-legal-matter-submit')"));
+    expect(source, isNot(contains('FirebaseFirestore')));
+    expect(source, isNot(contains('cloud_firestore')));
+  });
 }
 
 Future<void> _setDeterministicTestSurface(WidgetTester tester) async {
