@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/professional_services_callable_client.dart';
 import '../domain/professional_service_models.dart';
 import 'professional_services_controller.dart';
+import 'professional_services_operation_form.dart';
 import 'professional_services_strings.dart';
 
 class ProfessionalServicesHubPage extends StatefulWidget {
@@ -104,6 +105,17 @@ class _ProfessionalServicesHubPageState
                         result: _controller.result,
                         failure: _controller.failure,
                       ),
+                      if (selected != null) ...[
+                        const SizedBox(height: 16),
+                        ProfessionalServicesOperationForm(
+                          key: ValueKey(
+                            'professional-service-operational-form-${selected.wireValue}',
+                          ),
+                          operation: selected,
+                          controller: _controller,
+                          locale: widget.locale,
+                        ),
+                      ],
                     ],
                   ),
                 ),

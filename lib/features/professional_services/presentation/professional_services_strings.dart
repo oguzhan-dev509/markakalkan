@@ -133,10 +133,10 @@ class ProfessionalServicesStrings {
             'sınırını temsil eder.';
 
   String get boundarySelectedDescription => _english
-      ? 'This boundary is selected. The valid command form will be connected '
-            'in the next controlled phase.'
-      : 'Bu sınır seçildi. Geçerli komut formu sonraki kontrollü fazda '
-            'bağlanacaktır.';
+      ? 'This boundary is selected. Complete the protected command form below; '
+            'nothing runs until you explicitly submit it.'
+      : 'Bu sınır seçildi. Aşağıdaki korumalı komut formunu doldurun; '
+            'siz açıkça göndermeden hiçbir işlem çalıştırılmaz.';
 
   String get boundaryRunningDescription => _english
       ? 'The operation is running through the protected callable boundary.'

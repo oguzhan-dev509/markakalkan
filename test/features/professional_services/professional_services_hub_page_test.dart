@@ -106,4 +106,102 @@ void main() {
     expect(find.text('Yetkili insan incelemesi'), findsWidgets);
     expect(gateway.commands, isEmpty);
   });
+
+  testWidgets('selected transition form submits only after explicit action', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final gateway = RecordingGateway();
+    final controller = ProfessionalServicesController(gateway: gateway);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalServicesHubPage(
+          controller: controller,
+          locale: const Locale('tr'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final transitionCard = find.byKey(
+      const ValueKey(
+        'professional-service-capability-transition_service_request',
+      ),
+    );
+    await tester.ensureVisible(transitionCard);
+    await tester.tap(transitionCard);
+    await tester.pumpAndSettle();
+
+    expect(gateway.commands, isEmpty);
+    expect(
+      find.byKey(
+        const ValueKey(
+          'professional-service-command-form-transition_service_request',
+        ),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(
+        const ValueKey(
+          'professional-service-field-transition_service_request-serviceRequestId',
+        ),
+      ),
+      'psr-1',
+    );
+    await tester.enterText(
+      find.byKey(
+        const ValueKey(
+          'professional-service-field-transition_service_request-expectedVersion',
+        ),
+      ),
+      '3',
+    );
+    await tester.enterText(
+      find.byKey(
+        const ValueKey(
+          'professional-service-field-transition_service_request-nextStatus',
+        ),
+      ),
+      'scoping',
+    );
+    await tester.enterText(
+      find.byKey(
+        const ValueKey(
+          'professional-service-field-transition_service_request-reasonCode',
+        ),
+      ),
+      'operator_update',
+    );
+
+    final submit = find.byKey(
+      const ValueKey('professional-service-submit-transition_service_request'),
+    );
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(gateway.commands, hasLength(1));
+    final command = gateway.commands.single;
+    expect(
+      command.operation,
+      ProfessionalServiceOperation.transitionServiceRequest,
+    );
+    expect(
+      command.payload['contractVersion'],
+      'professional-service-request-transition-command-v1',
+    );
+    expect(command.payload['serviceRequestId'], 'psr-1');
+    expect(command.payload['expectedVersion'], 3);
+    expect(command.payload['nextStatus'], 'scoping');
+    expect(command.payload['reasonCode'], 'operator_update');
+    expect(command.payload.containsKey('actorUid'), isFalse);
+    expect(controller.status, ProfessionalServicesControllerStatus.succeeded);
+  });
 }
