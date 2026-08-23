@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
 import 'package:markakalkan/features/intervention_legal/presentation/intervention_legal_hub_page.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 
 void main() {
   testWidgets(
@@ -305,6 +306,75 @@ void main() {
 
     expect(liveMatterTitle, findsOneWidget);
     expect(repository.callCount, 2);
+  });
+
+  testWidgets(
+    'workspace waits for App Check readiness before repository load',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final authenticationChanges = StreamController<bool>.broadcast();
+      addTearDown(authenticationChanges.close);
+      final repository = _CountingWorkspaceRepository(_snapshot());
+      final readiness = Completer<void>();
+      var readinessCalls = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: repository,
+            authenticationChanges: authenticationChanges.stream,
+            appCheckReadinessResolver: () async {
+              readinessCalls += 1;
+              await readiness.future;
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      authenticationChanges.add(true);
+      await tester.pump();
+
+      expect(readinessCalls, 1);
+      expect(repository.callCount, 0);
+
+      readiness.complete();
+      await tester.pumpAndSettle();
+
+      expect(repository.callCount, 1);
+      expect(find.text('Canlı hukuki dosya'), findsOneWidget);
+    },
+  );
+
+  testWidgets('App Check unavailable blocks workspace repository call', (
+    tester,
+  ) async {
+    await _setDeterministicTestSurface(tester);
+    final authenticationChanges = StreamController<bool>.broadcast();
+    addTearDown(authenticationChanges.close);
+    final repository = _CountingWorkspaceRepository(_snapshot());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: InterventionLegalHubPage(
+          repository: repository,
+          authenticationChanges: authenticationChanges.stream,
+          appCheckReadinessResolver: () async {
+            throw const AppCheckUnavailableException();
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    authenticationChanges.add(true);
+    await tester.pumpAndSettle();
+
+    expect(repository.callCount, 0);
+    expect(
+      find.text('Uygulama doğrulaması tamamlanamadı. Sayfayı yenileyin.'),
+      findsOneWidget,
+    );
   });
 }
 

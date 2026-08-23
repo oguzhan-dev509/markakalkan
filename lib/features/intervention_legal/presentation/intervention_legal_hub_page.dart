@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 
 typedef InterventionLegalLoginOpener =
     Future<bool?> Function(BuildContext context);
@@ -19,12 +20,14 @@ class InterventionLegalHubPage extends StatefulWidget {
     this.authenticationChanges,
     this.loginOpener,
     this.authenticationResolver,
+    this.appCheckReadinessResolver,
   });
 
   final InterventionLegalWorkspaceRepository? repository;
   final Stream<bool>? authenticationChanges;
   final InterventionLegalLoginOpener? loginOpener;
   final InterventionLegalAuthenticationResolver? authenticationResolver;
+  final Future<void> Function()? appCheckReadinessResolver;
 
   @override
   State<InterventionLegalHubPage> createState() =>
@@ -187,8 +190,25 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
     }
   }
 
+  Future<void> _ensureAppCheckReady() async {
+    final resolver = widget.appCheckReadinessResolver;
+    if (resolver != null) {
+      await resolver();
+      return;
+    }
+
+    final productionRepository =
+        widget.repository == null && widget.authenticationChanges == null;
+    if (!productionRepository) {
+      return;
+    }
+
+    await AppCheckBootstrap.instance.ensureReady();
+  }
+
   Future<InterventionLegalWorkspaceSnapshot>
   _loadWorkspaceWithAuthRecovery() async {
+    await _ensureAppCheckReady();
     try {
       return await _repository.loadWorkspace();
     } catch (error) {
@@ -264,6 +284,9 @@ class _InterventionLegalHubPageState extends State<InterventionLegalHubPage> {
   }
 
   String _errorMessage(Object error) {
+    if (error is AppCheckUnavailableException) {
+      return 'Uygulama doğrulaması tamamlanamadı. Sayfayı yenileyin.';
+    }
     if (error is FirebaseFunctionsException) {
       switch (error.code) {
         case 'unauthenticated':
