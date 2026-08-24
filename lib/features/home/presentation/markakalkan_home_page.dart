@@ -18,6 +18,8 @@ class MarkaKalkanHomePage extends StatelessWidget {
           slivers: [
             SliverToBoxAdapter(child: _Header()),
             SliverToBoxAdapter(child: _HeroSection()),
+            SliverToBoxAdapter(child: _ProtectionIntentSection()),
+            SliverToBoxAdapter(child: _MobileVerificationSection()),
             SliverToBoxAdapter(child: _PublicRadarSection()),
             SliverToBoxAdapter(child: _PublicRiskScanSection()),
             SliverToBoxAdapter(child: _PublicServicesSection()),
@@ -134,6 +136,8 @@ class _Header extends StatelessWidget {
 class _HeroSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 820;
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -142,7 +146,10 @@ class _HeroSection extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 72),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 24 : 28,
+        vertical: compact ? 40 : 72,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
@@ -154,29 +161,27 @@ class _HeroSection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const _HeroLabel(),
-                  const SizedBox(height: 22),
-                  const Text(
+                  SizedBox(height: compact ? 16 : 22),
+                  Text(
                     'Müşteriniz orijinalini bilsin,\nsiz sahtesini görün.',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 46,
-                      height: 1.12,
+                      fontSize: compact ? 34 : 46,
+                      height: compact ? 1.08 : 1.12,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Her ürüne benzersiz dijital kimlik verin. '
-                    'Tüketicinin ürünü doğrulamasını sağlayın; '
-                    'kopyalanmış kodları, şüpheli taramaları ve '
-                    'yetkisiz üretim risklerini tek panelden izleyin.',
+                  SizedBox(height: compact ? 14 : 20),
+                  Text(
+                    'Riskleri bulun, delilleri koruyun, vakaya dönüştürün '
+                    've sonuca kadar yönetin.',
                     style: TextStyle(
-                      color: Color(0xFFD9E5EA),
-                      fontSize: 17,
-                      height: 1.6,
+                      color: const Color(0xFFD9E5EA),
+                      fontSize: compact ? 15 : 17,
+                      height: compact ? 1.45 : 1.6,
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  SizedBox(height: compact ? 22 : 28),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
@@ -188,9 +193,9 @@ class _HeroSection extends StatelessWidget {
                         style: FilledButton.styleFrom(
                           backgroundColor: MarkaKalkanTheme.teal,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 22,
-                            vertical: 17,
+                            vertical: compact ? 14 : 17,
                           ),
                         ),
                         icon: const Icon(Icons.add_business_outlined),
@@ -203,9 +208,9 @@ class _HeroSection extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: const BorderSide(color: Color(0xFF92ADB8)),
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 22,
-                            vertical: 17,
+                            vertical: compact ? 14 : 17,
                           ),
                         ),
                         icon: const Icon(Icons.qr_code_scanner),
@@ -219,14 +224,7 @@ class _HeroSection extends StatelessWidget {
               const verificationCard = _VerificationCard();
 
               if (isNarrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    introduction,
-                    const SizedBox(height: 40),
-                    verificationCard,
-                  ],
-                );
+                return introduction;
               }
 
               return Row(
@@ -425,6 +423,549 @@ class _VerificationCardState extends State<_VerificationCard> {
       ),
     );
   }
+}
+
+class _MobileVerificationSection extends StatelessWidget {
+  const _MobileVerificationSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 820) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          color: const Color(0xFFF7FAFC),
+          padding: const EdgeInsets.fromLTRB(28, 0, 28, 64),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: const _VerificationCard(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+Future<void> _openProtectionIntentDestination(
+  BuildContext context,
+  _ProtectionIntentData intent,
+) {
+  return switch (intent.destination) {
+    _ProtectionIntentDestination.brandDetective =>
+      AppRouter.openBrandDetectiveHub(context),
+    _ProtectionIntentDestination.digitalMarketMonitoring =>
+      AppRouter.openDijitalPazarIzleme(context),
+    _ProtectionIntentDestination.digitalDetectiveTasks =>
+      AppRouter.openDigitalDetectiveTasks(context),
+    _ProtectionIntentDestination.supplySecurity =>
+      AppRouter.openSupplySecurityHub(context),
+    _ProtectionIntentDestination.customsSecurity =>
+      AppRouter.openCustomsSecurityHub(context),
+    _ProtectionIntentDestination.interventionLegal =>
+      AppRouter.openInterventionLegalHub(context),
+  };
+}
+
+class _ProtectionIntentSection extends StatelessWidget {
+  const _ProtectionIntentSection();
+
+  static const _intents = <_ProtectionIntentData>[
+    _ProtectionIntentData(
+      code: 'counterfeit_product',
+      ctaLabel: 'Dijital Dedektife geç',
+      destination: _ProtectionIntentDestination.brandDetective,
+      icon: Icons.inventory_2_outlined,
+      title: 'Sahte ürün',
+      description: 'Ürününüze benzeyen şüpheli satışları bulun.',
+      guidanceTitle: 'Sahte ürünleri bulmak istiyorsunuz',
+      guidanceDescription:
+          'MarkaKalkan’ın 12 Yapay Zekâ Ajanı dijital kaynaklarda şüpheli '
+          'ürünleri bulmanıza ve önceliklendirmenize yardımcı olur.',
+      steps: [
+        'Markanızı seçin',
+        'Mevcut sonuçları inceleyin',
+        'Gerekirse yeni tarama başlatın',
+      ],
+    ),
+    _ProtectionIntentData(
+      code: 'fake_account',
+      ctaLabel: 'Dijital Dedektife geç',
+      destination: _ProtectionIntentDestination.brandDetective,
+      icon: Icons.account_circle_outlined,
+      title: 'Sahte hesap',
+      description: 'Markanızı taklit eden hesapları inceleyin.',
+      guidanceTitle: 'Taklit hesapları incelemek istiyorsunuz',
+      guidanceDescription:
+          'Marka adınızı, görsellerinizi veya kimliğinizi kullanan şüpheli '
+          'hesapları önce mevcut bulgular üzerinden değerlendirin.',
+      steps: [
+        'Markanızı seçin',
+        'Mevcut hesap bulgularını inceleyin',
+        'Gerekirse yeni inceleme başlatın',
+      ],
+    ),
+    _ProtectionIntentData(
+      code: 'fake_website',
+      ctaLabel: 'Dijital Dedektife geç',
+      destination: _ProtectionIntentDestination.brandDetective,
+      icon: Icons.language_outlined,
+      title: 'Taklit web sitesi',
+      description: 'Markanızı kullanan şüpheli siteleri bulun.',
+      guidanceTitle: 'Taklit web sitelerini incelemek istiyorsunuz',
+      guidanceDescription:
+          'Markanızı, ürünlerinizi veya kurumsal kimliğinizi kullanan şüpheli '
+          'siteleri mevcut bulgular ve deliller üzerinden değerlendirin.',
+      steps: [
+        'Markanızı seçin',
+        'Mevcut site bulgularını inceleyin',
+        'Gerekirse yeni inceleme başlatın',
+      ],
+    ),
+    _ProtectionIntentData(
+      code: 'unauthorized_seller',
+      ctaLabel: 'Satıcı takibine geç',
+      destination: _ProtectionIntentDestination.digitalMarketMonitoring,
+      icon: Icons.storefront_outlined,
+      title: 'İzinsiz satıcı',
+      description: 'Yetkisiz ve tekrar eden satışları takip edin.',
+      guidanceTitle: 'İzinsiz satıcıları takip etmek istiyorsunuz',
+      guidanceDescription:
+          'Yetkisiz satışları, tekrar eden satıcıları ve ilişkili kanalları '
+          'önce mevcut kayıtlar üzerinden inceleyin.',
+      steps: [
+        'Markanızı seçin',
+        'Mevcut satıcı bulgularını inceleyin',
+        'Gerekirse yeni takip başlatın',
+      ],
+    ),
+    _ProtectionIntentData(
+      code: 'pirated_content',
+      ctaLabel: 'Dijital Dedektife geç',
+      destination: _ProtectionIntentDestination.digitalDetectiveTasks,
+      icon: Icons.copyright_outlined,
+      title: 'Korsan içerik',
+      description: 'İzinsiz kullanılan içerikleri ve dijital varlıkları bulun.',
+      guidanceTitle: 'Korsan içerikleri incelemek istiyorsunuz',
+      guidanceDescription:
+          'İzinsiz kullanılan içeriklerinizi ve dijital varlıklarınızı mevcut '
+          'bulgular, kaynaklar ve deliller üzerinden değerlendirin.',
+      steps: [
+        'Korunacak varlığı seçin',
+        'Mevcut kullanım bulgularını inceleyin',
+        'Gerekirse yeni inceleme başlatın',
+      ],
+    ),
+    _ProtectionIntentData(
+      code: 'supply_risk',
+      ctaLabel: 'Tedarik güvenliğine geç',
+      destination: _ProtectionIntentDestination.supplySecurity,
+      icon: Icons.factory_outlined,
+      title: 'Üretim ve tedarik riski',
+      description: 'Üretici, tesis ve tedarik zinciri risklerini yönetin.',
+      guidanceTitle: 'Üretim ve tedarik riskini yönetmek istiyorsunuz',
+      guidanceDescription:
+          'Üretici, tesis, üretim varlığı ve tedarik zinciri kayıtlarını '
+          'korunan markanızla ilişkili olarak değerlendirin.',
+      steps: [
+        'Markanızı seçin',
+        'Üretim ve tedarik kayıtlarını inceleyin',
+        'Gerekli koruma adımını belirleyin',
+      ],
+    ),
+    _ProtectionIntentData(
+      code: 'customs_risk',
+      ctaLabel: 'Gümrük güvenliğine geç',
+      destination: _ProtectionIntentDestination.customsSecurity,
+      icon: Icons.local_shipping_outlined,
+      title: 'Gümrük riski',
+      description:
+          'Sahte ürünlere karşı sınır ve gümrük seçeneklerini değerlendirin.',
+      guidanceTitle: 'Gümrük seçeneklerini değerlendirmek istiyorsunuz',
+      guidanceDescription:
+          'Sınırda durdurma ve gümrük koruması için önce mevcut vaka, delil '
+          've marka bilgilerinizi değerlendirin.',
+      steps: [
+        'Markanızı ve ilgili vakayı seçin',
+        'Mevcut delilleri inceleyin',
+        'Uygun gümrük seçeneğini değerlendirin',
+      ],
+    ),
+    _ProtectionIntentData(
+      code: 'trademark_infringement',
+      ctaLabel: 'Müdahale seçeneklerini incele',
+      destination: _ProtectionIntentDestination.interventionLegal,
+      icon: Icons.gavel_outlined,
+      title: 'Marka ihlali',
+      description: 'Delil, vaka ve müdahale seçeneklerine geçin.',
+      guidanceTitle: 'Marka ihlaline karşı ilerlemek istiyorsunuz',
+      guidanceDescription:
+          'Mevcut bulgu ve delilleri vakaya dönüştürmeden veya müdahale '
+          'seçmeden önce durumunuzu bütün olarak inceleyin.',
+      steps: [
+        'Markanızı ve bulguyu seçin',
+        'Delilleri ve mevcut vakayı inceleyin',
+        'Uygun müdahale seçeneğini değerlendirin',
+      ],
+    ),
+  ];
+
+  void _openGuidance(BuildContext context, _ProtectionIntentData intent) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProtectionIntentGuidanceSheet(
+        intent: intent,
+        onContinue: () => _openProtectionIntentDestination(context, intent),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF7FAFC),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 64),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Markanızı bugün neye karşı korumak istiyorsunuz?',
+                style: TextStyle(
+                  color: MarkaKalkanTheme.navy,
+                  fontSize: 34,
+                  height: 1.16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'İhtiyacınızı seçin; MarkaKalkan size doğru yolu göstersin.',
+                style: TextStyle(
+                  color: Color(0xFF667580),
+                  fontSize: 16,
+                  height: 1.55,
+                ),
+              ),
+              const SizedBox(height: 34),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columns = width >= 1040 ? 4 : (width >= 620 ? 2 : 1);
+                  final itemWidth = (width - ((columns - 1) * 16)) / columns;
+
+                  return Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: _intents
+                        .map(
+                          (intent) => SizedBox(
+                            width: itemWidth,
+                            child: _ProtectionIntentCard(
+                              intent: intent,
+                              onTap: () => _openGuidance(context, intent),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProtectionIntentCard extends StatelessWidget {
+  const _ProtectionIntentCard({required this.intent, required this.onTap});
+
+  final _ProtectionIntentData intent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '${intent.title}. ${intent.description}',
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          key: Key('homeIntent_${intent.code}'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 176),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFDCE6EA)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0D0B2834),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE7F4F2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    intent.icon,
+                    color: MarkaKalkanTheme.teal,
+                    size: 25,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  intent.title,
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 17,
+                    height: 1.25,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  intent.description,
+                  style: const TextStyle(
+                    color: Color(0xFF667580),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProtectionIntentGuidanceSheet extends StatelessWidget {
+  const _ProtectionIntentGuidanceSheet({
+    required this.intent,
+    required this.onContinue,
+  });
+
+  final _ProtectionIntentData intent;
+  final Future<void> Function() onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 640;
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(maxWidth: 760),
+        margin: EdgeInsets.fromLTRB(
+          compact ? 12 : 24,
+          24,
+          compact ? 12 : 24,
+          12,
+        ),
+        padding: EdgeInsets.all(compact ? 22 : 30),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 30,
+              offset: Offset(0, 16),
+            ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE7F4F2),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Icon(
+                      intent.icon,
+                      color: MarkaKalkanTheme.teal,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      intent.guidanceTitle,
+                      style: const TextStyle(
+                        color: MarkaKalkanTheme.navy,
+                        fontSize: 24,
+                        height: 1.2,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Kapat',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                intent.guidanceDescription,
+                style: const TextStyle(
+                  color: Color(0xFF5F6E78),
+                  fontSize: 15,
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ...List.generate(intent.steps.length, (index) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF0B7A75),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Text(
+                            intent.steps[index],
+                            style: const TextStyle(
+                              color: MarkaKalkanTheme.navy,
+                              fontSize: 15,
+                              height: 1.4,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: Key('homeIntentContinue_${intent.code}'),
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await onContinue();
+                  },
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  label: Text(intent.ctaLabel),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MarkaKalkanTheme.teal,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Bu seçim yalnızca size doğru yolu gösterir; tarama veya '
+                'başka bir işlem başlatmaz.',
+                style: TextStyle(
+                  color: Color(0xFF78858D),
+                  fontSize: 12,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _ProtectionIntentDestination {
+  brandDetective,
+  digitalMarketMonitoring,
+  digitalDetectiveTasks,
+  supplySecurity,
+  customsSecurity,
+  interventionLegal,
+}
+
+class _ProtectionIntentData {
+  const _ProtectionIntentData({
+    required this.code,
+    required this.ctaLabel,
+    required this.destination,
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.guidanceTitle,
+    required this.guidanceDescription,
+    required this.steps,
+  });
+
+  final String code;
+  final String ctaLabel;
+  final _ProtectionIntentDestination destination;
+  final IconData icon;
+  final String title;
+  final String description;
+  final String guidanceTitle;
+  final String guidanceDescription;
+  final List<String> steps;
 }
 
 class _PublicRadarSection extends StatelessWidget {

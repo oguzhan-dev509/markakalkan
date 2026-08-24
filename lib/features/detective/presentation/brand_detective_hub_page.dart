@@ -73,6 +73,8 @@ class BrandDetectiveHubPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const _DigitalDetectiveFirstScreenPanel(),
+                const SizedBox(height: 28),
                 const _DetectiveHeader(),
                 const SizedBox(height: 30),
                 const Text(
@@ -481,6 +483,244 @@ class _DetectiveStatusBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+}
+
+// MK_UX_DD_1_1_2_FIRST_SCREEN_PANEL
+class _DigitalDetectiveFirstScreenPanel extends StatelessWidget {
+  const _DigitalDetectiveFirstScreenPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 24,
+            offset: Offset(0, 10),
+            color: Color(0x12000000),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Dijital Dedektif',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Markanızı dijital risklere karşı izleyin, mevcut görev ve '
+            'bulguları inceleyin, 12 Yapay Zekâ Ajanı’nın nasıl çalıştığını '
+            'görün.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              height: 1.45,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 760;
+              final cardWidth = compact
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - 16) / 2;
+
+              return Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: _DigitalDetectiveJourneyCard(
+                      icon: Icons.fact_check_outlined,
+                      title: 'Mevcut durumu görün',
+                      body:
+                          'Daha önce oluşturulan dijital araştırma görevlerini '
+                          've bulunan sonuçları inceleyin.',
+                      actionLabel: 'Görevleri ve bulguları incele',
+                      onPressed: () =>
+                          AppRouter.openDigitalDetectiveTasks(context),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _DigitalDetectiveJourneyCard(
+                      icon: Icons.hub_outlined,
+                      title: '12 Yapay Zekâ Ajanı',
+                      body:
+                          '12 uzman yapay zekâ ajanı dijital sahayı farklı risk '
+                          'türleri açısından birlikte inceler; kritik kararlar '
+                          'insan onayıyla ilerler.',
+                      actionLabel: '12 ajanı tanıyın',
+                      onPressed: () =>
+                          AppRouter.openAiFieldDetectivesHub(context),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _DigitalDetectiveJourneyCard(
+                      icon: Icons.business_center_outlined,
+                      title: 'Marka kapsamınızı yönetin',
+                      body:
+                          'Marka portföyünüzü görüntüleyin ve kayıtlarınızı '
+                          'yönetin. Portföyü açmak marka seçimi veya marka adına '
+                          'işlem yetkisi vermez.',
+                      actionLabel: 'Marka portföyünü aç',
+                      onPressed: () => AppRouter.openBrandPortfolio(context),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: const _DigitalDetectiveOperationGateCard(),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DigitalDetectiveJourneyCard extends StatelessWidget {
+  const _DigitalDetectiveJourneyCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.actionLabel,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final String actionLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: colorScheme.primary),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.45,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              onPressed: onPressed,
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DigitalDetectiveOperationGateCard extends StatelessWidget {
+  const _DigitalDetectiveOperationGateCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline_rounded, color: colorScheme.primary),
+          const SizedBox(height: 14),
+          Text(
+            'Yeni 12-Ajan operasyonu',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Yeni bir 12-Ajan operasyonu ancak hizmet erişimi, doğrulanmış '
+            'marka erişimi ve işlem özelinde yetki birlikte doğrulandığında '
+            'başlatılmalıdır.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.45,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Chip(label: Text('Hizmet erişimi')),
+              Chip(label: Text('Doğrulanmış marka erişimi')),
+              Chip(label: Text('İşlem yetkisi')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Bu kart yalnızca gerekli koşulları açıklar; tarama veya operasyon '
+            'başlatmaz.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              height: 1.4,
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
