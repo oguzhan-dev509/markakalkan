@@ -22,33 +22,51 @@ void main() {
     },
   );
 
-  test(
-    'guided intent and mobile verification keep the approved top order',
-    () {
-      const heroMarker = 'SliverToBoxAdapter(child: _HeroSection())';
-      const intentMarker =
-          'SliverToBoxAdapter(child: _ProtectionIntentSection())';
-      const mobileVerificationMarker =
-          'SliverToBoxAdapter(child: _MobileVerificationSection())';
-      const radarMarker = 'SliverToBoxAdapter(child: _PublicRadarSection())';
+  test('prominent Marka Dedektifi entries open the detective hub', () {
+    final headerStart = homeSource.indexOf('final actions = Wrap(');
+    final headerEnd = homeSource.indexOf('if (isNarrow) {', headerStart);
+    expect(headerStart, greaterThanOrEqualTo(0));
+    expect(headerEnd, greaterThan(headerStart));
+    final headerSource = homeSource.substring(headerStart, headerEnd);
+    expect(headerSource, contains('AppRouter.openBrandDetectiveHub(context)'));
+    expect(
+      headerSource,
+      isNot(contains('AppRouter.openProductVerification(context)')),
+    );
 
-      final heroIndex = homeSource.indexOf(heroMarker);
-      final intentIndex = homeSource.indexOf(intentMarker);
-      final mobileVerificationIndex =
-          homeSource.indexOf(mobileVerificationMarker);
-      final radarIndex = homeSource.indexOf(radarMarker);
+    final heroStart = homeSource.indexOf('class _HeroSection');
+    final heroEnd = homeSource.indexOf('class _HeroLabel');
+    expect(heroStart, greaterThanOrEqualTo(0));
+    expect(heroEnd, greaterThan(heroStart));
+    final heroSource = homeSource.substring(heroStart, heroEnd);
+    expect(heroSource, contains('AppRouter.openBrandDetectiveHub(context)'));
+  });
 
-      expect(heroIndex, greaterThanOrEqualTo(0));
-      expect(intentIndex, greaterThan(heroIndex));
-      expect(mobileVerificationIndex, greaterThan(intentIndex));
-      expect(radarIndex, greaterThan(mobileVerificationIndex));
-      expect(
-        homeSource.substring(heroIndex, radarIndex),
-        contains(mobileVerificationMarker),
-      );
-      expect(homeSource, contains('Gerçek Ürün – Sahte İkiz Karşılaştırmaları'));
-    },
-  );
+  test('guided intent and mobile verification keep the approved top order', () {
+    const heroMarker = 'SliverToBoxAdapter(child: _HeroSection())';
+    const intentMarker =
+        'SliverToBoxAdapter(child: _ProtectionIntentSection())';
+    const mobileVerificationMarker =
+        'SliverToBoxAdapter(child: _MobileVerificationSection())';
+    const radarMarker = 'SliverToBoxAdapter(child: _PublicRadarSection())';
+
+    final heroIndex = homeSource.indexOf(heroMarker);
+    final intentIndex = homeSource.indexOf(intentMarker);
+    final mobileVerificationIndex = homeSource.indexOf(
+      mobileVerificationMarker,
+    );
+    final radarIndex = homeSource.indexOf(radarMarker);
+
+    expect(heroIndex, greaterThanOrEqualTo(0));
+    expect(intentIndex, greaterThan(heroIndex));
+    expect(mobileVerificationIndex, greaterThan(intentIndex));
+    expect(radarIndex, greaterThan(mobileVerificationIndex));
+    expect(
+      homeSource.substring(heroIndex, radarIndex),
+      contains(mobileVerificationMarker),
+    );
+    expect(homeSource, contains('Gerçek Ürün – Sahte İkiz Karşılaştırmaları'));
+  });
 
   test('mobile hero is compact and defers the verification card', () {
     final heroStart = homeSource.indexOf('class _HeroSection');
@@ -280,116 +298,111 @@ void main() {
     expect(homeSource, isNot(contains('partnerLogoUrl')));
   });
 
-  test('MK-UX-HOME-2 guidance stays pure and CTA routing is navigation-only', () {
-    final source = File(
-      'lib/features/home/presentation/markakalkan_home_page.dart',
-    ).readAsStringSync().replaceAll('\r\n', '\n');
+  test(
+    'MK-UX-HOME-2 guidance stays pure and CTA routing is navigation-only',
+    () {
+      final source = File(
+        'lib/features/home/presentation/markakalkan_home_page.dart',
+      ).readAsStringSync().replaceAll('\r\n', '\n');
 
-    const startMarker =
-        'class _ProtectionIntentSection extends StatelessWidget {';
-    const endMarker = 'class _PublicRadarSection extends StatelessWidget {';
-    final start = source.indexOf(startMarker);
-    final end = source.indexOf(endMarker);
+      const startMarker =
+          'class _ProtectionIntentSection extends StatelessWidget {';
+      const endMarker = 'class _PublicRadarSection extends StatelessWidget {';
+      final start = source.indexOf(startMarker);
+      final end = source.indexOf(endMarker);
 
-    expect(start, greaterThanOrEqualTo(0));
-    expect(end, greaterThan(start));
+      expect(start, greaterThanOrEqualTo(0));
+      expect(end, greaterThan(start));
 
-    final block = source.substring(start, end);
+      final block = source.substring(start, end);
 
-    const mappings = <String>[
-      "code: 'counterfeit_product',\n"
-          "      ctaLabel: 'Dijital Dedektife geç',\n"
-          '      destination: _ProtectionIntentDestination.brandDetective,',
-      "code: 'fake_account',\n"
-          "      ctaLabel: 'Dijital Dedektife geç',\n"
-          '      destination: _ProtectionIntentDestination.brandDetective,',
-      "code: 'fake_website',\n"
-          "      ctaLabel: 'Dijital Dedektife geç',\n"
-          '      destination: _ProtectionIntentDestination.brandDetective,',
-      "code: 'unauthorized_seller',\n"
-          "      ctaLabel: 'Satıcı takibine geç',\n"
-          '      destination: '
-          '_ProtectionIntentDestination.digitalMarketMonitoring,',
-      "code: 'pirated_content',\n"
-          "      ctaLabel: 'Dijital Dedektife geç',\n"
-          '      destination: '
-          '_ProtectionIntentDestination.digitalDetectiveTasks,',
-      "code: 'supply_risk',\n"
-          "      ctaLabel: 'Tedarik güvenliğine geç',\n"
-          '      destination: _ProtectionIntentDestination.supplySecurity,',
-      "code: 'customs_risk',\n"
-          "      ctaLabel: 'Gümrük güvenliğine geç',\n"
-          '      destination: _ProtectionIntentDestination.customsSecurity,',
-      "code: 'trademark_infringement',\n"
-          "      ctaLabel: 'Müdahale seçeneklerini incele',\n"
-          '      destination: '
-          '_ProtectionIntentDestination.interventionLegal,',
-    ];
+      const mappings = <String>[
+        "code: 'counterfeit_product',\n"
+            "      ctaLabel: 'Dijital Dedektife geç',\n"
+            '      destination: _ProtectionIntentDestination.brandDetective,',
+        "code: 'fake_account',\n"
+            "      ctaLabel: 'Dijital Dedektife geç',\n"
+            '      destination: _ProtectionIntentDestination.brandDetective,',
+        "code: 'fake_website',\n"
+            "      ctaLabel: 'Dijital Dedektife geç',\n"
+            '      destination: _ProtectionIntentDestination.brandDetective,',
+        "code: 'unauthorized_seller',\n"
+            "      ctaLabel: 'Satıcı takibine geç',\n"
+            '      destination: '
+            '_ProtectionIntentDestination.digitalMarketMonitoring,',
+        "code: 'pirated_content',\n"
+            "      ctaLabel: 'Dijital Dedektife geç',\n"
+            '      destination: '
+            '_ProtectionIntentDestination.digitalDetectiveTasks,',
+        "code: 'supply_risk',\n"
+            "      ctaLabel: 'Tedarik güvenliğine geç',\n"
+            '      destination: _ProtectionIntentDestination.supplySecurity,',
+        "code: 'customs_risk',\n"
+            "      ctaLabel: 'Gümrük güvenliğine geç',\n"
+            '      destination: _ProtectionIntentDestination.customsSecurity,',
+        "code: 'trademark_infringement',\n"
+            "      ctaLabel: 'Müdahale seçeneklerini incele',\n"
+            '      destination: '
+            '_ProtectionIntentDestination.interventionLegal,',
+      ];
 
-    for (final mapping in mappings) {
-      expect(block, contains(mapping));
-    }
+      for (final mapping in mappings) {
+        expect(block, contains(mapping));
+      }
 
-    const safeRoutes = <String>[
-      'AppRouter.openBrandDetectiveHub(context)',
-      'AppRouter.openDijitalPazarIzleme(context)',
-      'AppRouter.openDigitalDetectiveTasks(context)',
-      'AppRouter.openSupplySecurityHub(context)',
-      'AppRouter.openCustomsSecurityHub(context)',
-      'AppRouter.openInterventionLegalHub(context)',
-    ];
-    for (final route in safeRoutes) {
-      expect(source, contains(route));
-    }
+      const safeRoutes = <String>[
+        'AppRouter.openBrandDetectiveHub(context)',
+        'AppRouter.openDijitalPazarIzleme(context)',
+        'AppRouter.openDigitalDetectiveTasks(context)',
+        'AppRouter.openSupplySecurityHub(context)',
+        'AppRouter.openCustomsSecurityHub(context)',
+        'AppRouter.openInterventionLegalHub(context)',
+      ];
+      for (final route in safeRoutes) {
+        expect(source, contains(route));
+      }
 
-    expect(
-      source,
-      contains('Future<void> _openProtectionIntentDestination('),
-    );
-    expect(block, isNot(contains('AppRouter.')));
-    expect(
-      block,
-      contains(
-        'onContinue: () => '
-        '_openProtectionIntentDestination(context, intent),',
-      ),
-    );
+      expect(
+        source,
+        contains('Future<void> _openProtectionIntentDestination('),
+      );
+      expect(block, isNot(contains('AppRouter.')));
+      expect(
+        block,
+        contains(
+          'onContinue: () => '
+          '_openProtectionIntentDestination(context, intent),',
+        ),
+      );
 
-    expect(
-      block,
-      contains("onTap: () => _openGuidance(context, intent),"),
-    );
-    expect(block, contains('showModalBottomSheet<void>'));
-    expect(
-      block,
-      contains("key: Key('homeIntentContinue_\${intent.code}')"),
-    );
-    expect(block, contains('Navigator.of(context).pop();'));
-    expect(block, contains('await onContinue();'));
-    expect(
-      block,
-      contains(
-        'Bu seçim yalnızca size doğru yolu gösterir; tarama veya ',
-      ),
-    );
-    expect(block, contains('başka bir işlem başlatmaz.'));
+      expect(block, contains("onTap: () => _openGuidance(context, intent),"));
+      expect(block, contains('showModalBottomSheet<void>'));
+      expect(block, contains("key: Key('homeIntentContinue_\${intent.code}')"));
+      expect(block, contains('Navigator.of(context).pop();'));
+      expect(block, contains('await onContinue();'));
+      expect(
+        block,
+        contains('Bu seçim yalnızca size doğru yolu gösterir; tarama veya '),
+      );
+      expect(block, contains('başka bir işlem başlatmaz.'));
 
-    const forbidden = <String>[
-      'httpsCallable',
-      'FirebaseFunctions',
-      'startPublicLiteRiskScan',
-      'openPublicLiteRiskScan',
-      'n8n',
-      'createInterventionLegalMatter',
-      'createCustomsBorderIntervention',
-      'createCustomsProtectionProfile',
-      'recordExternalSubmission',
-      'recordAuthorityOutcome',
-      'createAndActivate',
-      'AppRouter.openDigitalDetectiveFindings',
-    ];
-    for (final marker in forbidden) {
-      expect(block, isNot(contains(marker)));
-    }
-  });
+      const forbidden = <String>[
+        'httpsCallable',
+        'FirebaseFunctions',
+        'startPublicLiteRiskScan',
+        'openPublicLiteRiskScan',
+        'n8n',
+        'createInterventionLegalMatter',
+        'createCustomsBorderIntervention',
+        'createCustomsProtectionProfile',
+        'recordExternalSubmission',
+        'recordAuthorityOutcome',
+        'createAndActivate',
+        'AppRouter.openDigitalDetectiveFindings',
+      ];
+      for (final marker in forbidden) {
+        expect(block, isNot(contains(marker)));
+      }
+    },
+  );
 }

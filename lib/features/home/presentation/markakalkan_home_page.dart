@@ -97,7 +97,7 @@ class _Header extends StatelessWidget {
                 children: [
                   TextButton(
                     onPressed: () {
-                      AppRouter.openProductVerification(context);
+                      AppRouter.openBrandDetectiveHub(context);
                     },
                     child: const Text('Marka Dedektifi'),
                   ),
@@ -203,7 +203,7 @@ class _HeroSection extends StatelessWidget {
                       ),
                       OutlinedButton.icon(
                         onPressed: () {
-                          AppRouter.openProductVerification(context);
+                          AppRouter.openBrandDetectiveHub(context);
                         },
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
@@ -2424,12 +2424,7 @@ class _Footer extends StatelessWidget {
       key: const Key('homeCorporateFooter'),
       decoration: const BoxDecoration(
         color: _background,
-        border: Border(
-          top: BorderSide(
-            color: _accent,
-            width: 3,
-          ),
-        ),
+        border: Border(top: BorderSide(color: _accent, width: 3)),
       ),
       child: Center(
         child: ConstrainedBox(
@@ -2480,9 +2475,7 @@ class _HomeTrustSecurityPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: _Footer._panel,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.10),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -2524,11 +2517,7 @@ class _HomeTrustSecurityPanel extends StatelessWidget {
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                intro,
-                const SizedBox(height: 18),
-                principles,
-              ],
+              children: [intro, const SizedBox(height: 18), principles],
             );
           }
 
@@ -2554,16 +2543,11 @@ class _HomeTrustChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.11),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.11)),
       ),
       child: Text(
         label,
@@ -2585,10 +2569,7 @@ class _HomeCorporateFooterWide extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
-          flex: 6,
-          child: _HomeCorporateBrandBlock(),
-        ),
+        const Expanded(flex: 6, child: _HomeCorporateBrandBlock()),
         const SizedBox(width: 42),
         Expanded(
           flex: 10,
@@ -2705,9 +2686,7 @@ class _HomeCorporateBrandBlock extends StatelessWidget {
               decoration: BoxDecoration(
                 color: _Footer._panel,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.12),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
               ),
               child: const Icon(
                 Icons.shield_outlined,
@@ -2767,10 +2746,7 @@ class _HomePlatformColumn extends StatelessWidget {
 }
 
 class _HomeFooterColumn extends StatelessWidget {
-  const _HomeFooterColumn({
-    required this.title,
-    required this.items,
-  });
+  const _HomeFooterColumn({required this.title, required this.items});
 
   final String title;
   final List<_HomeFooterItemData> items;
@@ -2801,9 +2777,7 @@ class _HomeFooterColumn extends StatelessWidget {
 }
 
 class _HomeFooterLink extends StatelessWidget {
-  const _HomeFooterLink({
-    required this.item,
-  });
+  const _HomeFooterLink({required this.item});
 
   final _HomeFooterItemData item;
 
@@ -2816,9 +2790,7 @@ class _HomeFooterLink extends StatelessWidget {
             ? _Footer._muted
             : Colors.white.withValues(alpha: 0.92),
         fontSize: 13,
-        fontWeight: item.onTap == null
-            ? FontWeight.w500
-            : FontWeight.w600,
+        fontWeight: item.onTap == null ? FontWeight.w500 : FontWeight.w600,
         height: 1.35,
       ),
     );
@@ -2867,26 +2839,18 @@ class _HomeCorporateFooterBottom extends StatelessWidget {
 
         final copyright = Text(
           '© 2026 MarkaKalkan. Tüm hakları saklıdır.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: _Footer._muted,
-          ),
+          style: theme.textTheme.bodySmall?.copyWith(color: _Footer._muted),
         );
 
         final platform = Text(
           'Dijital Ürün Kimliği ve Marka Koruma Platformu',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: _Footer._muted,
-          ),
+          style: theme.textTheme.bodySmall?.copyWith(color: _Footer._muted),
         );
 
         if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              copyright,
-              const SizedBox(height: 7),
-              platform,
-            ],
+            children: [copyright, const SizedBox(height: 7), platform],
           );
         }
 
@@ -2903,10 +2867,7 @@ class _HomeCorporateFooterBottom extends StatelessWidget {
 }
 
 class _HomeFooterItemData {
-  const _HomeFooterItemData(
-    this.label, {
-    this.onTap,
-  });
+  const _HomeFooterItemData(this.label, {this.onTap});
 
   final String label;
   final VoidCallback? onTap;
