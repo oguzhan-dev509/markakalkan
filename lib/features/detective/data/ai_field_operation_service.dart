@@ -1,35 +1,113 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 import 'package:markakalkan/features/detective/data/ai_field_operation_models.dart';
+
+typedef AiFieldOperationCallable =
+    Future<Object?> Function(String callableName, Map<String, Object?> payload);
+
+final class AiFieldOperationFailure implements Exception {
+  const AiFieldOperationFailure(
+    this.code,
+    this.message, {
+    this.retryable = false,
+  });
+
+  final String code;
+  final String message;
+  final bool retryable;
+
+  @override
+  String toString() => 'AiFieldOperationFailure($code)';
+}
+
+final class AiFieldOperationReadiness {
+  const AiFieldOperationReadiness({
+    required this.verifiedBrand,
+    required this.serviceAccess,
+    required this.operationAuthority,
+    required this.ready,
+    required this.brandName,
+    required this.companyName,
+    required this.reasons,
+  });
+
+  final bool verifiedBrand;
+  final bool serviceAccess;
+  final bool operationAuthority;
+  final bool ready;
+  final String brandName;
+  final String companyName;
+  final List<String> reasons;
+
+  factory AiFieldOperationReadiness.fromValue(Object? value) {
+    final root = _map(value);
+    if (root['contractVersion'] != AiFieldOperationService.contractVersion) {
+      throw const FormatException('Yetki yanıtı sözleşme sürümü geçersiz.');
+    }
+    final gates = _map(root['gates']);
+    final brand = root['brand'] == null
+        ? const <String, dynamic>{}
+        : _map(root['brand']);
+    final reasons = root['gates'] is Map ? gates['reasons'] : null;
+    return AiFieldOperationReadiness(
+      verifiedBrand: gates['verifiedBrand'] == true,
+      serviceAccess: gates['serviceAccess'] == true,
+      operationAuthority: gates['operationAuthority'] == true,
+      ready: gates['ready'] == true,
+      brandName: brand['brandName']?.toString().trim() ?? '',
+      companyName: brand['companyName']?.toString().trim() ?? '',
+      reasons: reasons is List
+          ? reasons.map((item) => item.toString()).toList(growable: false)
+          : const <String>[],
+    );
+  }
+}
 
 class AiFieldOperationService {
   AiFieldOperationService({
     FirebaseFirestore? firestore,
     FirebaseAuth? firebaseAuth,
+    FirebaseFunctions? functions,
+    Future<void> Function()? ensureAppCheckReady,
+    AiFieldOperationCallable? callable,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
+       _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+       _functions = callable == null
+           ? functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3')
+           : null,
+       _ensureAppCheckReady =
+           ensureAppCheckReady ?? AppCheckBootstrap.instance.ensureReady,
+       _callable = callable;
+
+  static const String contractVersion = 'ai-field-operation-authority-v1';
+  static const String readinessCallableName = 'getAiFieldOperationReadiness';
+  static const String createCallableName = 'createAiFieldOperation';
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _firebaseAuth;
+  final FirebaseFunctions? _functions;
+  final Future<void> Function() _ensureAppCheckReady;
+  final AiFieldOperationCallable? _callable;
 
   User get _currentUser {
     final user = _firebaseAuth.currentUser;
-
     if (user == null) {
-      throw StateError(
+      throw const AiFieldOperationFailure(
+        'unauthenticated',
         'Yapay Zekâ Saha Dedektifi işlemi için oturum açılmalıdır.',
       );
     }
-
     return user;
   }
 
   CollectionReference<Map<String, dynamic>> get _operationsCollection {
-    final user = _currentUser;
-
     return _firestore
         .collection('brands')
-        .doc(user.uid)
+        .doc(_currentUser.uid)
         .collection('aiFieldOperations');
   }
 
@@ -49,7 +127,6 @@ class AiFieldOperationService {
       if (!document.exists) {
         return null;
       }
-
       return AiFieldOperation.fromDocument(document);
     });
   }
@@ -67,139 +144,130 @@ class AiFieldOperationService {
         );
   }
 
+  Future<AiFieldOperationReadiness> getReadiness() async {
+    final value = await _invoke(
+      readinessCallableName,
+      const <String, Object?>{},
+    );
+    return AiFieldOperationReadiness.fromValue(value);
+  }
+
   Future<String> createOperation({
     required String title,
     required String objective,
     AiFieldOperationPriority priority = AiFieldOperationPriority.normal,
     Map<String, dynamic> initialInput = const <String, dynamic>{},
   }) async {
-    final normalizedTitle = title.trim();
-    final normalizedObjective = objective.trim();
-
-    if (normalizedTitle.isEmpty) {
-      throw ArgumentError('Operasyon başlığı boş bırakılamaz.');
-    }
-
-    if (normalizedObjective.isEmpty) {
-      throw ArgumentError('Operasyon amacı boş bırakılamaz.');
-    }
-
-    final operationDocument = _operationsCollection.doc();
-    final batch = _firestore.batch();
-    final agents = AiFieldAgentCatalog.agents;
-
-    batch.set(operationDocument, {
-      'title': normalizedTitle,
-      'objective': normalizedObjective,
-      'status': AiFieldOperationStatus.queued.value,
+    final requestId = _uuidV4();
+    final value = await _invoke(createCallableName, <String, Object?>{
+      'contractVersion': contractVersion,
+      'requestId': requestId,
+      'idempotencyKey': 'ai-field-operation:$requestId',
+      'title': title.trim(),
+      'objective': objective.trim(),
       'priority': priority.value,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'currentAgentId': agents.first.id,
-      'requiresHumanApproval': true,
+      'initialInput': Map<String, Object?>.from(initialInput),
     });
-
-    for (var index = 0; index < agents.length; index++) {
-      final agent = agents[index];
-      final isFirstAgent = index == 0;
-      final nextAgentId = index + 1 < agents.length ? agents[index + 1].id : '';
-
-      final taskDocument = operationDocument
-          .collection('agentTasks')
-          .doc(agent.id);
-
-      batch.set(taskDocument, {
-        'agentId': agent.id,
-        'agentName': agent.name,
-        'agentOrder': agent.order,
-        'status': isFirstAgent
-            ? AiFieldAgentTaskStatus.queued.value
-            : AiFieldAgentTaskStatus.pending.value,
-        'input': isFirstAgent
-            ? <String, dynamic>{
-                'operationTitle': normalizedTitle,
-                'operationObjective': normalizedObjective,
-                ...initialInput,
-              }
-            : <String, dynamic>{},
-        'output': <String, dynamic>{},
-        'startedAt': null,
-        'completedAt': null,
-        'errorMessage': '',
-        'handoffToAgentId': nextAgentId,
-      });
+    final result = _map(value);
+    if (result['contractVersion'] != contractVersion ||
+        result['resultType'] != 'ai_field_operation') {
+      throw const AiFieldOperationFailure(
+        'invalid-response',
+        'Operasyon hizmetinden geçersiz yanıt alındı.',
+      );
     }
-
-    await batch.commit();
-
-    return operationDocument.id;
+    final operationId = result['operationId']?.toString().trim() ?? '';
+    if (operationId.isEmpty) {
+      throw const AiFieldOperationFailure(
+        'invalid-response',
+        'Operasyon numarası alınamadı.',
+      );
+    }
+    return operationId;
   }
 
-  Future<void> updateOperationStatus({
-    required String operationId,
-    required AiFieldOperationStatus status,
-    String? currentAgentId,
-  }) async {
-    final updates = <String, dynamic>{
-      'status': status.value,
-      'updatedAt': FieldValue.serverTimestamp(),
+  Future<Object?> _invoke(
+    String callableName,
+    Map<String, Object?> payload,
+  ) async {
+    try {
+      if (_currentUser.uid.isEmpty) {
+        throw const AiFieldOperationFailure(
+          'unauthenticated',
+          'Operasyon için oturum açmanız gerekir.',
+        );
+      }
+      await _ensureAppCheckReady();
+      final injected = _callable;
+      if (injected != null) {
+        return await injected(callableName, payload);
+      }
+      return (await _functions!
+              .httpsCallable(callableName)
+              .call<Object?>(payload))
+          .data;
+    } on AiFieldOperationFailure {
+      rethrow;
+    } on FirebaseFunctionsException catch (error) {
+      throw AiFieldOperationFailure(
+        error.code,
+        _message(error),
+        retryable: const {
+          'aborted',
+          'deadline-exceeded',
+          'resource-exhausted',
+          'unavailable',
+        }.contains(error.code),
+      );
+    } on AppCheckUnavailableException {
+      throw const AiFieldOperationFailure(
+        'app-check-unavailable',
+        'Güvenlik doğrulaması hazırlanamadı. Sayfayı yenileyip tekrar deneyin.',
+        retryable: true,
+      );
+    } on FormatException catch (error) {
+      throw AiFieldOperationFailure('invalid-response', error.message);
+    }
+  }
+
+  static String _message(FirebaseFunctionsException error) {
+    final safe = error.message?.trim();
+    if (safe != null && safe.isNotEmpty && error.code != 'internal') {
+      return safe;
+    }
+    return switch (error.code) {
+      'unauthenticated' => 'Operasyon için oturum açmanız gerekir.',
+      'failed-precondition' => 'Uygulama güvenlik doğrulaması tamamlanamadı.',
+      'permission-denied' =>
+        'Marka, hizmet veya operasyon yetkisi henüz hazır değil.',
+      'invalid-argument' => 'Operasyon bilgilerini kontrol edin.',
+      'already-exists' =>
+        'Bu istek kimliği daha önce farklı içerikle kullanılmış.',
+      'unavailable' => 'Operasyon hizmeti geçici olarak kullanılamıyor.',
+      _ => 'Operasyon güvenli biçimde oluşturulamadı.',
     };
-
-    if (currentAgentId != null) {
-      updates['currentAgentId'] = currentAgentId.trim();
-    }
-
-    await _operationsCollection.doc(operationId).update(updates);
   }
+}
 
-  Future<void> updateAgentTaskStatus({
-    required String operationId,
-    required String agentId,
-    required AiFieldAgentTaskStatus status,
-    Map<String, dynamic>? output,
-    String? errorMessage,
-    String? handoffToAgentId,
-  }) async {
-    final updates = <String, dynamic>{'status': status.value};
+String _uuidV4() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final value = bytes
+      .map((part) => part.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '${value.substring(0, 8)}-${value.substring(8, 12)}-'
+      '${value.substring(12, 16)}-${value.substring(16, 20)}-'
+      '${value.substring(20)}';
+}
 
-    if (status == AiFieldAgentTaskStatus.running) {
-      updates['startedAt'] = FieldValue.serverTimestamp();
-      updates['completedAt'] = null;
-      updates['errorMessage'] = '';
-    }
-
-    if (status == AiFieldAgentTaskStatus.completed ||
-        status == AiFieldAgentTaskStatus.failed ||
-        status == AiFieldAgentTaskStatus.skipped) {
-      updates['completedAt'] = FieldValue.serverTimestamp();
-    }
-
-    if (output != null) {
-      updates['output'] = output;
-    }
-
-    if (errorMessage != null) {
-      updates['errorMessage'] = errorMessage.trim();
-    }
-
-    if (handoffToAgentId != null) {
-      updates['handoffToAgentId'] = handoffToAgentId.trim();
-    }
-
-    final operationDocument = _operationsCollection.doc(operationId);
-
-    final batch = _firestore.batch();
-
-    batch.update(
-      operationDocument.collection('agentTasks').doc(agentId),
-      updates,
-    );
-
-    batch.update(operationDocument, {
-      'currentAgentId': agentId,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit();
+Map<String, dynamic> _map(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return value;
   }
+  if (value is Map) {
+    return value.map((key, item) => MapEntry(key.toString(), item));
+  }
+  throw const FormatException('Nesne bekleniyordu.');
 }

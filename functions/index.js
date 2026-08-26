@@ -109,6 +109,12 @@ const {
     "./digital_detective/ai_field_operation_bridge",
 );
 const {
+  buildCreateAiFieldOperation,
+  buildGetAiFieldOperationReadiness,
+} = require(
+    "./digital_detective/ai_field_operation_authority",
+);
+const {
   buildReceiveDigitalDetectiveResult,
 } = require(
     "./digital_detective/digital_detective_result",
@@ -305,6 +311,10 @@ exports.bridgeAiFieldOperation =
       onDocumentCreated,
       logger,
     });
+exports.getAiFieldOperationReadiness =
+    buildGetAiFieldOperationReadiness({db});
+exports.createAiFieldOperation =
+    buildCreateAiFieldOperation({db, admin});
 exports.receiveDigitalDetectiveResult =
     buildReceiveDigitalDetectiveResult({
       db,

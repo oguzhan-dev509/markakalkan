@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:markakalkan/core/theme/markakalkan_theme.dart';
 import 'package:markakalkan/features/detective/data/ai_field_operation_models.dart';
@@ -25,7 +24,34 @@ class _AiFieldOperationCreatePageState
   final _targetUrlController = TextEditingController();
 
   AiFieldOperationPriority _priority = AiFieldOperationPriority.normal;
+  AiFieldOperationReadiness? _readiness;
+  bool _isLoadingReadiness = true;
   bool _isSubmitting = false;
+  String? _readinessError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReadiness();
+  }
+
+  Future<void> _loadReadiness() async {
+    setState(() {
+      _isLoadingReadiness = true;
+      _readinessError = null;
+    });
+    try {
+      final readiness = await _operationService.getReadiness();
+      if (!mounted) return;
+      _brandNameController.text = readiness.brandName;
+      setState(() => _readiness = readiness);
+    } on AiFieldOperationFailure catch (error) {
+      if (!mounted) return;
+      setState(() => _readinessError = error.message);
+    } finally {
+      if (mounted) setState(() => _isLoadingReadiness = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -75,6 +101,45 @@ class _AiFieldOperationCreatePageState
     return null;
   }
 
+  String? _concreteTargetValidator(String? _) {
+    if (_productNameController.text.trim().isEmpty &&
+        _sellerNameController.text.trim().isEmpty &&
+        _targetUrlController.text.trim().isEmpty) {
+      return 'En az bir somut hedef girin: ürün, satıcı veya URL.';
+    }
+    return null;
+  }
+
+  Future<bool> _confirmOperation() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Operasyonu Onayla'),
+        content: Text(
+          'Marka: ${_readiness?.brandName ?? ''}\n'
+          'Başlık: ${_titleController.text.trim()}\n'
+          'Hedef: ${_productNameController.text.trim().isNotEmpty
+              ? _productNameController.text.trim()
+              : _sellerNameController.text.trim().isNotEmpty
+              ? _sellerNameController.text.trim()
+              : _targetUrlController.text.trim()}\n\n'
+          'Operasyon ve 12 ajan görevi sunucuda atomik olarak oluşturulacaktır.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Geri Dön'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Operasyonu Onayla'),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
   String _priorityLabel(AiFieldOperationPriority priority) {
     return switch (priority) {
       AiFieldOperationPriority.low => 'Düşük',
@@ -85,6 +150,16 @@ class _AiFieldOperationCreatePageState
   }
 
   Future<void> _submitOperation() async {
+    if (_readiness?.ready != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Marka, hizmet ve operasyon yetkisi birlikte hazır olmalıdır.',
+          ),
+        ),
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -97,6 +172,8 @@ class _AiFieldOperationCreatePageState
         );
       return;
     }
+
+    if (!await _confirmOperation()) return;
 
     setState(() {
       _isSubmitting = true;
@@ -133,17 +210,11 @@ class _AiFieldOperationCreatePageState
       );
 
       Navigator.of(context).pop(operationId);
-    } on FirebaseException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+    } on AiFieldOperationFailure catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Operasyon Firestore’a kaydedilemedi: '
-            '${error.message ?? error.code}',
-          ),
+          content: Text(error.message),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -204,6 +275,13 @@ class _AiFieldOperationCreatePageState
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const _OperationCreateHeader(),
+                  const SizedBox(height: 18),
+                  _ReadinessPanel(
+                    readiness: _readiness,
+                    loading: _isLoadingReadiness,
+                    error: _readinessError,
+                    onRetry: _loadReadiness,
+                  ),
                   const SizedBox(height: 22),
                   _FormSection(
                     title: 'Operasyon Tanımı',
@@ -289,8 +367,9 @@ class _AiFieldOperationCreatePageState
                       children: [
                         TextFormField(
                           controller: _brandNameController,
+                          readOnly: true,
                           decoration: const InputDecoration(
-                            labelText: 'Marka Adı',
+                            labelText: 'Doğrulanmış marka',
                             hintText: 'Örnek: MarkaKalkan Test Markası',
                             prefixIcon: Icon(Icons.shield_outlined),
                             border: OutlineInputBorder(),
@@ -299,6 +378,7 @@ class _AiFieldOperationCreatePageState
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _productNameController,
+                          validator: _concreteTargetValidator,
                           decoration: const InputDecoration(
                             labelText: 'Ürün Adı',
                             hintText: 'Örnek: Bal 850 g',
@@ -325,6 +405,8 @@ class _AiFieldOperationCreatePageState
                           decoration: const InputDecoration(
                             labelText: 'Başlangıç URL’si',
                             hintText: 'https://...',
+                            helperText:
+                                'Yalnız incelemenin başlayacağı açık http/https adresini girin.',
                             prefixIcon: Icon(Icons.link_outlined),
                             border: OutlineInputBorder(),
                           ),
@@ -336,7 +418,12 @@ class _AiFieldOperationCreatePageState
                   const _AgentCreationSummary(),
                   const SizedBox(height: 22),
                   FilledButton.icon(
-                    onPressed: _isSubmitting ? null : _submitOperation,
+                    onPressed:
+                        _isSubmitting ||
+                            _isLoadingReadiness ||
+                            _readiness?.ready != true
+                        ? null
+                        : _submitOperation,
                     style: FilledButton.styleFrom(
                       backgroundColor: MarkaKalkanTheme.teal,
                       foregroundColor: Colors.white,
@@ -368,6 +455,92 @@ class _AiFieldOperationCreatePageState
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ReadinessPanel extends StatelessWidget {
+  const _ReadinessPanel({
+    required this.readiness,
+    required this.loading,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final AiFieldOperationReadiness? readiness;
+  final bool loading;
+  final String? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const _FormSection(
+        title: 'Operasyon Hazırlığı',
+        description: 'Marka, hizmet ve işlem yetkileri doğrulanıyor.',
+        child: LinearProgressIndicator(),
+      );
+    }
+    if (error != null) {
+      return _FormSection(
+        title: 'Operasyon Hazırlığı',
+        description: error!,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Yeniden Doğrula'),
+          ),
+        ),
+      );
+    }
+    final value = readiness;
+    return _FormSection(
+      title: 'Operasyon Hazırlığı',
+      description: value?.ready == true
+          ? 'Üç güvenlik koşulu tamamlandı. Operasyon oluşturulabilir.'
+          : 'Operasyon başlamadan önce üç koşul birlikte tamamlanmalıdır.',
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _ReadinessGate(
+            label: 'Doğrulanmış marka',
+            ready: value?.verifiedBrand == true,
+          ),
+          _ReadinessGate(
+            label: 'Hizmet erişimi',
+            ready: value?.serviceAccess == true,
+          ),
+          _ReadinessGate(
+            label: 'Operasyon yetkisi',
+            ready: value?.operationAuthority == true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadinessGate extends StatelessWidget {
+  const _ReadinessGate({required this.label, required this.ready});
+
+  final String label;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ready ? MarkaKalkanTheme.teal : const Color(0xFF9A5B28);
+    return Chip(
+      avatar: Icon(
+        ready ? Icons.verified_outlined : Icons.lock_outline,
+        size: 18,
+        color: color,
+      ),
+      label: Text(ready ? '$label · Hazır' : '$label · Gerekli'),
+      side: BorderSide(color: color.withValues(alpha: 0.45)),
+      backgroundColor: color.withValues(alpha: 0.08),
     );
   }
 }
