@@ -22,7 +22,7 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
           'Pazaryerleri, sosyal medya, web siteleri ve dijital raflarda '
           'ürün, fiyat, stok, satıcı ve kaynak verisi toplar.',
       icon: Icons.travel_explore_outlined,
-      status: _AgentStatus.priority,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 3,
@@ -31,7 +31,7 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
           'Fiyat, stok, başlık, görsel, satıcı ve sayfa durumundaki '
           'değişiklikleri zaman içinde takip eder.',
       icon: Icons.change_circle_outlined,
-      status: _AgentStatus.priority,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 4,
@@ -40,7 +40,7 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
           'Aynı veya değiştirilmiş ürün görsellerini farklı mağaza, hesap '
           've platformlarda eşleştirir.',
       icon: Icons.image_search_outlined,
-      status: _AgentStatus.planned,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 5,
@@ -49,7 +49,7 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
           'İlan açıklamalarını, riskli ifadeleri, tekrar eden metinleri ve '
           'çok dilli içerikleri analiz eder.',
       icon: Icons.translate_outlined,
-      status: _AgentStatus.planned,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 6,
@@ -58,61 +58,61 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
           'Telefon, e-posta, adres, IBAN, alan adı, mağaza adı ve diğer '
           'izler üzerinden olası ortak kimlikleri belirler.',
       icon: Icons.hub_outlined,
-      status: _AgentStatus.planned,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 7,
-      title: 'Ağ Analizi Ajanı',
+      title: 'Alan Adı ve Teknik İz Ajanı',
       description:
-          'Tekil mağazalar yerine bağlantılı satıcı, hesap, şirket ve '
-          'dağıtım yapılarını ortaya çıkarır.',
+          'Alan adı, DNS, barındırma, yönlendirme ve diğer teknik izleri '
+          'inceleyerek bağlantılı dijital varlıkları belirler.',
       icon: Icons.schema_outlined,
-      status: _AgentStatus.planned,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 8,
-      title: 'Fiyat ve Anomali Ajanı',
+      title: 'Fiyat ve Ticari Örüntü Ajanı',
       description:
-          'Olağan dışı fiyatları, ani düşüşleri, piyasa sapmalarını ve '
-          'eşzamanlı hareketleri tespit eder.',
+          'Fiyat anomalilerini, ticari örüntüleri, eşzamanlı hareketleri ve '
+          'riskli satış davranışlarını analiz eder.',
       icon: Icons.monitor_heart_outlined,
-      status: _AgentStatus.planned,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 9,
-      title: 'Delil Muhafaza Ajanı',
+      title: 'Coğrafi ve Kanal Analizi Ajanı',
       description:
-          'Ekran görüntüsü, URL, zaman damgası, hash, arşiv ve delil '
-          'bütünlüğü kayıtlarını oluşturur.',
+          'Ülke, şehir, platform ve satış kanalı dağılımlarını inceleyerek '
+          'risk yoğunluklarını ortaya çıkarır.',
       icon: Icons.inventory_2_outlined,
-      status: _AgentStatus.priority,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 10,
-      title: 'Risk ve Müdahale Ajanı',
+      title: 'Delil Doğrulama Ajanı',
       description:
-          'Bulguları risk, yayılma, delil yeterliliği ve müdahale '
-          'önceliğine göre puanlar.',
+          'Toplanan bulguların kaynak, zaman, bütünlük ve destekleyici veri '
+          'bakımından doğrulanabilirliğini değerlendirir.',
       icon: Icons.policy_outlined,
-      status: _AgentStatus.planned,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 11,
-      title: 'Raporlama Ajanı',
+      title: 'Risk Önceliklendirme Ajanı',
       description:
-          'Yönetici özeti, vaka kronolojisi, ağ görünümü ve müdahale '
-          'dosyası üretir.',
+          'Doğrulanmış bulguları önem, yayılma, etki ve müdahale ihtiyacına '
+          'göre önceliklendirir.',
       icon: Icons.summarize_outlined,
-      status: _AgentStatus.planned,
+      status: _AgentStatus.operational,
     ),
     _AiFieldAgent(
       number: 12,
-      title: 'İnsan Uzman Onay Kapısı',
+      title: 'Raporlama ve Müdahale Hazırlama Ajanı',
       description:
-          'Kritik değerlendirmeleri, dış müdahale adımlarını ve nihai '
-          'kararları yetkili insan uzman onayına bağlar.',
+          'Ajan çıktılarını yönetici özeti, vaka kronolojisi ve kontrollü '
+          'müdahale hazırlığı halinde birleştirir.',
       icon: Icons.verified_user_outlined,
-      status: _AgentStatus.control,
+      status: _AgentStatus.reporting,
     ),
   ];
 
@@ -141,43 +141,52 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
               children: [
                 const _AiFieldHeader(),
                 const SizedBox(height: 22),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    onPressed: () async {
-                      final operationId =
-                          await AppRouter.openAiFieldOperationCreate(context);
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => AppRouter.openAiFieldOperations(context),
+                      icon: const Icon(Icons.monitor_heart_outlined),
+                      label: const Text('Ajan ilerlemesini ve sonuçları gör'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () async {
+                        final operationId =
+                            await AppRouter.openAiFieldOperationCreate(context);
 
-                      if (!context.mounted || operationId == null) {
-                        return;
-                      }
+                        if (!context.mounted || operationId == null) {
+                          return;
+                        }
 
-                      ScaffoldMessenger.of(context)
-                        ..hideCurrentSnackBar()
-                        ..showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Operasyon ve 12 ajan görevi oluşturuldu. '
-                              'Operasyon No: $operationId',
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Operasyon ve 12 ajan görevi oluşturuldu. '
+                                'Operasyon No: $operationId',
+                              ),
+                              duration: const Duration(seconds: 6),
                             ),
-                            duration: const Duration(seconds: 6),
-                          ),
-                        );
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: MarkaKalkanTheme.teal,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 22,
-                        vertical: 16,
+                          );
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: MarkaKalkanTheme.teal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 16,
+                        ),
+                      ),
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text(
+                        'Yeni Operasyon Oluştur',
+                        style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                    icon: const Icon(Icons.add_circle_outline),
-                    label: const Text(
-                      'Yeni Operasyon Oluştur',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 22),
                 const _OperationFlow(),
@@ -192,8 +201,9 @@ class AiFieldDetectivesHubPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Her ajan kendi uzmanlık görevini yürütür; çıktılar ortak '
-                  'istihbarat zincirinde birleştirilir.',
+                  'Her ajan kendi uzmanlık görevini operasyon zinciri içinde '
+                  'yürütür; kartlar bağımsız işlem başlatmaz. Yeni operasyon '
+                  'oluşturulduğunda 12 ajan birlikte çalışır.',
                   style: TextStyle(
                     color: Color(0xFF687580),
                     fontSize: 15,
@@ -375,16 +385,14 @@ class _AiFieldAgentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusLabel = switch (agent.status) {
       _AgentStatus.foundation => 'Orkestrasyon',
-      _AgentStatus.priority => 'İlk Faz',
-      _AgentStatus.planned => 'Planlandı',
-      _AgentStatus.control => 'Zorunlu Kontrol',
+      _AgentStatus.operational => 'Uzman Ajan',
+      _AgentStatus.reporting => 'Sonuç Hazırlığı',
     };
 
     final statusColor = switch (agent.status) {
       _AgentStatus.foundation => const Color(0xFF365E7D),
-      _AgentStatus.priority => const Color(0xFF00897B),
-      _AgentStatus.planned => const Color(0xFF73808A),
-      _AgentStatus.control => const Color(0xFF8A5A00),
+      _AgentStatus.operational => const Color(0xFF00897B),
+      _AgentStatus.reporting => const Color(0xFF176B87),
     };
 
     return Container(
@@ -402,82 +410,101 @@ class _AiFieldAgentCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF5F4),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(agent.icon, color: MarkaKalkanTheme.teal, size: 27),
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: statusColor,
+                borderRadius: BorderRadius.circular(999),
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF5F4),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        agent.icon,
+                        color: MarkaKalkanTheme.teal,
+                        size: 27,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11,
+                const SizedBox(height: 18),
+                Text(
+                  '${agent.number.toString().padLeft(2, '0')} · ${agent.title}',
+                  style: const TextStyle(
+                    color: MarkaKalkanTheme.navy,
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
+                    height: 1.25,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
-            '${agent.number.toString().padLeft(2, '0')} · ${agent.title}',
-            style: const TextStyle(
-              color: MarkaKalkanTheme.navy,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              height: 1.25,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            agent.description,
-            style: const TextStyle(
-              color: Color(0xFF687580),
-              fontSize: 13.5,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 22),
-          Row(
-            children: [
-              Icon(
-                agent.status == _AgentStatus.priority
-                    ? Icons.rocket_launch_outlined
-                    : Icons.settings_suggest_outlined,
-                size: 18,
-                color: statusColor,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                agent.status == _AgentStatus.priority
-                    ? 'Geliştirme önceliğinde'
-                    : 'Ajan altyapısı hazırlanıyor',
-                style: TextStyle(
-                  color: statusColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                const SizedBox(height: 10),
+                Text(
+                  agent.description,
+                  style: const TextStyle(
+                    color: Color(0xFF687580),
+                    fontSize: 13.5,
+                    height: 1.5,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.account_tree_outlined,
+                      size: 18,
+                      color: statusColor,
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Operasyon zincirinde etkin',
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -521,7 +548,7 @@ class _HumanControlNotice extends StatelessWidget {
   }
 }
 
-enum _AgentStatus { foundation, priority, planned, control }
+enum _AgentStatus { foundation, operational, reporting }
 
 class _AiFieldAgent {
   const _AiFieldAgent({

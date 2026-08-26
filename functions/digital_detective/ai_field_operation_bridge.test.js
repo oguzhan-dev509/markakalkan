@@ -155,6 +155,7 @@ async function testPureMapping() {
   assert.equal(data.riskLevel, "medium");
   assert.equal(data.sourceType, "ai_field_operation");
   assert.equal(data.sourceOperationId, "operation-123");
+  assert.equal(data.bridgeVersion, "ai-field-operation-v2");
   assert.equal(data.bridgeVersion, BRIDGE_VERSION);
   assert.equal(data.endDate, null);
   assert.equal(data.createdAt, "SERVER_TIMESTAMP");

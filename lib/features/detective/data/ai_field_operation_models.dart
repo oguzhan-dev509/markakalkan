@@ -132,52 +132,52 @@ abstract final class AiFieldAgentCatalog {
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'text_language_analyst',
+      id: 'text_language_analyzer',
       name: 'Metin ve Dil Analizi Ajanı',
       order: 5,
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'seller_entity_resolver',
+      id: 'seller_entity_linker',
       name: 'Satıcı ve Varlık Eşleştirme Ajanı',
       order: 6,
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'network_analyst',
-      name: 'Ağ Analizi Ajanı',
+      id: 'domain_technical_trace',
+      name: 'Alan Adı ve Teknik İz Ajanı',
       order: 7,
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'price_anomaly_analyst',
-      name: 'Fiyat ve Anomali Ajanı',
+      id: 'price_commercial_pattern',
+      name: 'Fiyat ve Ticari Örüntü Ajanı',
       order: 8,
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'evidence_custodian',
-      name: 'Delil Muhafaza Ajanı',
+      id: 'geographic_channel_analyzer',
+      name: 'Coğrafi ve Kanal Analizi Ajanı',
       order: 9,
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'risk_intervention_analyst',
-      name: 'Risk ve Müdahale Ajanı',
+      id: 'evidence_validator',
+      name: 'Delil Doğrulama Ajanı',
       order: 10,
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'reporting_agent',
-      name: 'Raporlama Ajanı',
+      id: 'risk_prioritizer',
+      name: 'Risk Önceliklendirme Ajanı',
       order: 11,
       requiresHumanApproval: false,
     ),
     AiFieldAgentDefinition(
-      id: 'human_expert_gate',
-      name: 'İnsan Uzman Onay Kapısı',
+      id: 'reporting_intervention_preparer',
+      name: 'Raporlama ve Müdahale Hazırlama Ajanı',
       order: 12,
-      requiresHumanApproval: true,
+      requiresHumanApproval: false,
     ),
   ];
 
@@ -201,6 +201,11 @@ class AiFieldOperation {
     required this.priority,
     required this.currentAgentId,
     required this.requiresHumanApproval,
+    required this.expectedAgentCount,
+    required this.processedAgentCount,
+    required this.completedAgentCount,
+    required this.failedAgentCount,
+    required this.resultExecutionId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -212,6 +217,11 @@ class AiFieldOperation {
   final AiFieldOperationPriority priority;
   final String currentAgentId;
   final bool requiresHumanApproval;
+  final int expectedAgentCount;
+  final int processedAgentCount;
+  final int completedAgentCount;
+  final int failedAgentCount;
+  final String resultExecutionId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -230,6 +240,14 @@ class AiFieldOperation {
       ),
       currentAgentId: data['currentAgentId']?.toString().trim() ?? '',
       requiresHumanApproval: data['requiresHumanApproval'] == true,
+      expectedAgentCount: _intFromValue(
+        data['expectedAgentCount'],
+        fallback: 12,
+      ),
+      processedAgentCount: _intFromValue(data['processedAgentCount']),
+      completedAgentCount: _intFromValue(data['completedAgentCount']),
+      failedAgentCount: _intFromValue(data['failedAgentCount']),
+      resultExecutionId: data['resultExecutionId']?.toString().trim() ?? '',
       createdAt: _dateTimeFromValue(data['createdAt']),
       updatedAt: _dateTimeFromValue(data['updatedAt']),
     );
@@ -279,6 +297,12 @@ class AiFieldAgentTask {
       handoffToAgentId: data['handoffToAgentId']?.toString().trim() ?? '',
     );
   }
+}
+
+int _intFromValue(dynamic value, {int fallback = 0}) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
 Map<String, dynamic> _mapFromValue(dynamic value) {

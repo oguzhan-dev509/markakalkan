@@ -9,6 +9,7 @@ const {
   calculateExecutionStatus,
   constantTimeEqual,
   normalizeResultPayload,
+  resolveAiFieldAgentTaskId,
   sha256Hex,
 } = require("./digital_detective_result");
 
@@ -202,6 +203,20 @@ async function testPureHelpers() {
   assert.equal(constantTimeEqual("abc", "abc"), true);
   assert.equal(constantTimeEqual("abc", "abd"), false);
   assert.equal(sha256Hex("value").length, 64);
+  assert.equal(
+      resolveAiFieldAgentTaskId(
+          "reporting_intervention_preparer",
+          "ai-field-operation-v1",
+      ),
+      "human_expert_gate",
+  );
+  assert.equal(
+      resolveAiFieldAgentTaskId(
+          "reporting_intervention_preparer",
+          "ai-field-operation-v2",
+      ),
+      "reporting_intervention_preparer",
+  );
 
   assert.equal(
       calculateExecutionStatus({
@@ -363,6 +378,61 @@ async function testFailedExecution() {
   assert.equal(task.resultProcessing.failedAgentCount, 1);
 }
 
+async function testAiFieldOperationProjection() {
+  const taskPath =
+    "brands/brand-123/digitalDetectiveTasks/task-456";
+  const operationPath =
+    "brands/brand-123/aiFieldOperations/operation-123";
+  const finalAgent = AGENTS.at(-1);
+  const agentTaskPath =
+    `${operationPath}/agentTasks/${finalAgent.code}`;
+  const executionPath =
+    `${taskPath}/resultExecutions/${sha256Hex("execution-789")}`;
+  const completedAgentCodes = EXPECTED_AGENT_CODES.slice(0, -1);
+  const db = new FakeFirestore({
+    [taskPath]: {
+      ownerUid: "brand-123",
+      status: "running",
+      processedCount: 11,
+      resultCount: 0,
+      sourceOperationId: "operation-123",
+      bridgeVersion: "ai-field-operation-v2",
+    },
+    [operationPath]: {
+      status: "running",
+      currentAgentId: "risk_prioritizer",
+    },
+    [agentTaskPath]: {
+      agentId: finalAgent.code,
+      status: "pending",
+      output: {},
+    },
+    [executionPath]: {
+      executionId: "execution-789",
+      completedAgentCodes,
+      failedAgentCodes: [],
+      receivedAgentCount: 11,
+    },
+  });
+  const {handler} = makeHandler({db});
+  const response = await invoke(handler, {
+    body: makePayload(finalAgent),
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.taskStatus, "completed");
+  assert.equal(db.documents.get(agentTaskPath).status, "completed");
+  assert.equal(
+      db.documents.get(agentTaskPath).output.agentCode,
+      finalAgent.code,
+  );
+  assert.equal(db.documents.get(operationPath).status, "completed");
+  assert.equal(db.documents.get(operationPath).processedAgentCount, 12);
+  assert.equal(db.documents.get(operationPath).completedAgentCount, 12);
+  assert.equal(db.documents.get(operationPath).failedAgentCount, 0);
+  assert.equal(db.documents.get(operationPath).completedAt, "SERVER_TIMESTAMP");
+}
+
 async function testMissingTask() {
   const db = new FakeFirestore();
   const {handler} = makeHandler({db});
@@ -380,6 +450,7 @@ async function main() {
   await testAuthorizationAndMethod();
   await testAllAgentsAndDuplicate();
   await testFailedExecution();
+  await testAiFieldOperationProjection();
   await testMissingTask();
 
   console.log("digital_detective_result.test.js: PASS");

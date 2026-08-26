@@ -80,6 +80,29 @@ const EXPECTED_AGENT_CODES = Object.freeze(
     AGENTS.map((agent) => agent.code),
 );
 
+const LEGACY_AI_FIELD_AGENT_TASK_IDS = Object.freeze({
+  task_planner: "task_planner",
+  digital_field_scanner: "digital_field_scanner",
+  page_change_monitor: "page_change_monitor",
+  visual_matcher: "visual_matcher",
+  text_language_analyzer: "text_language_analyst",
+  seller_entity_linker: "seller_entity_resolver",
+  domain_technical_trace: "network_analyst",
+  price_commercial_pattern: "price_anomaly_analyst",
+  geographic_channel_analyzer: "evidence_custodian",
+  evidence_validator: "risk_intervention_analyst",
+  risk_prioritizer: "reporting_agent",
+  reporting_intervention_preparer: "human_expert_gate",
+});
+
+function resolveAiFieldAgentTaskId(agentCode, bridgeVersion) {
+  if (cleanString(bridgeVersion, 100) === "ai-field-operation-v1") {
+    return LEGACY_AI_FIELD_AGENT_TASK_IDS[agentCode] || agentCode;
+  }
+
+  return agentCode;
+}
+
 class ResultHttpError extends Error {
   constructor(statusCode, code, message) {
     super(message);
@@ -427,6 +450,32 @@ async function persistDigitalDetectiveResult({
       );
     }
 
+    const sourceOperationId = cleanString(
+        taskData.sourceOperationId,
+        200,
+    );
+    let sourceOperationRef = null;
+    let sourceAgentTaskRef = null;
+    let sourceOperationSnapshot = null;
+    let sourceAgentTaskSnapshot = null;
+
+    if (sourceOperationId) {
+      sourceOperationRef = db
+          .collection("brands")
+          .doc(payload.tenantId)
+          .collection("aiFieldOperations")
+          .doc(sourceOperationId);
+      const sourceAgentTaskId = resolveAiFieldAgentTaskId(
+          payload.agentCode,
+          taskData.bridgeVersion,
+      );
+      sourceAgentTaskRef = sourceOperationRef
+          .collection("agentTasks")
+          .doc(sourceAgentTaskId);
+      sourceOperationSnapshot = await transaction.get(sourceOperationRef);
+      sourceAgentTaskSnapshot = await transaction.get(sourceAgentTaskRef);
+    }
+
     if (resultSnapshot.exists) {
       const existing = resultSnapshot.data() || {};
 
@@ -578,6 +627,43 @@ async function persistDigitalDetectiveResult({
 
     transaction.update(taskRef, taskUpdate);
 
+    if (sourceOperationSnapshot?.exists &&
+        sourceAgentTaskSnapshot?.exists) {
+      transaction.update(sourceAgentTaskRef, {
+        status: payload.status,
+        output: {
+          contractVersion: payload.contractVersion,
+          executionId: payload.executionId,
+          agentCode: payload.agentCode,
+          outputType: payload.outputType,
+          value: payload.output,
+          metadata: payload.metadata,
+        },
+        completedAt: fieldValue.serverTimestamp(),
+        errorMessage: payload.status === "failed" ?
+          "Ajan yürütmesi başarısız tamamlandı." :
+          "",
+      });
+
+      const operationUpdate = {
+        status: executionStatus,
+        currentAgentId: payload.agentCode,
+        expectedAgentCount: EXPECTED_AGENT_CODES.length,
+        processedAgentCount: receivedAgentCodes.length,
+        completedAgentCount: normalizedCompletedCodes.length,
+        failedAgentCount: normalizedFailedCodes.length,
+        sourceTaskId: payload.taskId,
+        resultExecutionId: payload.executionId,
+        updatedAt: fieldValue.serverTimestamp(),
+      };
+
+      if (isFinished) {
+        operationUpdate.completedAt = fieldValue.serverTimestamp();
+      }
+
+      transaction.update(sourceOperationRef, operationUpdate);
+    }
+
     return {
       duplicate: false,
       taskStatus: executionStatus,
@@ -706,5 +792,6 @@ module.exports = {
   constantTimeEqual,
   normalizeResultPayload,
   persistDigitalDetectiveResult,
+  resolveAiFieldAgentTaskId,
   sha256Hex,
 };

@@ -1,6 +1,6 @@
 const OPERATION_DOCUMENT =
     "brands/{brandUid}/aiFieldOperations/{operationId}";
-const BRIDGE_VERSION = "ai-field-operation-v1";
+const BRIDGE_VERSION = "ai-field-operation-v2";
 
 function cleanString(value, maximumLength = 2000) {
   return typeof value === "string" ?
