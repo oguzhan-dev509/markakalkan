@@ -1392,3 +1392,134 @@ hrtBeV5Test(
           validDispatch.scanRunId);
     },
 );
+
+// BRT-0AH parent ingress body access regression
+test("BRT-0AH parent accepts inherited readable n8n wrapper body", async () => {
+  class InheritedWebhookWrapper {
+    constructor(body) {
+      Object.defineProperty(this, "_body", {
+        value: body,
+        enumerable: false,
+        writable: false,
+      });
+    }
+
+    get body() {
+      return this._body;
+    }
+
+    get headers() {
+      return {};
+    }
+
+    get params() {
+      return {};
+    }
+
+    get query() {
+      return {};
+    }
+
+    get webhookUrl() {
+      return "https://example.invalid/webhook";
+    }
+
+    get executionMode() {
+      return "webhook";
+    }
+  }
+
+  const input = new InheritedWebhookWrapper(
+    JSON.parse(JSON.stringify(validDispatch)),
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(input, "body"),
+    false,
+  );
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(
+    output[0].json.dispatchEnvelope.scanRunId,
+    validDispatch.scanRunId,
+  );
+});
+
+test("BRT-0AH parent accepts proxy-readable n8n wrapper body", async () => {
+  class InheritedWebhookWrapper {
+    constructor(body) {
+      Object.defineProperty(this, "_body", {
+        value: body,
+        enumerable: false,
+        writable: false,
+      });
+    }
+
+    get body() {
+      return this._body;
+    }
+
+    get headers() {
+      return {};
+    }
+
+    get params() {
+      return {};
+    }
+
+    get query() {
+      return {};
+    }
+
+    get webhookUrl() {
+      return "https://example.invalid/webhook";
+    }
+
+    get executionMode() {
+      return "webhook";
+    }
+  }
+
+  const target = new InheritedWebhookWrapper(
+    JSON.parse(JSON.stringify(validDispatch)),
+  );
+  const input = new Proxy(target, {
+    getOwnPropertyDescriptor(object, key) {
+      if (key === "body") {
+        return undefined;
+      }
+      return Reflect.getOwnPropertyDescriptor(object, key);
+    },
+    get(object, key, receiver) {
+      return Reflect.get(object, key, receiver);
+    },
+  });
+
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(input, "body"),
+    false,
+  );
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+});
+
+test("BRT-0AH parent keeps direct non-plain envelope rejection", async () => {
+  class DirectEnvelope {}
+  const input = Object.assign(
+    new DirectEnvelope(),
+    JSON.parse(JSON.stringify(validDispatch)),
+  );
+  await assert.rejects(
+    async () => executeCode(validatorCode(), {input}),
+    /dispatchEnvelope must be an object/u,
+  );
+});
+
+test("BRT-0AH parent rejects inherited body without wrapper markers", async () => {
+  const input = Object.create({
+    body: JSON.parse(JSON.stringify(validDispatch)),
+  });
+  await assert.rejects(
+    async () => executeCode(validatorCode(), {input}),
+    /dispatchEnvelope must be an object/u,
+  );
+});

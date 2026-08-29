@@ -618,10 +618,52 @@ function normalizeWebhookJson(value, depth, state) {
   return output;
 }
 
+function webhookBodyCandidate(value) {
+  if (value === null ||
+      typeof value !== "object" ||
+      Array.isArray(value)) {
+    return {found: false, value: undefined};
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, "body")) {
+    return {found: true, value: value.body};
+  }
+
+  if (plain(value)) {
+    return {found: false, value: undefined};
+  }
+
+  try {
+    const body = value.body;
+    if (body === undefined) {
+      return {found: false, value: undefined};
+    }
+
+    let wrapperMarkerCount = 0;
+    for (const key of [
+      "headers",
+      "params",
+      "query",
+      "webhookUrl",
+      "executionMode",
+    ]) {
+      if (value[key] !== undefined) wrapperMarkerCount += 1;
+    }
+
+    if (wrapperMarkerCount < 2) {
+      return {found: false, value: undefined};
+    }
+
+    return {found: true, value: body};
+  } catch {
+    return {found: false, value: undefined};
+  }
+}
+
 const incoming = $input.first().json;
-const raw = incoming &&
-    Object.prototype.hasOwnProperty.call(incoming, "body") ?
-  normalizeWebhookJson(incoming.body, 0, {count: 0}) : incoming;
+const bodyCandidate = webhookBodyCandidate(incoming);
+const raw = bodyCandidate.found ?
+  normalizeWebhookJson(bodyCandidate.value, 0, {count: 0}) : incoming;
 exactKeys(raw, EXPECTED_KEYS, "dispatchEnvelope");
 if (raw.contractVersion !==
     "risk-scan-public-lite-dispatch-envelope-v1" ||
