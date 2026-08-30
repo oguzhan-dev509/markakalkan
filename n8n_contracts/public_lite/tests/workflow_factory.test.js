@@ -1523,3 +1523,54 @@ test("BRT-0AH parent rejects inherited body without wrapper markers", async () =
     /dispatchEnvelope must be an object/u,
   );
 });
+
+// BRT-0BF readable body before plain fallback regression
+test("BRT-0BF parent accepts plain proxy-readable wrapper body before plain fallback", async () => {
+  const body = JSON.parse(JSON.stringify(validDispatch));
+  const input = new Proxy({}, {
+    getOwnPropertyDescriptor(target, key) {
+      if (key === "body") return undefined;
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+    get(target, key, receiver) {
+      if (key === "body") return body;
+      if (key === "headers") return {};
+      if (key === "params") return {};
+      if (key === "query") return {};
+      if (key === "webhookUrl") return "https://example.invalid/webhook";
+      if (key === "executionMode") return "webhook";
+      return Reflect.get(target, key, receiver);
+    },
+  });
+
+  assert.equal(
+      Object.prototype.hasOwnProperty.call(input, "body"),
+      false,
+  );
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(
+      output[0].json.dispatchEnvelope.scanRunId,
+      validDispatch.scanRunId,
+  );
+});
+
+test("BRT-0BF parent rejects plain proxy-readable body without wrapper marker threshold", async () => {
+  const body = JSON.parse(JSON.stringify(validDispatch));
+  const input = new Proxy({}, {
+    getOwnPropertyDescriptor(target, key) {
+      if (key === "body") return undefined;
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+    get(target, key, receiver) {
+      if (key === "body") return body;
+      if (key === "headers") return {};
+      return Reflect.get(target, key, receiver);
+    },
+  });
+
+  await assert.rejects(
+      async () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope/u,
+  );
+});

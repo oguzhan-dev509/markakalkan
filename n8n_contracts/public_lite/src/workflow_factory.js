@@ -629,35 +629,33 @@ function webhookBodyCandidate(value) {
     return {found: true, value: value.body};
   }
 
+  try {
+    const body = value.body;
+    if (body !== undefined) {
+      let wrapperMarkerCount = 0;
+      for (const key of [
+        "headers",
+        "params",
+        "query",
+        "webhookUrl",
+        "executionMode",
+      ]) {
+        if (value[key] !== undefined) wrapperMarkerCount += 1;
+      }
+
+      if (wrapperMarkerCount >= 2) {
+        return {found: true, value: body};
+      }
+    }
+  } catch {
+    // Preserve fail-closed fallback below.
+  }
+
   if (plain(value)) {
     return {found: false, value: undefined};
   }
 
-  try {
-    const body = value.body;
-    if (body === undefined) {
-      return {found: false, value: undefined};
-    }
-
-    let wrapperMarkerCount = 0;
-    for (const key of [
-      "headers",
-      "params",
-      "query",
-      "webhookUrl",
-      "executionMode",
-    ]) {
-      if (value[key] !== undefined) wrapperMarkerCount += 1;
-    }
-
-    if (wrapperMarkerCount < 2) {
-      return {found: false, value: undefined};
-    }
-
-    return {found: true, value: body};
-  } catch {
-    return {found: false, value: undefined};
-  }
+  return {found: false, value: undefined};
 }
 
 const incoming = $input.first().json;
