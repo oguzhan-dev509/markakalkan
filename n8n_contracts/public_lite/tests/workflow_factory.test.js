@@ -1629,3 +1629,72 @@ test("BRT-0BP parent keeps exact direct envelope ahead of proxy-synthetic body a
       validDispatch.scanRunId,
   );
 });
+
+// BRT-0BY tri-state introspection fail-closed regressions
+test("BRT-0BY parent fails closed when direct-envelope ownKeys introspection throws", async () => {
+  const body = JSON.parse(JSON.stringify(validDispatch));
+  const target = JSON.parse(JSON.stringify(validDispatch));
+  const input = new Proxy(target, {
+    ownKeys() {
+      throw new Error("BRT_0BY_TRAP_OWN_KEYS");
+    },
+    get(inner, key, receiver) {
+      if (key === "body") return body;
+      if (key === "headers") return {};
+      if (key === "params") return {};
+      return Reflect.get(inner, key, receiver);
+    },
+  });
+
+  await assert.rejects(
+      async () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope introspection failed/u,
+  );
+});
+
+test("BRT-0BY parent fails closed when direct-envelope getPrototypeOf introspection throws", async () => {
+  const body = JSON.parse(JSON.stringify(validDispatch));
+  const target = JSON.parse(JSON.stringify(validDispatch));
+  const input = new Proxy(target, {
+    getPrototypeOf() {
+      throw new Error("BRT_0BY_TRAP_GET_PROTOTYPE_OF");
+    },
+    get(inner, key, receiver) {
+      if (key === "body") return body;
+      if (key === "headers") return {};
+      if (key === "params") return {};
+      return Reflect.get(inner, key, receiver);
+    },
+  });
+
+  await assert.rejects(
+      async () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope introspection failed/u,
+  );
+});
+
+test("BRT-0BY parent fails closed when direct-envelope property-descriptor introspection throws", async () => {
+  const body = JSON.parse(JSON.stringify(validDispatch));
+  const target = JSON.parse(JSON.stringify(validDispatch));
+  const trappedKey = Object.keys(target).sort()[0];
+  const input = new Proxy(target, {
+    getOwnPropertyDescriptor(inner, key) {
+      if (key === trappedKey) {
+        throw new Error("BRT_0BY_TRAP_GET_OWN_PROPERTY_DESCRIPTOR");
+      }
+      if (key === "body") return undefined;
+      return Reflect.getOwnPropertyDescriptor(inner, key);
+    },
+    get(inner, key, receiver) {
+      if (key === "body") return body;
+      if (key === "headers") return {};
+      if (key === "params") return {};
+      return Reflect.get(inner, key, receiver);
+    },
+  });
+
+  await assert.rejects(
+      async () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope introspection failed/u,
+  );
+});

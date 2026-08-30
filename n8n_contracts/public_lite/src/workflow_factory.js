@@ -625,11 +625,26 @@ function webhookBodyCandidate(value) {
     return {found: false, value: undefined};
   }
 
+  let directEnvelopeExactness = "notExact";
   try {
-    exactKeys(value, EXPECTED_KEYS, "dispatchEnvelope");
-    return {found: false, value: undefined};
+    if (plain(value)) {
+      const directEnvelopeKeys = Object.keys(value).sort();
+      if (directEnvelopeKeys.length === EXPECTED_KEYS.length &&
+          !directEnvelopeKeys.some(
+            (key, index) => key !== EXPECTED_KEYS[index]
+          )) {
+        directEnvelopeExactness = "exact";
+      }
+    }
   } catch {
-    // Not an exact direct envelope; continue wrapper detection.
+    directEnvelopeExactness = "introspectionError";
+  }
+
+  if (directEnvelopeExactness === "introspectionError") {
+    fail("dispatchEnvelope introspection failed");
+  }
+  if (directEnvelopeExactness === "exact") {
+    return {found: false, value: undefined};
   }
 
   if (Object.prototype.hasOwnProperty.call(value, "body")) {
