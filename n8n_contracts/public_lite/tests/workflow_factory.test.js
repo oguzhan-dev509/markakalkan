@@ -1574,3 +1574,58 @@ test("BRT-0BF parent rejects plain proxy-readable body without wrapper marker th
       /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope/u,
   );
 });
+
+// BRT-0BP direct-envelope precedence adversarial regressions
+test("BRT-0BP parent keeps exact direct envelope ahead of inherited readable wrapper fields", async () => {
+  const body = JSON.parse(JSON.stringify(validDispatch));
+  const proto = {
+    body,
+    headers: {},
+    params: {},
+  };
+  const target = Object.assign(
+      Object.create(proto),
+      JSON.parse(JSON.stringify(validDispatch)),
+  );
+  const input = new Proxy(target, {
+    getPrototypeOf() {
+      // Model a plain runtime facade while values remain inherited.
+      return Object.prototype;
+    },
+  });
+
+  assert.equal(Object.prototype.hasOwnProperty.call(input, "body"), false);
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(
+      output[0].json.dispatchEnvelope.scanRunId,
+      validDispatch.scanRunId,
+  );
+});
+
+test("BRT-0BP parent keeps exact direct envelope ahead of proxy-synthetic body and markers", async () => {
+  const body = JSON.parse(JSON.stringify(validDispatch));
+  const target = JSON.parse(JSON.stringify(validDispatch));
+  const input = new Proxy(target, {
+    getOwnPropertyDescriptor(inner, key) {
+      if (key === "body" || key === "headers" || key === "params") {
+        return undefined;
+      }
+      return Reflect.getOwnPropertyDescriptor(inner, key);
+    },
+    get(inner, key, receiver) {
+      if (key === "body") return body;
+      if (key === "headers") return {};
+      if (key === "params") return {};
+      return Reflect.get(inner, key, receiver);
+    },
+  });
+
+  assert.equal(Object.prototype.hasOwnProperty.call(input, "body"), false);
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(
+      output[0].json.dispatchEnvelope.scanRunId,
+      validDispatch.scanRunId,
+  );
+});

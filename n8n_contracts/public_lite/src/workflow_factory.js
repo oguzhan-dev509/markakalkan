@@ -625,6 +625,13 @@ function webhookBodyCandidate(value) {
     return {found: false, value: undefined};
   }
 
+  try {
+    exactKeys(value, EXPECTED_KEYS, "dispatchEnvelope");
+    return {found: false, value: undefined};
+  } catch {
+    // Not an exact direct envelope; continue wrapper detection.
+  }
+
   if (Object.prototype.hasOwnProperty.call(value, "body")) {
     return {found: true, value: value.body};
   }
