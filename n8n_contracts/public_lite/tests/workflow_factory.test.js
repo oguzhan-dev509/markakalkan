@@ -1514,16 +1514,17 @@ test("BRT-0AH parent keeps direct non-plain envelope rejection", async () => {
   );
 });
 
-test("BRT-0AH parent rejects inherited body without wrapper markers", async () => {
+test("BRT-0CN.1 contract migration accepts exact inherited body without wrapper markers", async () => {
   const input = Object.create({
     body: JSON.parse(JSON.stringify(validDispatch)),
   });
-  await assert.rejects(
-    async () => executeCode(validatorCode(), {input}),
-    /dispatchEnvelope must be an object/u,
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(
+      output[0].json.dispatchEnvelope.scanRunId,
+      validDispatch.scanRunId,
   );
 });
-
 // BRT-0BF readable body before plain fallback regression
 test("BRT-0BF parent accepts plain proxy-readable wrapper body before plain fallback", async () => {
   const body = JSON.parse(JSON.stringify(validDispatch));
@@ -1555,7 +1556,7 @@ test("BRT-0BF parent accepts plain proxy-readable wrapper body before plain fall
   );
 });
 
-test("BRT-0BF parent rejects plain proxy-readable body without wrapper marker threshold", async () => {
+test("BRT-0CN.1 contract migration accepts exact proxy-readable body below legacy marker threshold", async () => {
   const body = JSON.parse(JSON.stringify(validDispatch));
   const input = new Proxy({}, {
     getOwnPropertyDescriptor(target, key) {
@@ -1569,12 +1570,13 @@ test("BRT-0BF parent rejects plain proxy-readable body without wrapper marker th
     },
   });
 
-  await assert.rejects(
-      async () => executeCode(validatorCode(), {input}),
-      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope/u,
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(
+      output[0].json.dispatchEnvelope.scanRunId,
+      validDispatch.scanRunId,
   );
 });
-
 // BRT-0BP direct-envelope precedence adversarial regressions
 test("BRT-0BP parent keeps exact direct envelope ahead of inherited readable wrapper fields", async () => {
   const body = JSON.parse(JSON.stringify(validDispatch));
@@ -1696,5 +1698,151 @@ test("BRT-0BY parent fails closed when direct-envelope property-descriptor intro
   await assert.rejects(
       async () => executeCode(validatorCode(), {input}),
       /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope introspection failed/u,
+  );
+});
+
+// BRT-0CM conservative readable-body materialization regressions
+function brt0cmClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function brt0cmInheritedWrapper(body, markers) {
+  const proto = {body};
+  if (markers >= 1) proto.headers = {};
+  if (markers >= 2) proto.params = {};
+  return Object.create(proto);
+}
+
+function brt0cmProxyWrapper(body, markers) {
+  return new Proxy({}, {
+    getOwnPropertyDescriptor(target, key) {
+      if (key === "body" ||
+          key === "headers" ||
+          key === "params") {
+        return undefined;
+      }
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+    get(target, key, receiver) {
+      if (key === "body") return body;
+      if (markers >= 1 && key === "headers") return {};
+      if (markers >= 2 && key === "params") return {};
+      return Reflect.get(target, key, receiver);
+    },
+  });
+}
+
+function brt0cmNonPlainDirectWithSyntheticBody(body, extraKey) {
+  class DirectEnvelope {}
+  const target = Object.assign(
+      new DirectEnvelope(),
+      brt0cmClone(validDispatch),
+  );
+  if (extraKey) target.unexpectedExtra = "must-stay-direct";
+  return new Proxy(target, {
+    getOwnPropertyDescriptor(inner, key) {
+      if (key === "body" ||
+          key === "headers" ||
+          key === "params") {
+        return undefined;
+      }
+      return Reflect.getOwnPropertyDescriptor(inner, key);
+    },
+    get(inner, key, receiver) {
+      if (key === "body") return body;
+      if (key === "headers") return {};
+      if (key === "params") return {};
+      return Reflect.get(inner, key, receiver);
+    },
+  });
+}
+
+function brt0cmOwnKeysTrapWrapper(body) {
+  return new Proxy({}, {
+    ownKeys() {
+      throw new Error("BRT_0CM_OWN_KEYS_TRAP");
+    },
+    getOwnPropertyDescriptor(target, key) {
+      if (key === "body") return undefined;
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+    get(target, key, receiver) {
+      if (key === "body") return body;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+}
+
+test("BRT-0CM parent accepts inherited exact body with zero visible wrapper markers", async () => {
+  const input = brt0cmInheritedWrapper(brt0cmClone(validDispatch), 0);
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.dispatchEnvelope.scanRunId, validDispatch.scanRunId);
+});
+
+test("BRT-0CM parent accepts inherited exact body with one visible wrapper marker", async () => {
+  const input = brt0cmInheritedWrapper(brt0cmClone(validDispatch), 1);
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.dispatchEnvelope.scanRunId, validDispatch.scanRunId);
+});
+
+test("BRT-0CM parent accepts proxy exact body with zero visible wrapper markers", async () => {
+  const input = brt0cmProxyWrapper(brt0cmClone(validDispatch), 0);
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.dispatchEnvelope.scanRunId, validDispatch.scanRunId);
+});
+
+test("BRT-0CM parent accepts proxy exact body with one visible wrapper marker", async () => {
+  const input = brt0cmProxyWrapper(brt0cmClone(validDispatch), 1);
+  const output = await executeCode(validatorCode(), {input});
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.dispatchEnvelope.scanRunId, validDispatch.scanRunId);
+});
+
+test("BRT-0CM parent does not redirect nonplain direct envelope through synthetic body", async () => {
+  const input = brt0cmNonPlainDirectWithSyntheticBody(
+      brt0cmClone(validDispatch),
+      false,
+  );
+  await assert.rejects(
+      () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope must be an object/,
+  );
+});
+
+test("BRT-0CM parent does not hide extra-key nonplain direct envelope behind synthetic body", async () => {
+  const input = brt0cmNonPlainDirectWithSyntheticBody(
+      brt0cmClone(validDispatch),
+      true,
+  );
+  await assert.rejects(
+      () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope must be an object/,
+  );
+});
+
+test("BRT-0CM parent preserves fail-closed ownKeys introspection policy", async () => {
+  const input = brt0cmOwnKeysTrapWrapper(brt0cmClone(validDispatch));
+  await assert.rejects(
+      () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED: dispatchEnvelope introspection failed/,
+  );
+});
+
+test("BRT-0CM parent rejects inherited wrong body without wrapper markers", async () => {
+  const input = brt0cmInheritedWrapper({not: "dispatch-envelope"}, 0);
+  await assert.rejects(
+      () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED:/,
+  );
+});
+
+test("BRT-0CM parent rejects proxy wrong body without wrapper markers", async () => {
+  const input = brt0cmProxyWrapper({not: "dispatch-envelope"}, 0);
+  await assert.rejects(
+      () => executeCode(validatorCode(), {input}),
+      /PUBLIC_LITE_DISPATCH_REJECTED:/,
   );
 });

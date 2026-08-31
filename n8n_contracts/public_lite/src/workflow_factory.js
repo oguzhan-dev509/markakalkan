@@ -654,7 +654,49 @@ function webhookBodyCandidate(value) {
   try {
     const body = value.body;
     if (body !== undefined) {
-      let wrapperMarkerCount = 0;
+      // BRT-0CL.2 candidate: a readable body that independently
+    // materializes to the exact dispatch-envelope keyset may be accepted
+    // even when n8n runtime wrapper markers are hidden.
+    //
+    // Conservative direct-envelope precedence: if every required direct
+    // dispatch field is readable on the incoming object, preserve the
+    // incoming object and let downstream exactKeys enforce prototype and
+    // exact-key strictness. This avoids redirecting direct nonplain objects
+    // through synthetic/inherited body accessors.
+    let directReadableEnvelope = true;
+    try {
+      for (const key of EXPECTED_KEYS) {
+        if (value[key] === undefined) {
+          directReadableEnvelope = false;
+          break;
+        }
+      }
+    } catch {
+      fail("dispatchEnvelope introspection failed");
+    }
+    if (directReadableEnvelope) {
+      return {found: false, value: undefined};
+    }
+
+    try {
+      const materializedBody =
+        normalizeWebhookJson(body, 0, {count: 0});
+      if (plain(materializedBody)) {
+        const bodyKeys = Object.keys(materializedBody).sort();
+        const bodyKeySetExact =
+          bodyKeys.length === EXPECTED_KEYS.length &&
+          !bodyKeys.some(
+            (key, index) => key !== EXPECTED_KEYS[index]
+          );
+        if (bodyKeySetExact) {
+          return {found: true, value: body};
+        }
+      }
+    } catch {
+      // Preserve the existing marker-based path and downstream validation.
+    }
+
+    let wrapperMarkerCount = 0;
       for (const key of [
         "headers",
         "params",
