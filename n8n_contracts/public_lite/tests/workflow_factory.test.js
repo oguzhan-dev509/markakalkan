@@ -1846,3 +1846,19 @@ test("BRT-0CM parent rejects proxy wrong body without wrapper markers", async ()
       /PUBLIC_LITE_DISPATCH_REJECTED:/,
   );
 });
+
+// BRT-0CS.5F.1 materialized-body return contract
+test("BRT-0CS.5F.1 materialized-body path returns normalized plain body", () => {
+  const code = validatorCode();
+  const materializedPos = code.indexOf("const materializedBody =");
+  const wrapperMarkerPos = code.indexOf("let wrapperMarkerCount = 0;");
+  assert.notEqual(materializedPos, -1);
+  assert.notEqual(wrapperMarkerPos, -1);
+  assert.ok(wrapperMarkerPos > materializedPos);
+
+  const region = code.slice(materializedPos, wrapperMarkerPos);
+  assert.match(region, /plain\(materializedBody\)/);
+  assert.match(region, /bodyKeySetExact/);
+  assert.match(region, /return \{found: true, value: materializedBody\};/);
+  assert.doesNotMatch(region, /return \{found: true, value: body\};/);
+});

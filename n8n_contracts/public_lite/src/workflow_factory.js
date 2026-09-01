@@ -689,7 +689,7 @@ function webhookBodyCandidate(value) {
             (key, index) => key !== EXPECTED_KEYS[index]
           );
         if (bodyKeySetExact) {
-          return {found: true, value: body};
+          return {found: true, value: materializedBody};
         }
       }
     } catch {
