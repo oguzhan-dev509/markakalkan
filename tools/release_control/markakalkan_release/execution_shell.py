@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from .safety import acquire_single_use_lock
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Protocol, Sequence
@@ -146,6 +149,39 @@ class LiveReadOnlyReceipt:
         }
 
 
+
+@dataclass(frozen=True)
+class LiveMutationPermit:
+    plan_sha256: str
+    single_use_lock_path: Path
+
+
+@dataclass(frozen=True)
+class LiveMutationReceipt:
+    mode: str
+    workflow_id: str
+    plan_sha256: str
+    operation_count: int
+    update_count: int
+    publish_count: int
+    single_use_lock_path: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode,
+            "workflowId": self.workflow_id,
+            "planSha256": self.plan_sha256,
+            "operationCount": self.operation_count,
+            "updateCount": self.update_count,
+            "publishCount": self.publish_count,
+            "singleUseLockPath": self.single_use_lock_path,
+        }
+
+
+class LiveMutationPlanError(RuntimeError):
+    pass
+
+
 class ReleaseExecutionShell:
     """
     Execution boundary for release plans.
@@ -153,6 +189,9 @@ class ReleaseExecutionShell:
     Phase 3B permits exactly one live READ_WORKFLOW operation after exact
     authorization. Any mutation-capable live plan remains disabled.
     """
+
+    def __init__(self, *, live_mutation_enabled: bool = False) -> None:
+        self._live_mutation_enabled = live_mutation_enabled
 
     def dry_run(self, plan: ReleaseExecutionPlan) -> DryRunReceipt:
         return DryRunReceipt(
@@ -215,6 +254,132 @@ class ReleaseExecutionShell:
             mutation_count=0,
         )
         return workflow, receipt
+
+    @staticmethod
+    def _assert_live_mutation_plan(plan: ReleaseExecutionPlan) -> None:
+        update_count = sum(
+            1 for operation in plan.operations
+            if operation == N8nOperation.SAVE_DRAFT
+        )
+        publish_count = sum(
+            1 for operation in plan.operations
+            if operation == N8nOperation.PUBLISH_EXACT_VERSION
+        )
+
+        if update_count + publish_count == 0:
+            raise LiveMutationPlanError(
+                "live mutation plan requires at least one mutation"
+            )
+        if plan.update_budget not in (0, 1):
+            raise LiveMutationPlanError(
+                "live update budget must be 0 or 1"
+            )
+        if plan.publish_budget not in (0, 1):
+            raise LiveMutationPlanError(
+                "live publish budget must be 0 or 1"
+            )
+        if update_count > plan.update_budget:
+            raise LiveMutationPlanError(
+                "save count exceeds live update budget"
+            )
+        if publish_count > plan.publish_budget:
+            raise LiveMutationPlanError(
+                "publish count exceeds live publish budget"
+            )
+        if publish_count and not plan.exact_version_id:
+            raise LiveMutationPlanError(
+                "live publish requires exact_version_id"
+            )
+
+    def execute_live_mutation(
+        self,
+        *,
+        plan: ReleaseExecutionPlan,
+        typed_authorization: str,
+        client: Any,
+        permit: LiveMutationPermit,
+        draft_payload: Mapping[str, Any] | None = None,
+    ) -> tuple[Mapping[str, Any], LiveMutationReceipt]:
+        if not self._live_mutation_enabled:
+            raise LiveExecutionDisabled(
+                "live mutation execution is disabled by default"
+            )
+
+        self.authorize(plan, typed_authorization)
+        self._assert_live_mutation_plan(plan)
+
+        if permit.plan_sha256 != plan.fingerprint_sha256():
+            raise AuthorizationError(
+                "live mutation permit plan fingerprint mismatch"
+            )
+        if not isinstance(permit.single_use_lock_path, Path):
+            raise TypeError(
+                "live mutation permit lock path must be pathlib.Path"
+            )
+
+        acquire_single_use_lock(
+            permit.single_use_lock_path,
+            {
+                "stage": "LIVE_MUTATION_EXECUTION",
+                "workflowId": plan.workflow_id,
+                "planSha256": plan.fingerprint_sha256(),
+                "operations": [
+                    operation.value for operation in plan.operations
+                ],
+                "updateBudget": plan.update_budget,
+                "publishBudget": plan.publish_budget,
+                "exactVersionId": plan.exact_version_id,
+            },
+        )
+
+        current: Mapping[str, Any] | None = None
+        update_count = 0
+        publish_count = 0
+
+        for operation in plan.operations:
+            if operation == N8nOperation.READ_WORKFLOW:
+                current = client.get_workflow(plan.workflow_id)
+            elif operation == N8nOperation.SAVE_DRAFT:
+                if draft_payload is None:
+                    raise LiveMutationPlanError(
+                        "SAVE_DRAFT requires draft_payload"
+                    )
+                current = client.save_draft(
+                    plan.workflow_id,
+                    draft_payload,
+                )
+                update_count += 1
+            elif operation == N8nOperation.PUBLISH_EXACT_VERSION:
+                if plan.exact_version_id is None:
+                    raise LiveMutationPlanError(
+                        "PUBLISH_EXACT_VERSION requires exact_version_id"
+                    )
+                current = client.publish_exact_version(
+                    plan.workflow_id,
+                    plan.exact_version_id,
+                )
+                publish_count += 1
+            else:
+                raise LiveMutationPlanError(
+                    "unsupported live mutation operation="
+                    + str(operation)
+                )
+
+        if not isinstance(current, Mapping):
+            raise LiveMutationPlanError(
+                "final live workflow object missing"
+            )
+
+        receipt = LiveMutationReceipt(
+            mode="LIVE_MUTATION",
+            workflow_id=plan.workflow_id,
+            plan_sha256=plan.fingerprint_sha256(),
+            operation_count=len(plan.operations),
+            update_count=update_count,
+            publish_count=publish_count,
+            single_use_lock_path=str(permit.single_use_lock_path),
+        )
+        return current, receipt
 
     def execute_live(
         self,
