@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "mk-rcp-brt-0cs-compatibility.v1",
+  "case": "BRT-0CS",
+  "closed": true,
+  "repositoryHead": "851d4a3bc83b0185b39cafc2ba7841d9c4455498",
+  "workflowId": "rwEz3BWN636OJU2B",
+  "final": {
+    "publishedVersionIdSha256": "4240bfdded213cd20aa4ff0b21c227c2dbd98feff7f485176c158f8f05fff8da",
+    "payloadSha256": "21d1b98d700d4cc986b7eb19da9a6cbdd49c5f4bad365729de147fd2937742bb",
+    "validatorSha256": "6ed5d1191e22545a832a5fc24b96e1c8ca993db9e4021b9aeff3e32643a67afb",
+    "receiptSha256": "3d23ccd547326293a756fd9d82183a2ee80bd1acb7c6d233cacf6b8f8f75dd29",
+    "staticDataState": "null"
+  },
+  "historical": {
+    "oldActiveVersionIdSha256": "c5224ab624ba90e5b5f1604dec6853d2a28c7c1a707b3fad5c2c1dc9679f0781",
+    "flawed5ITargetPayloadSha256": "f0e37161ef8c2002eb61fd92d3c734912331154a0dfc6dc2bc2abb0b504cf796",
+    "correctedRuntimeTargetPayloadSha256": "21d1b98d700d4cc986b7eb19da9a6cbdd49c5f4bad365729de147fd2937742bb",
+    "rootCause": "staticData_presence",
+    "nodeOrderComponentPresent": false
+  },
+  "permanentRules": {
+    "missingStaticDataIsNotNull": true,
+    "existingExactDraftMustNotBeRewritten": true,
+    "publishMustUseExactVersion": true,
+    "noBlindRetry": true,
+    "brt0cs4bRerunAllowed": false,
+    "brt0cs5jRerunAllowed": false,
+    "brt0cs5mRerunAllowed": false
+  }
+}
