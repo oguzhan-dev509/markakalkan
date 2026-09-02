@@ -1,3 +1,5 @@
+import 'package:markakalkan/shared/risk_contracts/v1/shared_risk_contracts_v1.dart';
+
 enum RiskOperationsLoadState {
   loading,
   ready,
@@ -135,6 +137,7 @@ class RiskOperationItem {
     required this.caseCandidacy,
     required this.timeline,
     required this.relationshipNodes,
+    required this.relationshipEdges,
     required this.adapterVersion,
     required this.projectionFingerprint,
   });
@@ -157,6 +160,7 @@ class RiskOperationItem {
   final CaseCandidacyProjection caseCandidacy;
   final List<RiskTimelineEvent> timeline;
   final List<RiskRelationshipNode> relationshipNodes;
+  final List<RelationEdgeV1> relationshipEdges;
   final String adapterVersion;
   final String projectionFingerprint;
   factory RiskOperationItem.fromMap(Map<String, dynamic> map) {
@@ -192,6 +196,9 @@ class RiskOperationItem {
       relationshipNodes: _maps(
         graph['nodes'],
       ).map(RiskRelationshipNode.fromMap).toList(growable: false),
+      relationshipEdges: _maps(
+        graph['edges'],
+      ).map(RelationEdgeV1.fromJson).toList(growable: false),
       adapterVersion: _required(map['adapterVersion'], 'adapterVersion'),
       projectionFingerprint: _required(
         map['projectionFingerprint'],
@@ -377,7 +384,20 @@ void _validateItem(Map<String, dynamic> item, String path) {
     _optionalType<String>(node, 'firstObservedAt');
     _optionalType<String>(node, 'lastObservedAt');
   }
-  _requireMapList(graph, 'edges');
+  final edges = _requireMapList(
+    graph,
+    'edges',
+    '$path.relationshipGraph.edges',
+  );
+  for (var edgeIndex = 0; edgeIndex < edges.length; edgeIndex++) {
+    try {
+      RelationEdgeV1.fromJson(edges[edgeIndex]);
+    } on FormatException catch (error) {
+      throw FormatException(
+        '$path.relationshipGraph.edges[$edgeIndex]: $error',
+      );
+    }
+  }
 }
 
 T _requireType<T>(Map<String, dynamic> map, String field, [String? path]) {

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/admin/models/platform_admin_access.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_lifecycle.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_models.dart';
+import 'package:markakalkan/shared/risk_contracts/v1/shared_risk_contracts_v1.dart';
 import 'package:markakalkan/features/risk_operations/data/risk_operations_repository.dart';
 import 'package:markakalkan/features/risk_operations/presentation/risk_operations_console_page.dart';
 
@@ -230,6 +231,92 @@ void main() {
         expect(find.text('Ortak risk kaydı oluştur'), findsNothing);
       });
     }
+  });
+
+  group('canonical relation edge read-model integration', () {
+    Map<String, dynamic> explicitEdgeWire() => Map<String, dynamic>.from(
+      RelationEdgeV1(
+        edgeId: 'rel-read-001',
+        sourceEntityRef: CanonicalEntityRef(
+          module: 'brand_registry',
+          entityType: 'brand',
+          entityId: 'brand-001',
+        ),
+        targetEntityRef: CanonicalEntityRef(
+          module: 'digital_market',
+          entityType: 'listing',
+          entityId: 'listing-009',
+        ),
+        relationType: NamespacedValue(
+          namespace: 'markakalkan.relation',
+          value: 'potential_counterfeit_of',
+        ),
+        directionality: RelationDirectionalityV1.directed,
+        observedAt: DateTime.utc(2026, 9, 2, 14, 30),
+        createdAt: DateTime.utc(2026, 9, 2, 14, 31),
+        provenance: ProvenanceEnvelope(
+          producerModule: 'risk_operations',
+          adaptedAt: DateTime.utc(2026, 9, 2, 14, 31),
+        ),
+      ).toJson(),
+    );
+
+    test('parses only an explicit canonical relationship edge wire value', () {
+      final response = _stringResponse();
+      final first = (response['items'] as List).first as Map<String, dynamic>;
+      final graph = first['relationshipGraph'] as Map<String, dynamic>;
+      graph['edges'] = <Map<String, dynamic>>[explicitEdgeWire()];
+
+      final parsed = _parse(response);
+      final edge = parsed.items.first.relationshipEdges.single;
+
+      expect(edge.edgeId, 'rel-read-001');
+      expect(edge.sourceEntityRef.entityId, 'brand-001');
+      expect(edge.targetEntityRef.entityId, 'listing-009');
+      expect(edge.relationType.namespace, 'markakalkan.relation');
+      expect(edge.relationType.value, 'potential_counterfeit_of');
+      expect(edge.directionality, RelationDirectionalityV1.directed);
+    });
+
+    test('does not infer relation truth from graph node co-occurrence', () {
+      final parsed = _parse(_stringResponse());
+
+      expect(parsed.items.first.relationshipNodes, isNotEmpty);
+      expect(parsed.items.first.relationshipEdges, isEmpty);
+    });
+
+    test('does not infer relation truth from risk fields', () {
+      final response = _stringResponse();
+      final first = (response['items'] as List).first as Map<String, dynamic>;
+      first['riskClass'] = 'counterfeit';
+      first['severity'] = 'critical';
+      first['confidence'] = 1.0;
+
+      final parsed = _parse(response);
+
+      expect(parsed.items.first.relationshipEdges, isEmpty);
+    });
+
+    test('invalid explicit relation directionality fails closed', () {
+      final response = _stringResponse();
+      final first = (response['items'] as List).first as Map<String, dynamic>;
+      final graph = first['relationshipGraph'] as Map<String, dynamic>;
+      final edge = explicitEdgeWire()..['directionality'] = 'SIDEWAYS';
+      graph['edges'] = <Map<String, dynamic>>[edge];
+
+      expect(() => _parse(response), throwsFormatException);
+    });
+
+    test('invalid explicit relation contract version fails closed', () {
+      final response = _stringResponse();
+      final first = (response['items'] as List).first as Map<String, dynamic>;
+      final graph = first['relationshipGraph'] as Map<String, dynamic>;
+      final edge = explicitEdgeWire()
+        ..['contractVersion'] = 'relation-edge-v999';
+      graph['edges'] = <Map<String, dynamic>>[edge];
+
+      expect(() => _parse(response), throwsFormatException);
+    });
   });
 }
 
