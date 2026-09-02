@@ -2,6 +2,7 @@ library;
 
 part 'common_references_v1.dart';
 part 'capability_access_contract_v1.dart';
+part 'relation_edge_contract_v1.dart';
 part 'risk_signal_contract_v1.dart';
 part 'risk_assessment_contract_v1.dart';
 part 'case_candidate_contract_v1.dart';
