@@ -76,6 +76,121 @@ void main() {
     final second = adapter.toSignal(scan(), adaptedAt: adaptedAt).toJson();
     expect(jsonEncode(first), jsonEncode(second));
   });
+
+  group('EvidenceQualityRefV1 adapter integration', () {
+    const qualityAdapter = TraceabilityRiskAdapterV1();
+
+    test('preserves every canonical evidence quality wire code', () {
+      for (final level in [
+        'verified_primary',
+        'corroborated',
+        'single_source',
+        'insufficient',
+        'unavailable',
+      ]) {
+        expect(
+          qualityAdapter.toEvidenceQualityRef(level: level).toJson()['level'],
+          level,
+        );
+      }
+    });
+
+    test('preserves evaluator evidence without vocabulary remapping', () {
+      final value = qualityAdapter.toEvidenceQualityRef(
+        level: 'corroborated',
+        reasonCodes: const ['evidence.multiple_independent_sources'],
+        evaluatedFrom: const {
+          'evidenceReferenceCount': 3,
+          'sourceCount': 2,
+          'primaryVerified': false,
+        },
+        evaluatorVersion: 'risk-operations-evaluator-v1',
+      );
+
+      expect(value.toJson(), {
+        'contractVersion': evidenceQualityRefContractVersionV1,
+        'level': 'corroborated',
+        'reasonCodes': ['evidence.multiple_independent_sources'],
+        'evaluatedFrom': {
+          'evidenceReferenceCount': 3,
+          'sourceCount': 2,
+          'primaryVerified': false,
+        },
+        'evaluatorVersion': 'risk-operations-evaluator-v1',
+      });
+    });
+
+    test('unknown evidence quality level fails closed', () {
+      expect(
+        () => qualityAdapter.toEvidenceQualityRef(level: 'strong'),
+        throwsFormatException,
+      );
+    });
+
+    test('does not infer evidence quality from traceability risk severity', () {
+      final value = qualityAdapter.toEvidenceQualityRef(
+        level: 'single_source',
+        evaluatedFrom: const {
+          'sourceSystem': 'traceability',
+          'sourceCount': 1,
+          'primaryVerified': false,
+        },
+      );
+
+      expect(value.toJson()['level'], 'single_source');
+      expect(value.toJson().containsKey('riskLevel'), isFalse);
+      expect(value.toJson().containsKey('riskScore'), isFalse);
+    });
+
+    test('adapter returns immutable evaluator evidence snapshots', () {
+      final reasons = <String>['evidence.single_source_only'];
+      final evaluatedFrom = <String, Object?>{
+        'sourceCount': 1,
+        'primaryVerified': false,
+      };
+
+      final value = qualityAdapter.toEvidenceQualityRef(
+        level: 'single_source',
+        reasonCodes: reasons,
+        evaluatedFrom: evaluatedFrom,
+      );
+
+      reasons.clear();
+      evaluatedFrom['sourceCount'] = 99;
+
+      expect(value.reasonCodes, ['evidence.single_source_only']);
+      expect(value.evaluatedFrom['sourceCount'], 1);
+      expect(
+        () => value.reasonCodes.add('evidence.other'),
+        throwsUnsupportedError,
+      );
+      expect(
+        () => value.evaluatedFrom['sourceCount'] = 2,
+        throwsUnsupportedError,
+      );
+    });
+
+    test('quality bridge carries no entitlement or persistence fields', () {
+      final json = qualityAdapter
+          .toEvidenceQualityRef(
+            level: 'verified_primary',
+            evaluatorVersion: 'risk-operations-evaluator-v1',
+          )
+          .toJson();
+
+      for (final field in [
+        'subscription',
+        'payment',
+        'accessRequirement',
+        'verifiedBrand',
+        'operationAuthority',
+        'persistenceTarget',
+        'command',
+      ]) {
+        expect(json.containsKey(field), isFalse);
+      }
+    });
+  });
 }
 
 SuspiciousVerificationScan scan() => SuspiciousVerificationScan(

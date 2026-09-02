@@ -4,6 +4,20 @@ import '../shared_risk_contracts_v1.dart';
 final class TraceabilityRiskAdapterV1 {
   const TraceabilityRiskAdapterV1();
 
+  EvidenceQualityRefV1 toEvidenceQualityRef({
+    required String level,
+    Iterable<String> reasonCodes = const [],
+    Map<String, Object?> evaluatedFrom = const {},
+    String? evaluatorVersion,
+  }) => EvidenceQualityRefV1.fromJson({
+    'contractVersion': evidenceQualityRefContractVersionV1,
+    'level': level,
+    'reasonCodes': reasonCodes.toList(growable: false),
+    if (evaluatedFrom.isNotEmpty)
+      'evaluatedFrom': Map<String, Object?>.from(evaluatedFrom),
+    'evaluatorVersion': ?evaluatorVersion,
+  });
+
   RiskSignalContractV1 toSignal(
     SuspiciousVerificationScan scan, {
     required DateTime adaptedAt,
