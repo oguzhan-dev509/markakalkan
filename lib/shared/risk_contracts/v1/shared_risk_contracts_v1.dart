@@ -5,6 +5,7 @@ part 'capability_access_contract_v1.dart';
 part 'relation_edge_contract_v1.dart';
 part 'evidence_quality_ref_v1.dart';
 part 'public_record_state_v1.dart';
+part 'timeline_event_ref_v1.dart';
 part 'risk_signal_contract_v1.dart';
 part 'risk_assessment_contract_v1.dart';
 part 'case_candidate_contract_v1.dart';
