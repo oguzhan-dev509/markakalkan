@@ -4,6 +4,9 @@ const {HttpsError, onCall} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const {monitoringProjection, traceabilityProjection} = require("../../risk_operations/v1/projection");
 const {resolveTenantContextV1, sharedRiskProjection} = require("../../risk_operations/v1/service");
+const {
+  buildCanonicalCaseCandidateV1,
+} = require("./case_candidate_adapter");
 
 const SOURCES = Object.freeze(["monitoring", "traceability", "digital_detective", "shared_risk"]);
 const CANDIDACY = Object.freeze(["review_candidate", "strong_candidate"]);
@@ -379,6 +382,15 @@ function createService({db, clock = {now: () => new Date().toISOString()}}) {
         return {outcome: "conflict", blockerCodes: ["source.projection_stale"], dryRun: request.dryRun, transactionCommitted: false, writeAttempted: false};
       }
       const caseId = sha256(["case-file-v1", context.tenantId, context.brandId, request.sourceSystem, request.sourceRecordId].join("|"));
+      const canonicalCaseCandidate = buildCanonicalCaseCandidateV1({
+        context,
+        request,
+        sourceProjection: source.projection,
+        recommendedPriority: priority(source.projection.severity),
+      });
+      if (canonicalCaseCandidate.deduplicationKey !== caseId) {
+        throw new CaseEvidenceCenterError("invalid-argument", "case candidate deduplication mismatch");
+      }
       const number = caseNumber(openedAt, caseId);
       if (request.dryRun) return {outcome: "dry_run_ready", caseNumber: number, blockerCodes: [], dryRun: true, transactionCommitted: false, writeAttempted: false};
       const caseRef = db.collection("case_files").doc(caseId);
@@ -391,7 +403,7 @@ function createService({db, clock = {now: () => new Date().toISOString()}}) {
         const currentSource = await transaction.get(source.reference);
         if (!currentSource.exists || versionOf(currentSource) !== source.item.version) return {outcome: "conflict", blockerCodes: ["source.version_changed"], transactionCommitted: false, writeAttempted: false};
         const sourceBinding = {sourceSystem: request.sourceSystem, sourceRecordId: request.sourceRecordId, sourceRecordVersion: source.item.version, sourceRecordPath: source.reference.path, projectionFingerprint: source.projection.projectionFingerprint};
-        transaction.create(caseRef, {contractVersion: "case-file-v1", schemaVersion: "case-file-schema-v1", tenantId: context.tenantId, canonicalBrandId: context.brandId, caseNumber: number, title: source.projection.title, summary: source.projection.summary, status: "open", stage: "initial_review", priority: priority(source.projection.severity), ownerUid: invocation.uid, riskClass: source.projection.riskClass, severity: source.projection.severity, evidenceQuality: source.projection.evidenceQuality, caseCandidacy: source.projection.caseCandidacy, sourceBinding, legalHold: {active: false, startedAt: null, releasedAt: null}, openedAt, updatedAt: openedAt, closedAt: null, archivedAt: null, lifecycleVersion: "v1"});
+        transaction.create(caseRef, {contractVersion: "case-file-v1", schemaVersion: "case-file-schema-v1", tenantId: context.tenantId, canonicalBrandId: context.brandId, caseNumber: number, title: source.projection.title, summary: source.projection.summary, status: "open", stage: "initial_review", priority: canonicalCaseCandidate.recommendedPriority, ownerUid: invocation.uid, riskClass: source.projection.riskClass, severity: source.projection.severity, evidenceQuality: source.projection.evidenceQuality, caseCandidacy: source.projection.caseCandidacy, sourceBinding, legalHold: {active: false, startedAt: null, releasedAt: null}, openedAt, updatedAt: openedAt, closedAt: null, archivedAt: null, lifecycleVersion: "v1"});
         transaction.create(eventRef, {contractVersion: "case-event-v1", caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, eventType: "case_opened_from_risk", summary: "Risk sinyalinden kontrollü vaka dosyası açıldı.", occurredAt: openedAt, actorUid: invocation.uid, sourceBinding, appendOnly: true});
         transaction.create(evidenceRef, {contractVersion: "case-evidence-reference-v1", caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, referenceType: "source_record", title: "Kaynak risk kaydı", sourceSystem: request.sourceSystem, sourceRecordPath: source.reference.path, sourceRecordVersion: source.item.version, projectionFingerprint: source.projection.projectionFingerprint, reviewStatus: "pending", integrityStatus: "reference_only", capturedAt: source.projection.occurredAt || openedAt, createdAt: openedAt, createdBy: invocation.uid, appendOnly: true});
         transaction.create(auditRef, {contractVersion: "case-audit-event-v1", caseId, tenantId: context.tenantId, canonicalBrandId: context.brandId, action: "case.created_from_risk", actorUid: invocation.uid, occurredAt: openedAt, correlationHash: sha256(request.correlationId).slice(0, 16), appendOnly: true});

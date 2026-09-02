@@ -550,3 +550,145 @@ test("party profile handler requires auth and App Check and transaction failure 
   const callable = graphHandler("updatePartyProfile", {db, clock: graphClock, appCheck: true, log: {info: () => {}}}); await assert.rejects(() => callable({data: request}), (error) => error.code === "unauthenticated"); await assert.rejects(() => callable({auth: {uid: "user-1"}, data: request}), (error) => error.code === "failed-precondition");
   const failingCollections = graphCollections(); failingCollections.case_parties = [{id: created.partyId, data: {...db.collections.case_parties[0].data, createdAt: "2026-07-23T14:47:00.000Z", updatedAt: "2026-07-23T14:47:00.000Z", lastEventAt: "2026-07-23T14:47:00.000Z"}}]; const failingDb = new FakeDb(failingCollections, {transactionFailure: true}); const before = structuredClone(failingDb.collections); await assert.rejects(() => createCaseGraphService({db: failingDb, clock: graphClock}).updatePartyProfile(request, {uid: "user-1"}), /simulated transaction failure/); assert.deepEqual(failingDb.collections, before);
 });
+
+test("canonical case candidate adapter keeps Case Evidence Center as sole persistence authority", () => {
+  const {
+    buildCanonicalCaseCandidateV1,
+    deterministicCaseIdentity,
+  } = require("./case_candidate_adapter");
+  const context = {tenantId: "tenant-1", brandId: "brand-1", uid: "user-1"};
+  const request = {sourceSystem: "monitoring", sourceRecordId: "monitoring-1"};
+  const sourceProjection = {
+    signalId: "risk-operation-1",
+    title: "Şüpheli ilan",
+    summary: "Güvenli vaka özeti.",
+    severity: "high",
+    evidenceQuality: {level: "single_source"},
+    caseCandidacy: {
+      status: "strong_candidate",
+      reasonCodes: ["case.high_risk_corroborated"],
+      evaluatedAt: "2026-07-22T10:00:00.000Z",
+      evaluatorVersion: "risk-operations-evaluator-v1",
+      requiresHumanReview: true,
+    },
+  };
+
+  const value = buildCanonicalCaseCandidateV1({
+    context,
+    request,
+    sourceProjection,
+    recommendedPriority: "high",
+  });
+
+  assert.equal(value.contractVersion, "case-candidate-v1");
+  assert.equal(value.status, "proposed");
+  assert.equal(value.recommendedPriority, "high");
+  assert.equal(value.title, sourceProjection.title);
+  assert.equal(value.summary, sourceProjection.summary);
+  assert.equal(value.proposedAt, "2026-07-22T10:00:00.000Z");
+  assert.deepEqual(value.identityScope, {
+    tenantId: "tenant-1",
+    brandId: "brand-1",
+    resolutionStatus: "resolved",
+    unresolvedReasons: [],
+  });
+  assert.deepEqual(value.sourceSignalRefs, []);
+  assert.deepEqual(value.sourceRiskRefs, [{
+    module: "risk_operations",
+    entityType: "risk_operation",
+    entityId: "risk-operation-1",
+  }]);
+  assert.deepEqual(value.canonicalAssetRefs, []);
+  assert.deepEqual(value.evidenceRefs, []);
+  assert.deepEqual(value.relatedEntityRefs, []);
+  assert.equal(value.reviewedAt, undefined);
+  assert.equal(value.reviewedBy, undefined);
+  assert.equal(value.promotedCaseRef, undefined);
+  assert.equal(
+      value.deduplicationKey,
+      deterministicCaseIdentity({
+        tenantId: "tenant-1",
+        canonicalBrandId: "brand-1",
+        sourceSystem: "monitoring",
+        sourceRecordId: "monitoring-1",
+      }),
+  );
+  assert.deepEqual(value.provenance, {
+    producerModule: "case_evidence_center",
+    producerVersion: "case-candidate-adapter-v1",
+    sourceRecordId: "monitoring-1",
+    adaptedAt: "2026-07-22T10:00:00.000Z",
+  });
+  assert.equal(JSON.stringify(value).includes("accepted"), false);
+  assert.equal(JSON.stringify(value).includes("promoted"), false);
+  assert.equal(JSON.stringify(value).includes("ownerUid"), false);
+  assert.equal(JSON.stringify(value).includes("evidenceQuality"), false);
+});
+
+test("canonical case candidate adapter treats local candidacy as eligibility metadata only", () => {
+  const {buildCanonicalCaseCandidateV1} = require("./case_candidate_adapter");
+  const base = {
+    context: {tenantId: "tenant-1", brandId: "brand-1"},
+    request: {sourceSystem: "monitoring", sourceRecordId: "monitoring-1"},
+    recommendedPriority: "critical",
+  };
+  for (const localStatus of ["review_candidate", "strong_candidate"]) {
+    const value = buildCanonicalCaseCandidateV1({
+      ...base,
+      sourceProjection: {
+        signalId: "risk-operation-1",
+        title: "Şüpheli ilan",
+        summary: "Güvenli vaka özeti.",
+        caseCandidacy: {
+          status: localStatus,
+          evaluatedAt: "2026-07-22T10:00:00.000Z",
+          requiresHumanReview: true,
+        },
+      },
+    });
+    assert.equal(value.status, "proposed");
+  }
+});
+
+test("canonical case candidate adapter fails closed on missing semantic source fields", () => {
+  const {buildCanonicalCaseCandidateV1} = require("./case_candidate_adapter");
+  const base = {
+    context: {tenantId: "tenant-1", brandId: "brand-1"},
+    request: {sourceSystem: "monitoring", sourceRecordId: "monitoring-1"},
+    recommendedPriority: "high",
+    sourceProjection: {
+      signalId: "risk-operation-1",
+      title: "Şüpheli ilan",
+      summary: "Güvenli vaka özeti.",
+      caseCandidacy: {
+        status: "review_candidate",
+        evaluatedAt: "2026-07-22T10:00:00.000Z",
+      },
+    },
+  };
+
+  assert.throws(
+      () => buildCanonicalCaseCandidateV1({
+        ...base,
+        sourceProjection: {...base.sourceProjection, signalId: ""},
+      }),
+      /signalId|required/,
+  );
+  assert.throws(
+      () => buildCanonicalCaseCandidateV1({
+        ...base,
+        sourceProjection: {
+          ...base.sourceProjection,
+          caseCandidacy: {
+            ...base.sourceProjection.caseCandidacy,
+            evaluatedAt: null,
+          },
+        },
+      }),
+      /evaluatedAt|required|invalid/,
+  );
+  assert.throws(
+      () => buildCanonicalCaseCandidateV1({...base, recommendedPriority: "urgent"}),
+      /recommendedPriority/,
+  );
+});
