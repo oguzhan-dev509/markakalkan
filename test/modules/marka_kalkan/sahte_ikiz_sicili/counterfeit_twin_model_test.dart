@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/constants/counterfeit_twin_enums.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_model.dart';
 
+import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/models/counterfeit_twin_public_contract.dart';
+import 'package:markakalkan/shared/risk_contracts/v1/shared_risk_contracts_v1.dart';
+
 void main() {
   group('CounterfeitTwinModel', () {
     final createdAt = DateTime.utc(2026, 7, 8, 12);
@@ -127,6 +130,60 @@ void main() {
       expect(map.containsKey('createdBy'), isFalse);
       expect(map['updatedBy'], 'user-2');
       expect(map['updatedAt'], isA<FieldValue>());
+    });
+  });
+
+  group('CounterfeitTwinPublicDetail canonical public record state', () {
+    test('explicit publicationState passes through to PublicRecordStateV1', () {
+      final detail = CounterfeitTwinPublicDetail.fromMap(<String, dynamic>{
+        'publicationState': 'published',
+      });
+
+      expect(detail.publicationState, 'published');
+      expect(detail.publicRecordState, isNotNull);
+      expect(
+        detail.publicRecordState!.publicStateCode,
+        PublicRecordStateCodeV1.published,
+      );
+      expect(detail.publicRecordState!.verifiedAt, isNull);
+      expect(detail.publicRecordState!.disputedAt, isNull);
+      expect(detail.publicRecordState!.correctedAt, isNull);
+      expect(detail.publicRecordState!.responseRef, isNull);
+    });
+
+    test(
+      'missing publicationState preserves legacy display fallback but does not invent canonical truth',
+      () {
+        final detail = CounterfeitTwinPublicDetail.fromMap(
+          const <String, dynamic>{},
+        );
+
+        expect(detail.publicationState, 'published');
+        expect(detail.publicRecordState, isNull);
+      },
+    );
+
+    test(
+      'explicit under_review is canonical publication state, not risk severity',
+      () {
+        final detail = CounterfeitTwinPublicDetail.fromMap(<String, dynamic>{
+          'publicationState': 'under_review',
+        });
+
+        expect(
+          detail.publicRecordState!.publicStateCode,
+          PublicRecordStateCodeV1.underReview,
+        );
+      },
+    );
+
+    test('unknown explicit publication state fails closed', () {
+      expect(
+        () => CounterfeitTwinPublicDetail.fromMap(<String, dynamic>{
+          'publicationState': 'verified',
+        }),
+        throwsFormatException,
+      );
     });
   });
 }

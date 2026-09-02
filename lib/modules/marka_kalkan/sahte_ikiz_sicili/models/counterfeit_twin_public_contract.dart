@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_comparison_codec.dart';
 
+import 'package:markakalkan/shared/risk_contracts/v1/shared_risk_contracts_v1.dart';
+
 enum CounterfeitTwinPublicCategory {
   physical('physical'),
   digital('digital'),
@@ -91,6 +93,7 @@ class CounterfeitTwinPublicDetail {
     required this.shareDescription,
     required this.publicationState,
     required this.financialImpact,
+    this.publicRecordState,
     this.usagePurpose = '',
     this.technicalIdentity = '',
     this.counterfeitRisk = '',
@@ -152,6 +155,7 @@ class CounterfeitTwinPublicDetail {
       shareTitle: _string(map['shareTitle']),
       shareDescription: _string(map['shareDescription']),
       publicationState: _string(map['publicationState'], fallback: 'published'),
+      publicRecordState: _canonicalPublicRecordState(map),
       financialImpact: CounterfeitTwinPublicFinancialImpact.fromMap(
         map['financialImpactSummary'],
       ),
@@ -215,6 +219,7 @@ class CounterfeitTwinPublicDetail {
   final String shareTitle;
   final String shareDescription;
   final String publicationState;
+  final PublicRecordStateV1? publicRecordState;
   final CounterfeitTwinPublicFinancialImpact financialImpact;
   final DateTime? publishedAt;
   final DateTime? updatedAt;
@@ -240,6 +245,20 @@ class CounterfeitTwinPublicDetailService {
 
     return CounterfeitTwinPublicDetail.fromMap(result.data['comparison']);
   }
+}
+
+PublicRecordStateV1? _canonicalPublicRecordState(Map<String, dynamic> map) {
+  final raw = map['publicationState'];
+  if (raw == null) return null;
+  if (raw is! String) {
+    throw const FormatException('publicationState has invalid type');
+  }
+  final code = raw.trim();
+  if (code.isEmpty) return null;
+  return PublicRecordStateV1.fromJson(<String, dynamic>{
+    'contractVersion': 'public-record-state-v1',
+    'publicStateCode': code,
+  });
 }
 
 Map<String, dynamic> _map(Object? value) {

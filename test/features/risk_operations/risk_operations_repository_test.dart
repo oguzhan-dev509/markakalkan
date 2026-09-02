@@ -318,6 +318,77 @@ void main() {
       expect(() => _parse(response), throwsFormatException);
     });
   });
+
+  group('canonical timeline event reference integration', () {
+    test(
+      'known-time event projects to TimelineEventRefV1 without actor or subject inference',
+      () {
+        final response = _stringResponse();
+        final first = (response['items'] as List).first as Map<String, dynamic>;
+        final timeline = first['timeline'] as List;
+        final event = timeline.first as Map<String, dynamic>;
+        event['occurredAt'] = '2026-09-02T15:20:00.000Z';
+        event['occurredAtStatus'] = 'known';
+        event['sourceSystem'] = 'monitoring';
+        event['sourceRecordId'] = 'monitoring-source-001';
+        event['eventType'] = 'source_observed';
+
+        final parsed = _parse(response);
+        final ref = parsed.items.first.timeline.first.timelineEventRef;
+
+        expect(ref, isNotNull);
+        expect(ref!.eventId, parsed.items.first.timeline.first.eventId);
+        expect(ref.eventType.namespace, 'monitoring');
+        expect(ref.eventType.value, 'source_observed');
+        expect(ref.sourceSystemCode, 'monitoring');
+        expect(ref.sourceRecordId, 'monitoring-source-001');
+        expect(ref.actorRef, isNull);
+        expect(ref.subjectRef, isNull);
+      },
+    );
+
+    test(
+      'unknown-time event does not invent a canonical occurrence timestamp',
+      () {
+        final parsed = _parse(_stringResponse());
+
+        expect(parsed.items.first.timeline.first.occurredAt, isNull);
+        expect(parsed.items.first.timeline.first.timelineEventRef, isNull);
+      },
+    );
+
+    test(
+      'timeline canonical namespace reuses explicit sourceSystem without global event enum',
+      () {
+        final response = _stringResponse();
+        final first = (response['items'] as List).first as Map<String, dynamic>;
+        final timeline = first['timeline'] as List;
+        final event = timeline.first as Map<String, dynamic>;
+        event['occurredAt'] = '2026-09-02T15:21:00.000Z';
+        event['occurredAtStatus'] = 'known';
+        event['sourceSystem'] = 'traceability';
+        event['sourceRecordId'] = 'scan-001';
+        event['eventType'] = 'source_observed';
+
+        final ref = _parse(
+          response,
+        ).items.first.timeline.first.timelineEventRef;
+
+        expect(ref!.eventType.namespace, 'traceability');
+        expect(ref.eventType.value, 'source_observed');
+      },
+    );
+
+    test('malformed explicit timeline sourceRecordId fails closed', () {
+      final response = _stringResponse();
+      final first = (response['items'] as List).first as Map<String, dynamic>;
+      final timeline = first['timeline'] as List;
+      final event = timeline.first as Map<String, dynamic>;
+      event['sourceRecordId'] = 42;
+
+      expect(() => _parse(response), throwsFormatException);
+    });
+  });
 }
 
 RiskOperationsPageResult _parse(Map<String, dynamic> response) =>

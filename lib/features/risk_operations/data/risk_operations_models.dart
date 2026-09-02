@@ -70,6 +70,7 @@ class RiskTimelineEvent {
     required this.sourceSystem,
     required this.summary,
     required this.evidenceReferenceCount,
+    this.sourceRecordId = '',
   });
   final String eventId;
   final String eventType;
@@ -78,6 +79,24 @@ class RiskTimelineEvent {
   final String sourceSystem;
   final String summary;
   final int evidenceReferenceCount;
+  final String sourceRecordId;
+
+  TimelineEventRefV1? get timelineEventRef {
+    final eventTime = occurredAt;
+    if (eventTime == null) return null;
+    final sourceNamespace = sourceSystem.trim();
+    final typeValue = eventType.trim();
+    if (sourceNamespace.isEmpty || typeValue.isEmpty) return null;
+    final recordId = sourceRecordId.trim();
+    return TimelineEventRefV1(
+      eventId: eventId,
+      eventType: NamespacedValue(namespace: sourceNamespace, value: typeValue),
+      occurredAt: eventTime,
+      sourceSystemCode: sourceNamespace,
+      sourceRecordId: recordId.isEmpty ? null : recordId,
+    );
+  }
+
   factory RiskTimelineEvent.fromMap(Map<String, dynamic> map) =>
       RiskTimelineEvent(
         eventId: _string(map['eventId']),
@@ -87,6 +106,7 @@ class RiskTimelineEvent {
         sourceSystem: _string(map['sourceSystem']),
         summary: _string(map['summary']),
         evidenceReferenceCount: _integer(map['evidenceReferenceCount']),
+        sourceRecordId: _string(map['sourceRecordId']),
       );
 }
 
@@ -348,6 +368,7 @@ void _validateItem(Map<String, dynamic> item, String path) {
       _requireType<String>(event, field, '$path.timeline[$eventIndex].$field');
     }
     _optionalType<String>(event, 'occurredAt');
+    _optionalType<String>(event, 'sourceRecordId');
     _requireNum(event, 'evidenceReferenceCount');
   }
 
