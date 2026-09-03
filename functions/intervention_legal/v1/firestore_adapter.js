@@ -229,6 +229,7 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
       tenantId,
       canonicalBrandId,
       operationCode,
+      serverMembershipRows = null,
     }) {
       const normalizedUid = requiredString(uid, "uid", 128);
       const normalizedTenantId = requiredString(
@@ -247,15 +248,35 @@ function createInterventionLegalFirestoreAdapter(dbInput) {
           "operationCode",
       );
 
-      const snapshot = await db
-          .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
-          .where("tenantId", "==", normalizedTenantId)
-          .where("uid", "==", normalizedUid)
-          .limit(10)
-          .get();
+      let membershipRows;
+      if (Array.isArray(serverMembershipRows)) {
+        membershipRows = serverMembershipRows
+            .filter((item) =>
+              item &&
+              typeof item === "object" &&
+              item.uid === normalizedUid &&
+              item.tenantId === normalizedTenantId,
+            )
+            .map((item) => ({
+              ...item,
+              membershipId:
+                typeof item.membershipId === "string" ?
+                  item.membershipId :
+                  typeof item.id === "string" ? item.id : null,
+            }));
+      } else {
+        const snapshot = await db
+            .collection(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS)
+            .where("tenantId", "==", normalizedTenantId)
+            .where("uid", "==", normalizedUid)
+            .limit(10)
+            .get();
+        membershipRows = snapshot.docs.map(
+            (doc) => ({membershipId: doc.id, ...doc.data()}),
+        );
+      }
 
-      const active = snapshot.docs
-          .map((doc) => ({membershipId: doc.id, ...doc.data()}))
+      const active = membershipRows
           .filter((item) => item.status === "active");
 
       const owner = active.find((item) => item.role === "owner");

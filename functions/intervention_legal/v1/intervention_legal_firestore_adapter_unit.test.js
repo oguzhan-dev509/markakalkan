@@ -1273,3 +1273,153 @@ test("createApprovalRequestAtomic rejects partial bundle", async () => {
       /partial or duplicate/,
   );
 });
+
+test(
+    "server membership snapshot owner path avoids Firestore query",
+    async () => {
+      const db = new FakeFirestore();
+      db._query = async () => {
+        throw new Error("unexpected Firestore membership query");
+      };
+      const adapter = createInterventionLegalFirestoreAdapter(db);
+      const result = await adapter.resolveLegalMatterAuthority({
+        uid: "owner-1",
+        tenantId: "tenant-1",
+        canonicalBrandId: "brand-1",
+        operationCode: "transition_legal_matter",
+        serverMembershipRows: [
+          {
+            id: "tm_owner",
+            tenantId: "tenant-1",
+            uid: "owner-1",
+            role: "owner",
+            status: "active",
+          },
+        ],
+      });
+
+      assert.equal(result.authorized, true);
+      assert.equal(result.authoritySource, "tenant_owner");
+      assert.equal(result.membershipId, "tm_owner");
+      assert.equal(result.operationCode, "transition_legal_matter");
+    },
+);
+
+test(
+    "server membership snapshot delegation preserves exact scope",
+    async () => {
+      const db = new FakeFirestore();
+      db._query = async () => {
+        throw new Error("unexpected Firestore membership query");
+      };
+      const adapter = createInterventionLegalFirestoreAdapter(db);
+      const rows = [
+        {
+          id: "tm_delegate",
+          tenantId: "tenant-1",
+          uid: "delegate-1",
+          role: "member",
+          status: "active",
+          delegatedLegalMatterOperations: [
+            "transition_legal_matter",
+          ],
+          delegatedCanonicalBrandIds: ["brand-1"],
+        },
+      ];
+
+      const granted = await adapter.resolveLegalMatterAuthority({
+        uid: "delegate-1",
+        tenantId: "tenant-1",
+        canonicalBrandId: "brand-1",
+        operationCode: "transition_legal_matter",
+        serverMembershipRows: rows,
+      });
+      const wrongOperation = await adapter.resolveLegalMatterAuthority({
+        uid: "delegate-1",
+        tenantId: "tenant-1",
+        canonicalBrandId: "brand-1",
+        operationCode: "create_legal_matter",
+        serverMembershipRows: rows,
+      });
+      const wrongBrand = await adapter.resolveLegalMatterAuthority({
+        uid: "delegate-1",
+        tenantId: "tenant-1",
+        canonicalBrandId: "brand-2",
+        operationCode: "transition_legal_matter",
+        serverMembershipRows: rows,
+      });
+
+      assert.equal(granted.authorized, true);
+      assert.equal(granted.authoritySource, "explicit_delegation");
+      assert.equal(wrongOperation.authorized, false);
+      assert.equal(wrongBrand.authorized, false);
+    },
+);
+
+test(
+    "server membership snapshot rejects other uid or tenant",
+    async () => {
+      const db = new FakeFirestore();
+      db._query = async () => {
+        throw new Error("unexpected Firestore membership query");
+      };
+      const adapter = createInterventionLegalFirestoreAdapter(db);
+      const result = await adapter.resolveLegalMatterAuthority({
+        uid: "user-1",
+        tenantId: "tenant-1",
+        canonicalBrandId: "brand-1",
+        operationCode: "transition_legal_matter",
+        serverMembershipRows: [
+          {
+            id: "tm_other_uid",
+            tenantId: "tenant-1",
+            uid: "other-user",
+            role: "owner",
+            status: "active",
+          },
+          {
+            id: "tm_other_tenant",
+            tenantId: "tenant-2",
+            uid: "user-1",
+            role: "owner",
+            status: "active",
+          },
+        ],
+      });
+
+      assert.equal(result.authorized, false);
+      assert.equal(result.authoritySource, "none");
+      assert.equal(result.membershipId, null);
+    },
+);
+
+test(
+    "missing server membership snapshot preserves fresh Firestore query",
+    async () => {
+      const db = new FakeFirestore();
+      db.seed(FIRESTORE_COLLECTIONS.TENANT_MEMBERSHIPS, "tm_owner", {
+        tenantId: "tenant-1",
+        uid: "owner-1",
+        role: "owner",
+        status: "active",
+      });
+      const originalQuery = db._query.bind(db);
+      let queryCount = 0;
+      db._query = async (...args) => {
+        queryCount += 1;
+        return originalQuery(...args);
+      };
+      const adapter = createInterventionLegalFirestoreAdapter(db);
+
+      const result = await adapter.resolveLegalMatterAuthority({
+        uid: "owner-1",
+        tenantId: "tenant-1",
+        canonicalBrandId: "brand-1",
+        operationCode: "transition_legal_matter",
+      });
+
+      assert.equal(result.authorized, true);
+      assert.equal(result.authoritySource, "tenant_owner");
+      assert.equal(queryCount, 1);
+    },
+);

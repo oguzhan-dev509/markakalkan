@@ -7,6 +7,7 @@ import 'package:markakalkan/features/auth/domain/markakalkan_auth_intent.dart';
 import 'package:markakalkan/features/auth/presentation/brand_login_page.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_command_repository.dart';
+import 'package:markakalkan/features/intervention_legal/data/intervention_legal_capability_access_adapter_v1.dart';
 import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 
 typedef InterventionLegalLoginOpener =
@@ -1595,7 +1596,17 @@ final class _InterventionLegalMatterCommandPanelState
     }
   }
 
+  bool _legalActionGranted(String operationCode) =>
+      const InterventionLegalCapabilityAccessAdapterV1().isGranted(
+        matter: widget.matter,
+        operationCode: operationCode,
+      );
+
   Future<void> _submitTransition() async {
+    if (!_legalActionGranted(interventionLegalTransitionOperationCode)) {
+      _message('Bu durum geçişi için operasyon yetkisi gerekli.');
+      return;
+    }
     final nextStatus = _selectedTransition;
     final reasonCode = _transitionReasonController.text.trim();
     if (nextStatus == null || reasonCode.isEmpty) {
@@ -1619,6 +1630,12 @@ final class _InterventionLegalMatterCommandPanelState
   }
 
   Future<void> _submitApprovalRequest() async {
+    if (!_legalActionGranted(
+      interventionLegalCreateApprovalRequestOperationCode,
+    )) {
+      _message('Bu onay talebi için operasyon yetkisi gerekli.');
+      return;
+    }
     final approvalType = _selectedApprovalType;
     final reasonCode = _approvalReasonController.text.trim();
     if (approvalType == null || reasonCode.isEmpty) {

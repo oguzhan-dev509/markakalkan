@@ -27,6 +27,18 @@ void main() {
       expect(snapshot.matters, hasLength(1));
       expect(snapshot.matters.single.legalMatterId, 'lm-1');
       expect(
+        snapshot.matters.single.capabilityAccess
+            .legalAction('transition_legal_matter')
+            ?.operationAuthorityGranted,
+        isTrue,
+      );
+      expect(
+        snapshot.matters.single.capabilityAccess
+            .legalAction('create_approval_request')
+            ?.operationAuthorityGranted,
+        isFalse,
+      );
+      expect(
         snapshot.matters.single.approvalRequests.single.status,
         'approved',
       );
@@ -72,6 +84,54 @@ void main() {
       );
     },
   );
+
+  test('missing capability projection fails closed as no authority', () async {
+    final payload = _workspacePayload();
+    final matters = payload['matters']! as List<Object?>;
+    final matter = Map<String, Object?>.from(
+      matters.single! as Map<String, Object?>,
+    )..remove('capabilityAccess');
+    payload['matters'] = <Object?>[matter];
+    final repository = CallableInterventionLegalWorkspaceRepository(
+      callable: (_, _) async => payload,
+    );
+    final snapshot = await repository.loadWorkspace();
+    expect(
+      snapshot.matters.single.capabilityAccess.legalAction(
+        'transition_legal_matter',
+      ),
+      isNull,
+    );
+  });
+
+  test('capability projection rejects brand scope mismatch', () async {
+    final payload = _workspacePayload();
+    final matters = payload['matters']! as List<Object?>;
+    final matter = Map<String, Object?>.from(
+      matters.single! as Map<String, Object?>,
+    );
+    final capability = Map<String, Object?>.from(
+      matter['capabilityAccess']! as Map<String, Object?>,
+    );
+    final legalAction = Map<String, Object?>.from(
+      capability['LEGAL_ACTION']! as Map<String, Object?>,
+    );
+    final transition = Map<String, Object?>.from(
+      legalAction['transition_legal_matter']! as Map<String, Object?>,
+    );
+    transition['canonicalBrandId'] = 'brand-other';
+    legalAction['transition_legal_matter'] = transition;
+    capability['LEGAL_ACTION'] = legalAction;
+    matter['capabilityAccess'] = capability;
+    payload['matters'] = <Object?>[matter];
+    final repository = CallableInterventionLegalWorkspaceRepository(
+      callable: (_, _) async => payload,
+    );
+    await expectLater(
+      repository.loadWorkspace(),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }
 
 Map<String, Object?> _workspacePayload() {
@@ -107,6 +167,22 @@ Map<String, Object?> _workspacePayload() {
         'createdByUid': 'user-1',
         'updatedByUid': 'user-1',
         'statusChangedByUid': 'user-1',
+        'capabilityAccess': {
+          'LEGAL_ACTION': {
+            'transition_legal_matter': {
+              'operationCode': 'transition_legal_matter',
+              'canonicalBrandId': 'brand-1',
+              'operationAuthorityGranted': true,
+              'authoritySource': 'tenant_owner',
+            },
+            'create_approval_request': {
+              'operationCode': 'create_approval_request',
+              'canonicalBrandId': 'brand-1',
+              'operationAuthorityGranted': false,
+              'authoritySource': 'none',
+            },
+          },
+        },
         'approvalRequests': [
           {
             'approvalRequestId': 'lar-1',

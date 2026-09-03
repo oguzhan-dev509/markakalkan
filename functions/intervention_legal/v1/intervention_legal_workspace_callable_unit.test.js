@@ -100,6 +100,15 @@ function readerFixture(overrides = {}) {
     async listApprovalDecisionsByMatter() {
       return [row("lad-1", baseDecision())];
     },
+    async resolveLegalMatterAuthority({canonicalBrandId, operationCode}) {
+      return {
+        authorized: canonicalBrandId === "brand-1",
+        authoritySource: canonicalBrandId === "brand-1" ?
+          "tenant_owner" :
+          "none",
+        operationCode,
+      };
+    },
     ...overrides,
   };
 }
@@ -424,3 +433,173 @@ test("callable maps unauthenticated and missing App Check requests", async () =>
         error.code === "failed-precondition",
   );
 });
+
+test("workspace projects exact scoped LEGAL_ACTION authority", async () => {
+  const service = buildInterventionLegalWorkspaceService({
+    reader: readerFixture(),
+    clock: () => "2026-08-01T12:00:00.000Z",
+  });
+  const result = await service({
+    uid: "user-1",
+    raw: {
+      contractVersion: WORKSPACE_CONTRACT_VERSION,
+      limit: 10,
+    },
+  });
+  const access = result.matters[0].capabilityAccess.LEGAL_ACTION;
+  assert.deepEqual(
+      Object.keys(access).sort(),
+      [
+        "create_approval_request",
+        "transition_legal_matter",
+      ],
+  );
+  assert.equal(
+      access.transition_legal_matter.operationAuthorityGranted,
+      true,
+  );
+  assert.equal(
+      access.transition_legal_matter.authoritySource,
+      "tenant_owner",
+  );
+  assert.equal(
+      access.transition_legal_matter.canonicalBrandId,
+      "brand-1",
+  );
+  assert.equal(
+      Object.prototype.hasOwnProperty.call(
+          result.matters[0],
+          "operationAuthorityGranted",
+      ),
+      false,
+  );
+});
+
+test(
+    "workspace authority remains independently scoped per operation",
+    async () => {
+      const service = buildInterventionLegalWorkspaceService({
+        reader: readerFixture({
+          async resolveLegalMatterAuthority({operationCode}) {
+            return {
+              authorized:
+                operationCode === "transition_legal_matter",
+              authoritySource:
+                operationCode === "transition_legal_matter" ?
+                  "explicit_delegation" :
+                  "none",
+              operationCode,
+            };
+          },
+        }),
+        clock: () => "2026-08-01T12:00:00.000Z",
+      });
+      const result = await service({
+        uid: "user-1",
+        raw: {
+          contractVersion: WORKSPACE_CONTRACT_VERSION,
+          limit: 10,
+        },
+      });
+      const access =
+        result.matters[0].capabilityAccess.LEGAL_ACTION;
+      assert.equal(
+          access.transition_legal_matter
+              .operationAuthorityGranted,
+          true,
+      );
+      assert.equal(
+          access.create_approval_request
+              .operationAuthorityGranted,
+          false,
+      );
+    },
+);
+
+test(
+    "workspace authority fails closed on resolver operation mismatch",
+    async () => {
+      const service = buildInterventionLegalWorkspaceService({
+        reader: readerFixture({
+          async resolveLegalMatterAuthority() {
+            return {
+              authorized: true,
+              authoritySource: "tenant_owner",
+              operationCode: "wrong_operation",
+            };
+          },
+        }),
+        clock: () => "2026-08-01T12:00:00.000Z",
+      });
+      const result = await service({
+        uid: "user-1",
+        raw: {
+          contractVersion: WORKSPACE_CONTRACT_VERSION,
+          limit: 10,
+        },
+      });
+      const access =
+        result.matters[0].capabilityAccess.LEGAL_ACTION;
+      assert.equal(
+          access.transition_legal_matter
+              .operationAuthorityGranted,
+          false,
+      );
+      assert.equal(
+          access.create_approval_request
+              .operationAuthorityGranted,
+          false,
+      );
+    },
+);
+
+test(
+    "workspace reuses one request-local membership snapshot for LEGAL_ACTION",
+    async () => {
+      const baseReader = readerFixture();
+      const serverMembershipRows =
+        await baseReader.listMembershipsByUid({uid: "user-1"});
+      const observedRows = [];
+      const observedOperations = [];
+      const service = buildInterventionLegalWorkspaceService({
+        reader: readerFixture({
+          async listMembershipsByUid() {
+            return serverMembershipRows;
+          },
+          async resolveLegalMatterAuthority({
+            operationCode,
+            serverMembershipRows: rows,
+          }) {
+            observedRows.push(rows);
+            observedOperations.push(operationCode);
+            return {
+              authorized: true,
+              authoritySource: "tenant_owner",
+              operationCode,
+            };
+          },
+        }),
+        clock: () => "2026-08-01T12:00:00.000Z",
+      });
+
+      const result = await service({
+        uid: "user-1",
+        raw: {
+          contractVersion: WORKSPACE_CONTRACT_VERSION,
+          limit: 10,
+        },
+      });
+
+      assert.equal(result.matters.length, 1);
+      assert.equal(observedRows.length, 2);
+      assert.equal(observedRows[0], serverMembershipRows);
+      assert.equal(observedRows[1], serverMembershipRows);
+      assert.deepEqual(
+          observedOperations.sort(),
+          [
+            "create_approval_request",
+            "transition_legal_matter",
+          ],
+      );
+    },
+);

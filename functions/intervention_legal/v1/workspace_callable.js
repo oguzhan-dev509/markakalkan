@@ -14,10 +14,17 @@ const {
   exactKeys,
   objectRequired,
 } = require("./contracts");
+const {
+  createInterventionLegalFirestoreAdapter,
+} = require("./firestore_adapter");
 
 const WORKSPACE_CONTRACT_VERSION = "intervention-legal-workspace-v1";
 const WORKSPACE_CALLABLE_NAME = "getInterventionLegalWorkspace";
 const READ_OPERATION_CODE = "read_legal_matter_workspace";
+const LEGAL_ACTION_OPERATION_CODES = Object.freeze([
+  "transition_legal_matter",
+  "create_approval_request",
+]);
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 const MAX_MEMBERSHIPS = 50;
@@ -260,6 +267,43 @@ function projectApprovalDecision(documentId, data) {
   });
 }
 
+async function projectLegalActionCapabilityAccess({
+  reader,
+  uid,
+  matter,
+  serverMembershipRows,
+}) {
+  const entries = await Promise.all(
+      LEGAL_ACTION_OPERATION_CODES.map(async (operationCode) => {
+        const authority = await reader.resolveLegalMatterAuthority({
+          uid,
+          tenantId: matter.tenantId,
+          canonicalBrandId: matter.canonicalBrandId,
+          operationCode,
+          serverMembershipRows,
+        });
+        const exactOperation =
+          authority && authority.operationCode === operationCode;
+        const granted = exactOperation && authority.authorized === true;
+        const source = exactOperation ?
+          optionalString(authority.authoritySource) :
+          null;
+        return [
+          operationCode,
+          Object.freeze({
+            operationCode,
+            canonicalBrandId: matter.canonicalBrandId,
+            operationAuthorityGranted: granted,
+            authoritySource: source || "none",
+          }),
+        ];
+      }),
+  );
+  return Object.freeze({
+    LEGAL_ACTION: Object.freeze(Object.fromEntries(entries)),
+  });
+}
+
 function snapshotRows(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.docs)) return [];
   return snapshot.docs.map((doc) => Object.freeze({
@@ -275,6 +319,8 @@ function createWorkspaceReader(dbInput) {
   ) {
     throw new TypeError("db must be a Firestore-compatible instance");
   }
+
+  const authorityStore = createInterventionLegalFirestoreAdapter(dbInput);
 
   return Object.freeze({
     async listMembershipsByUid({uid}) {
@@ -311,6 +357,10 @@ function createWorkspaceReader(dbInput) {
           .limit(RELATED_RECORD_LIMIT)
           .get();
       return snapshotRows(snapshot);
+    },
+
+    async resolveLegalMatterAuthority(input) {
+      return authorityStore.resolveLegalMatterAuthority(input);
     },
   });
 }
@@ -401,7 +451,8 @@ function buildInterventionLegalWorkspaceService({
     typeof reader.listMembershipsByUid !== "function" ||
     typeof reader.listMattersByTenant !== "function" ||
     typeof reader.listApprovalRequestsByMatter !== "function" ||
-    typeof reader.listApprovalDecisionsByMatter !== "function"
+    typeof reader.listApprovalDecisionsByMatter !== "function" ||
+    typeof reader.resolveLegalMatterAuthority !== "function"
   ) {
     throw new TypeError("workspace reader is incomplete");
   }
@@ -442,14 +493,21 @@ function buildInterventionLegalWorkspaceService({
 
     const enriched = await Promise.all(
         matters.map(async (matter) => {
-          const [requestRows, decisionRows] = await Promise.all([
-            reader.listApprovalRequestsByMatter({
-              legalMatterId: matter.legalMatterId,
-            }),
-            reader.listApprovalDecisionsByMatter({
-              legalMatterId: matter.legalMatterId,
-            }),
-          ]);
+          const [requestRows, decisionRows, capabilityAccess] =
+            await Promise.all([
+              reader.listApprovalRequestsByMatter({
+                legalMatterId: matter.legalMatterId,
+              }),
+              reader.listApprovalDecisionsByMatter({
+                legalMatterId: matter.legalMatterId,
+              }),
+              projectLegalActionCapabilityAccess({
+                reader,
+                uid,
+                matter,
+                serverMembershipRows: membershipRows,
+              }),
+            ]);
 
           const approvalRequests = requestRows
               .map((row) =>
@@ -462,6 +520,7 @@ function buildInterventionLegalWorkspaceService({
 
           return Object.freeze({
             ...matter,
+            capabilityAccess,
             approvalRequests: Object.freeze(approvalRequests),
             approvalDecisions: Object.freeze(approvalDecisions),
           });
@@ -539,6 +598,7 @@ module.exports = Object.freeze({
   WORKSPACE_CONTRACT_VERSION,
   WORKSPACE_CALLABLE_NAME,
   READ_OPERATION_CODE,
+  LEGAL_ACTION_OPERATION_CODES,
   DEFAULT_LIMIT,
   MAX_LIMIT,
   MAX_MEMBERSHIPS,
@@ -552,6 +612,7 @@ module.exports = Object.freeze({
   parseWorkspaceQuery,
   timestampToIso,
   projectMatter,
+  projectLegalActionCapabilityAccess,
   projectApprovalRequest,
   projectApprovalDecision,
   createWorkspaceReader,

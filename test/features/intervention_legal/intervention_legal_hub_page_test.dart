@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_workspace_repository.dart';
 import 'package:markakalkan/features/intervention_legal/data/intervention_legal_command_repository.dart';
+import 'package:markakalkan/features/intervention_legal/data/intervention_legal_capability_access_adapter_v1.dart';
 import 'package:markakalkan/features/intervention_legal/presentation/intervention_legal_hub_page.dart';
 import 'package:markakalkan/core/security/app_check_bootstrap.dart';
 
@@ -676,6 +677,42 @@ void main() {
     expect(source, isNot(contains('FirebaseFirestore')));
     expect(source, isNot(contains('cloud_firestore')));
   });
+
+  testWidgets(
+    'LEGAL_ACTION denial blocks transition command before backend invocation',
+    (tester) async {
+      await _setDeterministicTestSurface(tester);
+      final workspace = _Mhl3b3WorkspaceRepository(
+        _snapshot(legalActionAuthorityGranted: false),
+      );
+      final commands = _Mhl3b3RecordingCommandRepository();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionLegalHubPage(
+            repository: workspace,
+            commandRepository: commands,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Denied authority is evaluated before transition payload validation.
+      // Submit directly so this test exercises only the authority boundary.
+      final submit = find.byKey(
+        const ValueKey<String>('mhl-transition-submit-lm-1'),
+      );
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(commands.transitionCalls, 0);
+      expect(workspace.callCount, 1);
+      expect(
+        find.text('Bu durum geçişi için operasyon yetkisi gerekli.'),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 Future<void> _setDeterministicTestSurface(WidgetTester tester) async {
@@ -745,6 +782,7 @@ final class _RetryWorkspaceRepository
 
 InterventionLegalWorkspaceSnapshot _snapshot({
   String approvalStatus = 'approved',
+  bool legalActionAuthorityGranted = true,
 }) {
   final request = InterventionLegalApprovalRequestSummary(
     approvalRequestId: 'lar-1',
@@ -795,6 +833,29 @@ InterventionLegalWorkspaceSnapshot _snapshot({
     createdByUid: 'user-1',
     updatedByUid: 'user-1',
     statusChangedByUid: 'user-1',
+    capabilityAccess: InterventionLegalMatterCapabilityAccess(
+      legalActionByOperationCode: {
+        interventionLegalTransitionOperationCode:
+            InterventionLegalOperationAuthorityProjection(
+              operationCode: interventionLegalTransitionOperationCode,
+              canonicalBrandId: 'brand-1',
+              operationAuthorityGranted: legalActionAuthorityGranted,
+              authoritySource: legalActionAuthorityGranted
+                  ? 'tenant_owner'
+                  : 'none',
+            ),
+        interventionLegalCreateApprovalRequestOperationCode:
+            InterventionLegalOperationAuthorityProjection(
+              operationCode:
+                  interventionLegalCreateApprovalRequestOperationCode,
+              canonicalBrandId: 'brand-1',
+              operationAuthorityGranted: legalActionAuthorityGranted,
+              authoritySource: legalActionAuthorityGranted
+                  ? 'tenant_owner'
+                  : 'none',
+            ),
+      },
+    ),
     approvalRequests: [request],
     approvalDecisions: [decision],
   );

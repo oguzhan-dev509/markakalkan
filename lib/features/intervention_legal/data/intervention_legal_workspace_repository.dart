@@ -143,6 +143,118 @@ final class InterventionLegalWorkspaceCounts {
   final int rejectedApprovalCount;
 }
 
+final class InterventionLegalOperationAuthorityProjection {
+  const InterventionLegalOperationAuthorityProjection({
+    required this.operationCode,
+    required this.canonicalBrandId,
+    required this.operationAuthorityGranted,
+    required this.authoritySource,
+  });
+
+  factory InterventionLegalOperationAuthorityProjection.fromMap(
+    Map<String, Object?> map, {
+    required String expectedOperationCode,
+    required String expectedCanonicalBrandId,
+  }) {
+    final operationCode = _requiredString(
+      map['operationCode'],
+      r'$.matters[].capabilityAccess.LEGAL_ACTION[].operationCode',
+    );
+    final canonicalBrandId = _requiredString(
+      map['canonicalBrandId'],
+      r'$.matters[].capabilityAccess.LEGAL_ACTION[].canonicalBrandId',
+    );
+    if (operationCode != expectedOperationCode) {
+      throw const FormatException(
+        'Hukuki işlem yetki operationCode kapsamı eşleşmiyor.',
+      );
+    }
+    if (canonicalBrandId != expectedCanonicalBrandId) {
+      throw const FormatException(
+        'Hukuki işlem yetki marka kapsamı eşleşmiyor.',
+      );
+    }
+    return InterventionLegalOperationAuthorityProjection(
+      operationCode: operationCode,
+      canonicalBrandId: canonicalBrandId,
+      operationAuthorityGranted: _requiredBool(
+        map['operationAuthorityGranted'],
+        r'$.matters[].capabilityAccess.LEGAL_ACTION[].operationAuthorityGranted',
+      ),
+      authoritySource: _requiredString(
+        map['authoritySource'],
+        r'$.matters[].capabilityAccess.LEGAL_ACTION[].authoritySource',
+      ),
+    );
+  }
+
+  final String operationCode;
+  final String canonicalBrandId;
+  final bool operationAuthorityGranted;
+  final String authoritySource;
+}
+
+final class InterventionLegalMatterCapabilityAccess {
+  const InterventionLegalMatterCapabilityAccess({
+    required this.legalActionByOperationCode,
+  });
+
+  const InterventionLegalMatterCapabilityAccess.empty()
+    : legalActionByOperationCode =
+          const <String, InterventionLegalOperationAuthorityProjection>{};
+
+  factory InterventionLegalMatterCapabilityAccess.fromMatterMap(
+    Map<String, Object?> matter,
+  ) {
+    final canonicalBrandId = _requiredString(
+      matter['canonicalBrandId'],
+      r'$.matters[].canonicalBrandId',
+    );
+    final rawCapability = matter['capabilityAccess'];
+    if (rawCapability == null) {
+      return const InterventionLegalMatterCapabilityAccess.empty();
+    }
+    final capability = _requiredMap(
+      rawCapability,
+      r'$.matters[].capabilityAccess',
+    );
+    final rawLegalAction = capability['LEGAL_ACTION'];
+    if (rawLegalAction == null) {
+      return const InterventionLegalMatterCapabilityAccess.empty();
+    }
+    final legalAction = _requiredMap(
+      rawLegalAction,
+      r'$.matters[].capabilityAccess.LEGAL_ACTION',
+    );
+    final parsed = <String, InterventionLegalOperationAuthorityProjection>{};
+    for (final entry in legalAction.entries) {
+      final operationCode = entry.key.trim();
+      if (operationCode.isEmpty) {
+        throw const FormatException('Hukuki işlem operationCode boş olamaz.');
+      }
+      parsed[operationCode] =
+          InterventionLegalOperationAuthorityProjection.fromMap(
+            _requiredMap(
+              entry.value,
+              r'$.matters[].capabilityAccess.LEGAL_ACTION[]',
+            ),
+            expectedOperationCode: operationCode,
+            expectedCanonicalBrandId: canonicalBrandId,
+          );
+    }
+    return InterventionLegalMatterCapabilityAccess(
+      legalActionByOperationCode: Map.unmodifiable(parsed),
+    );
+  }
+
+  final Map<String, InterventionLegalOperationAuthorityProjection>
+  legalActionByOperationCode;
+
+  InterventionLegalOperationAuthorityProjection? legalAction(
+    String operationCode,
+  ) => legalActionByOperationCode[operationCode.trim()];
+}
+
 final class InterventionLegalMatterSummary {
   const InterventionLegalMatterSummary({
     required this.legalMatterId,
@@ -163,6 +275,8 @@ final class InterventionLegalMatterSummary {
     required this.createdByUid,
     required this.updatedByUid,
     required this.statusChangedByUid,
+    this.capabilityAccess =
+        const InterventionLegalMatterCapabilityAccess.empty(),
     required this.approvalRequests,
     required this.approvalDecisions,
   });
@@ -220,6 +334,9 @@ final class InterventionLegalMatterSummary {
         map['statusChangedByUid'],
         r'$.matters[].statusChangedByUid',
       ),
+      capabilityAccess: InterventionLegalMatterCapabilityAccess.fromMatterMap(
+        map,
+      ),
       approvalRequests:
           _requiredList(
                 map['approvalRequests'],
@@ -263,6 +380,7 @@ final class InterventionLegalMatterSummary {
   final String? createdByUid;
   final String? updatedByUid;
   final String? statusChangedByUid;
+  final InterventionLegalMatterCapabilityAccess capabilityAccess;
   final List<InterventionLegalApprovalRequestSummary> approvalRequests;
   final List<InterventionLegalApprovalDecisionSummary> approvalDecisions;
 }
