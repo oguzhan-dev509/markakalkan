@@ -625,101 +625,76 @@ function webhookBodyCandidate(value) {
     return {found: false, value: undefined};
   }
 
-  let directEnvelopeExactness = "notExact";
+  // RCA-14: tri-state direct-envelope-like precedence.
+  // "directLike" means every expected dispatch key is present as an enumerable
+  // top-level key; extra top-level keys do not erase direct-envelope precedence.
+  let directEnvelopeState = "notDirect";
   try {
-    if (plain(value)) {
-      const directEnvelopeKeys = Object.keys(value).sort();
-      if (directEnvelopeKeys.length === EXPECTED_KEYS.length &&
-          !directEnvelopeKeys.some(
-            (key, index) => key !== EXPECTED_KEYS[index]
-          )) {
-        directEnvelopeExactness = "exact";
-      }
+    // Preserve prototype-introspection fail-closed behavior even though
+    // plainness does not control direct-envelope precedence.
+    plain(value);
+
+    const directEnvelopeKeys = Object.keys(value).sort();
+    const directEnvelopeLike = EXPECTED_KEYS.every(
+      (key) => directEnvelopeKeys.includes(key)
+    );
+    if (directEnvelopeLike) {
+      directEnvelopeState = "directLike";
     }
   } catch {
-    directEnvelopeExactness = "introspectionError";
+    directEnvelopeState = "introspectionError";
   }
 
-  if (directEnvelopeExactness === "introspectionError") {
+  if (directEnvelopeState === "introspectionError") {
     fail("dispatchEnvelope introspection failed");
   }
-  if (directEnvelopeExactness === "exact") {
+  if (directEnvelopeState === "directLike") {
+    // Never inspect or redirect through a synthetic/readable body.
+    // Downstream exactKeys remains authoritative for plainness and extras.
     return {found: false, value: undefined};
   }
 
-  if (Object.prototype.hasOwnProperty.call(value, "body")) {
-    return {found: true, value: value.body};
+  let body;
+  try {
+    body = value.body;
+  } catch {
+    fail("dispatchEnvelope body access failed");
   }
 
-  try {
-    const body = value.body;
-    if (body !== undefined) {
-      // BRT-0CL.2 candidate: a readable body that independently
-    // materializes to the exact dispatch-envelope keyset may be accepted
-    // even when n8n runtime wrapper markers are hidden.
-    //
-    // Conservative direct-envelope precedence: if every required direct
-    // dispatch field is readable on the incoming object, preserve the
-    // incoming object and let downstream exactKeys enforce prototype and
-    // exact-key strictness. This avoids redirecting direct nonplain objects
-    // through synthetic/inherited body accessors.
-    let directReadableEnvelope = true;
+  if (body !== undefined) {
+    let materializedBody;
     try {
-      for (const key of EXPECTED_KEYS) {
-        if (value[key] === undefined) {
-          directReadableEnvelope = false;
-          break;
-        }
-      }
-    } catch {
-      fail("dispatchEnvelope introspection failed");
-    }
-    if (directReadableEnvelope) {
-      return {found: false, value: undefined};
-    }
-
-    try {
-      const materializedBody =
+      materializedBody =
         normalizeWebhookJson(body, 0, {count: 0});
-      if (plain(materializedBody)) {
-        const bodyKeys = Object.keys(materializedBody).sort();
-        const bodyKeySetExact =
-          bodyKeys.length === EXPECTED_KEYS.length &&
-          !bodyKeys.some(
-            (key, index) => key !== EXPECTED_KEYS[index]
-          );
-        if (bodyKeySetExact) {
-          return {found: true, value: materializedBody};
-        }
-      }
     } catch {
-      // Preserve the existing marker-based path and downstream validation.
+      fail("dispatchEnvelope body materialization failed");
     }
 
-    let wrapperMarkerCount = 0;
-      for (const key of [
-        "headers",
-        "params",
-        "query",
-        "webhookUrl",
-        "executionMode",
-      ]) {
-        if (value[key] !== undefined) wrapperMarkerCount += 1;
+    if (plain(materializedBody)) {
+      let bodyKeys;
+      try {
+        bodyKeys = Object.keys(materializedBody).sort();
+      } catch {
+        fail("dispatchEnvelope body introspection failed");
       }
 
-      if (wrapperMarkerCount >= 2) {
-        return {found: true, value: body};
+      const bodyKeySetExact =
+        bodyKeys.length === EXPECTED_KEYS.length &&
+        !bodyKeys.some(
+          (key, index) => key !== EXPECTED_KEYS[index]
+        );
+
+      if (bodyKeySetExact) {
+        return {found: true, value: materializedBody};
       }
     }
-  } catch {
-    // Preserve fail-closed fallback below.
   }
 
   if (plain(value)) {
     return {found: false, value: undefined};
   }
 
-  return {found: false, value: undefined};
+  fail("dispatchEnvelope ingress materialization failed");
 }
 
 const incoming = $input.first().json;

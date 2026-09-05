@@ -1850,15 +1850,40 @@ test("BRT-0CM parent rejects proxy wrong body without wrapper markers", async ()
 // BRT-0CS.5F.1 materialized-body return contract
 test("BRT-0CS.5F.1 materialized-body path returns normalized plain body", () => {
   const code = validatorCode();
-  const materializedPos = code.indexOf("const materializedBody =");
-  const wrapperMarkerPos = code.indexOf("let wrapperMarkerCount = 0;");
-  assert.notEqual(materializedPos, -1);
-  assert.notEqual(wrapperMarkerPos, -1);
-  assert.ok(wrapperMarkerPos > materializedPos);
+  const helperStart = code.indexOf("function webhookBodyCandidate(value)");
+  const rawSelectorStart =
+    code.indexOf("const bodyCandidate = webhookBodyCandidate(incoming);");
+  assert.notEqual(helperStart, -1);
+  assert.notEqual(rawSelectorStart, -1);
+  assert.ok(rawSelectorStart > helperStart);
 
-  const region = code.slice(materializedPos, wrapperMarkerPos);
-  assert.match(region, /plain\(materializedBody\)/);
-  assert.match(region, /bodyKeySetExact/);
-  assert.match(region, /return \{found: true, value: materializedBody\};/);
-  assert.doesNotMatch(region, /return \{found: true, value: body\};/);
+  const region = code.slice(helperStart, rawSelectorStart);
+  const bodyReadPos = region.indexOf("body = value.body;");
+  const normalizePos =
+    region.indexOf("normalizeWebhookJson(body, 0, {count: 0});");
+  const plainPos = region.indexOf("plain(materializedBody)");
+  const exactPos = region.indexOf("bodyKeySetExact");
+  const normalizedReturnPos =
+    region.indexOf("return {found: true, value: materializedBody};");
+
+  for (const position of [
+    bodyReadPos,
+    normalizePos,
+    plainPos,
+    exactPos,
+    normalizedReturnPos,
+  ]) {
+    assert.notEqual(position, -1);
+  }
+  assert.ok(bodyReadPos < normalizePos);
+  assert.ok(normalizePos < plainPos);
+  assert.ok(plainPos < exactPos);
+  assert.ok(exactPos < normalizedReturnPos);
+
+  assert.doesNotMatch(
+      region,
+      /return \{found: true, value: body\};/,
+  );
+  assert.doesNotMatch(region, /wrapperMarkerCount/);
+  assert.doesNotMatch(region, /hasOwnProperty/);
 });
