@@ -537,3 +537,25 @@ exports.listSponsorContentForAdmin =
 
 exports.upsertSponsorContentForAdmin =
     buildUpsertSponsorContentForAdmin({db, admin});
+
+// BEGIN ODLA-1G V1 CALLABLE EXPORTS
+const {
+  createOdlaVerificationCase,
+  getOdlaVerificationWorkspace,
+  appendOdlaChainOfCustodyEvent,
+  createOdlaTestRequest,
+  recordOdlaTestResult,
+  adjudicateOdlaFinding,
+  openOdlaAppeal,
+  resolveOdlaAppeal,
+} = require("./odla/v1/callables");
+
+exports.createOdlaVerificationCase = createOdlaVerificationCase;
+exports.getOdlaVerificationWorkspace = getOdlaVerificationWorkspace;
+exports.appendOdlaChainOfCustodyEvent = appendOdlaChainOfCustodyEvent;
+exports.createOdlaTestRequest = createOdlaTestRequest;
+exports.recordOdlaTestResult = recordOdlaTestResult;
+exports.adjudicateOdlaFinding = adjudicateOdlaFinding;
+exports.openOdlaAppeal = openOdlaAppeal;
+exports.resolveOdlaAppeal = resolveOdlaAppeal;
+// END ODLA-1G V1 CALLABLE EXPORTS
