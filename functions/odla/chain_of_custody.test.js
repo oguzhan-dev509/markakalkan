@@ -1,9 +1,23 @@
-'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),c=require('./chain_of_custody');
-function e(n,t,prev=null,o={}){return c.buildCustodyEvent({tenantId:'t',brandUid:'b',caseId:'c',sampleId:'s',eventSequence:n,eventType:t,occurredAt:`2026-09-09T13:00:0${Math.min(n,9)}Z`,recordedAt:`2026-09-09T13:01:0${Math.min(n,9)}Z`,actorType:'operator',actorId:'op',locationCode:'TR',sealId:o.sealId??null,previousEventId:prev?prev.eventId:null,previousEventPayloadSha256:prev?prev.eventPayloadSha256:null,evidenceRefs:o.evidenceRefs||[],...o})}
-test('ADV-008 sample substitution conflicts',()=>{const a=e(1,'received'),b=c.buildCustodyEvent({tenantId:'t',brandUid:'b',caseId:'c',sampleId:'OTHER',eventSequence:2,eventType:'transfer',occurredAt:'2026-09-09T13:00:02Z',recordedAt:'2026-09-09T13:01:02Z',actorType:'operator',actorId:'op',locationCode:'TR',previousEventId:a.eventId,previousEventPayloadSha256:a.eventPayloadSha256});assert.equal(c.validateCustodyAppend(a,b).code,'SAMPLE_IDENTITY_MISMATCH')});
-test('ADV-009 sequence gap rejected',()=>{const a=e(1,'received'),b=e(3,'transfer',a);assert.equal(c.validateCustodyAppend(a,b).code,'CUSTODY_SEQUENCE_GAP')});
-test('ADV-010 duplicate sequence different payload conflicts',()=>{const a=e(1,'received'),b=e(1,'other');assert.equal(c.validateCustodyAppend(a,b).code,'DUPLICATE_SEQUENCE_DIFFERENT_PAYLOAD')});
-test('ADV-011 previous hash mismatch conflicts',()=>{const a=e(1,'received'),b=e(2,'transfer',a),x={...b,previousEventPayloadSha256:'0'.repeat(64)};assert.equal(c.validateCustodyAppend(a,x).code,'CUSTODY_PREVIOUS_LINK_MISMATCH')});
-test('ADV-012 seal mismatch conflicts',()=>{const a=e(1,'sample_sealed',null,{sealId:'A'}),b=e(2,'lab_opened',a,{sealId:'B'});assert.equal(c.validateCustodyAppend(a,b).code,'SEAL_MISMATCH')});
-test('ADV-013 missing transport evidence fails',()=>{const a=e(1,'sealed'),b=e(2,'courier_handoff',a);assert.equal(c.validateCustodyAppend(a,b,{transportEvidenceRequired:true}).code,'REQUIRED_TRANSPORT_EVIDENCE_MISSING')});
+"use strict";
+const test=require("node:test"), assert=require("node:assert/strict"), c=require("./chain_of_custody");
+function e(n, t, prev=null, o={}) {
+  return c.buildCustodyEvent({tenantId: "t", brandUid: "b", caseId: "c", sampleId: "s", eventSequence: n, eventType: t, occurredAt: `2026-09-09T13:00:0${Math.min(n, 9)}Z`, recordedAt: `2026-09-09T13:01:0${Math.min(n, 9)}Z`, actorType: "operator", actorId: "op", locationCode: "TR", sealId: o.sealId??null, previousEventId: prev?prev.eventId:null, previousEventPayloadSha256: prev?prev.eventPayloadSha256:null, evidenceRefs: o.evidenceRefs||[], ...o});
+}
+test("ADV-008 sample substitution conflicts", ()=>{
+  const a=e(1, "received"), b=c.buildCustodyEvent({tenantId: "t", brandUid: "b", caseId: "c", sampleId: "OTHER", eventSequence: 2, eventType: "transfer", occurredAt: "2026-09-09T13:00:02Z", recordedAt: "2026-09-09T13:01:02Z", actorType: "operator", actorId: "op", locationCode: "TR", previousEventId: a.eventId, previousEventPayloadSha256: a.eventPayloadSha256}); assert.equal(c.validateCustodyAppend(a, b).code, "SAMPLE_IDENTITY_MISMATCH");
+});
+test("ADV-009 sequence gap rejected", ()=>{
+  const a=e(1, "received"), b=e(3, "transfer", a); assert.equal(c.validateCustodyAppend(a, b).code, "CUSTODY_SEQUENCE_GAP");
+});
+test("ADV-010 duplicate sequence different payload conflicts", ()=>{
+  const a=e(1, "received"), b=e(1, "other"); assert.equal(c.validateCustodyAppend(a, b).code, "DUPLICATE_SEQUENCE_DIFFERENT_PAYLOAD");
+});
+test("ADV-011 previous hash mismatch conflicts", ()=>{
+  const a=e(1, "received"), b=e(2, "transfer", a), x={...b, previousEventPayloadSha256: "0".repeat(64)}; assert.equal(c.validateCustodyAppend(a, x).code, "CUSTODY_PREVIOUS_LINK_MISMATCH");
+});
+test("ADV-012 seal mismatch conflicts", ()=>{
+  const a=e(1, "sample_sealed", null, {sealId: "A"}), b=e(2, "lab_opened", a, {sealId: "B"}); assert.equal(c.validateCustodyAppend(a, b).code, "SEAL_MISMATCH");
+});
+test("ADV-013 missing transport evidence fails", ()=>{
+  const a=e(1, "sealed"), b=e(2, "courier_handoff", a); assert.equal(c.validateCustodyAppend(a, b, {transportEvidenceRequired: true}).code, "REQUIRED_TRANSPORT_EVIDENCE_MISSING");
+});
