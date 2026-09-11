@@ -31,7 +31,10 @@ function requireString(value, name) {
 }
 
 function auditEventId(operationId, suffix) {
-  return contracts.deriveDeterministicId("odla-audit-event-v1", [operationId, suffix]);
+  return contracts.deriveDeterministicId("odla-audit-event-v1", [
+    operationId,
+    suffix,
+  ]);
 }
 
 function trustedAuditContext(authority, data, operationId, action) {
@@ -64,7 +67,9 @@ function custodyEventHashPayload(event) {
     sealId: event.sealId ?? null,
     previousEventId: event.previousEventId ?? null,
     previousEventPayloadSha256: event.previousEventPayloadSha256 ?? null,
-    evidenceRefs: Array.isArray(event.evidenceRefs) ? [...event.evidenceRefs] : [],
+    evidenceRefs: Array.isArray(event.evidenceRefs) ?
+      [...event.evidenceRefs] :
+      [],
     appendOnly: event.appendOnly,
     eventId: event.eventId,
   };
@@ -84,18 +89,24 @@ function assertTrustedProfileDocument(profile) {
   if (!profile || profile.status !== "active") {
     fail("failed-precondition", "VERIFICATION_PROFILE_NOT_ACTIVE");
   }
-  for (const field of [
-    "profileId", "profileCode", "productClassCode",
-  ]) {
+  for (const field of ["profileId", "profileCode", "productClassCode"]) {
     requireString(profile[field], field);
   }
-  if (!Number.isInteger(profile.profileVersion) || profile.profileVersion < 1) {
+  if (
+    !Number.isInteger(profile.profileVersion) ||
+    profile.profileVersion < 1
+  ) {
     fail("failed-precondition", "VERIFICATION_PROFILE_VERSION_INVALID");
   }
-  if (!profile.jurisdictionOverrides ||
-      typeof profile.jurisdictionOverrides !== "object" ||
-      Array.isArray(profile.jurisdictionOverrides)) {
-    fail("failed-precondition", "VERIFICATION_PROFILE_JURISDICTIONS_MISSING");
+  if (
+    !profile.jurisdictionOverrides ||
+    typeof profile.jurisdictionOverrides !== "object" ||
+    Array.isArray(profile.jurisdictionOverrides)
+  ) {
+    fail(
+        "failed-precondition",
+        "VERIFICATION_PROFILE_JURISDICTIONS_MISSING",
+    );
   }
   return profile;
 }
@@ -113,15 +124,19 @@ async function resolveTrustedPolicy(adapter, profileId, countryCode) {
     jurisdictionOverride,
   });
   if (!resolution.ok) fail("failed-precondition", resolution.code);
-  if (profile.profileCode !== resolution.profile.profileCode ||
-      profile.profileVersion !== resolution.profile.profileVersion) {
+  if (
+    profile.profileCode !== resolution.profile.profileCode ||
+    profile.profileVersion !== resolution.profile.profileVersion
+  ) {
     fail("failed-precondition", "TRUSTED_PROFILE_CORE_BINDING_MISMATCH");
   }
   return Object.freeze({profile, resolution});
 }
 
 function assertCaseScope(authority, workspace, data) {
-  if (!workspace || !workspace.case) fail("not-found", "ODLA verification case not found");
+  if (!workspace || !workspace.case) {
+    fail("not-found", "ODLA verification case not found");
+  }
   assertTenantMatch(authority, workspace.case);
   if (data.tenantId && workspace.case.tenantId !== data.tenantId) {
     fail("permission-denied", "Cross-tenant ODLA case mismatch");
@@ -142,7 +157,9 @@ function createOdlaWorkspaceService({adapter}) {
     assertActionAuthorized(authority, "create_case");
     const operationId = requireOperationId(data);
     const trusted = await resolveTrustedPolicy(
-        adapter, data.profileId, data.countryCode,
+        adapter,
+        data.profileId,
+        data.countryCode,
     );
     const caseRecord = contracts.validateVerificationCase({
       caseId: data.caseId,
@@ -161,10 +178,16 @@ function createOdlaWorkspaceService({adapter}) {
       operationId,
       actorUid: authority.uid,
       auditContext: trustedAuditContext(
-          authority, data, operationId, "create_case",
+          authority,
+          data,
+          operationId,
+          "create_case",
       ),
     });
-    return Object.freeze({case: result.data, idempotent: result.idempotent});
+    return Object.freeze({
+      case: result.data,
+      idempotent: result.idempotent,
+    });
   }
 
   async function getOdlaVerificationWorkspace({authority, data}) {
@@ -197,12 +220,15 @@ function createOdlaWorkspaceService({adapter}) {
       locationCode: data.locationCode,
       sealId: data.sealId ?? null,
       previousEventId: previous ? previous.eventId : null,
-      previousEventPayloadSha256: previous ? previous.eventPayloadSha256 : null,
+      previousEventPayloadSha256: previous ?
+        previous.eventPayloadSha256 :
+        null,
       evidenceRefs: data.evidenceRefs,
     });
     const check = previous ?
       custody.validateCustodyAppend(previous, event, {
-        transportEvidenceRequired: data.transportEvidenceRequired === true,
+        transportEvidenceRequired:
+            data.transportEvidenceRequired === true,
       }) :
       custody.validateCustodyGenesis(event);
     if (!check.ok) fail("failed-precondition", check.code);
@@ -211,11 +237,14 @@ function createOdlaWorkspaceService({adapter}) {
       operationId,
       actorUid: authority.uid,
       auditContext: trustedAuditContext(
-          authority, {
+          authority,
+          {
             ...data,
             tenantId: workspace.case.tenantId,
             brandUid: workspace.case.brandUid,
-          }, operationId, "append_custody",
+          },
+          operationId,
+          "append_custody",
       ),
     });
   }
@@ -227,15 +256,22 @@ function createOdlaWorkspaceService({adapter}) {
     const workspace = await adapter.getWorkspace(data.caseId);
     const caseRecord = assertCaseScope(authority, workspace, data);
     const trusted = await resolveTrustedPolicy(
-        adapter, caseRecord.profileId, caseRecord.countryCode,
+        adapter,
+        caseRecord.profileId,
+        caseRecord.countryCode,
     );
-    if (caseRecord.profileCode !== trusted.resolution.profile.profileCode ||
-        caseRecord.profileVersion !== trusted.resolution.profile.profileVersion ||
-        caseRecord.productClassCode !== trusted.resolution.profile.productClassCode) {
+    if (
+      caseRecord.profileCode !== trusted.resolution.profile.profileCode ||
+      caseRecord.profileVersion !==
+        trusted.resolution.profile.profileVersion ||
+      caseRecord.productClassCode !==
+        trusted.resolution.profile.productClassCode
+    ) {
       fail("failed-precondition", "CASE_TRUSTED_PROFILE_BINDING_MISMATCH");
     }
     const question = profiles.resolveTestQuestion(
-        trusted.resolution, data.testQuestionCode,
+        trusted.resolution,
+        data.testQuestionCode,
     );
     if (!question.ok) fail("failed-precondition", question.code);
     const laboratory = await adapter.getLaboratory(data.laboratoryId);
@@ -260,7 +296,9 @@ function createOdlaWorkspaceService({adapter}) {
       requireChainOfCustody: data.requireChainOfCustody === true,
       appealPrimaryLaboratoryId,
     });
-    if (!eligibility.eligible) fail("failed-precondition", eligibility.code);
+    if (!eligibility.eligible) {
+      fail("failed-precondition", eligibility.code);
+    }
     const requestRecord = contracts.validateTestRequest({
       testRequestId: data.testRequestId,
       sampleId: data.sampleId,
@@ -269,7 +307,9 @@ function createOdlaWorkspaceService({adapter}) {
       methodCode: data.methodCode,
       appealId: linkAppealId,
       laboratoryEvidenceClass:
-        laboratory.ownerType === "RIGHTSHOLDER" ? "BRAND_OWNED" : "INDEPENDENT_OR_OTHER",
+        laboratory.ownerType === "RIGHTSHOLDER" ?
+          "BRAND_OWNED" :
+          "INDEPENDENT_OR_OTHER",
       profileId: trusted.profile.profileId,
       profileCode: trusted.resolution.profile.profileCode,
       profileVersion: trusted.resolution.profile.profileVersion,
@@ -282,11 +322,14 @@ function createOdlaWorkspaceService({adapter}) {
       actorUid: authority.uid,
       linkAppealId,
       auditContext: trustedAuditContext(
-          authority, {
+          authority,
+          {
             ...data,
             tenantId: caseRecord.tenantId,
             brandUid: caseRecord.brandUid,
-          }, operationId, "create_test_request",
+          },
+          operationId,
+          "create_test_request",
       ),
     });
   }
@@ -297,7 +340,8 @@ function createOdlaWorkspaceService({adapter}) {
     const workspace = await adapter.getWorkspace(data.caseId);
     const caseRecord = assertCaseScope(authority, workspace, data);
     const request = await adapter.getTestRequest(
-        data.caseId, data.testRequestId,
+        data.caseId,
+        data.testRequestId,
     );
     if (data.sampleId && data.sampleId !== request.sampleId) {
       fail("failed-precondition", "TEST_RESULT_SAMPLE_BINDING_MISMATCH");
@@ -322,11 +366,14 @@ function createOdlaWorkspaceService({adapter}) {
       operationId,
       actorUid: authority.uid,
       auditContext: trustedAuditContext(
-          authority, {
+          authority,
+          {
             ...data,
             tenantId: caseRecord.tenantId,
             brandUid: caseRecord.brandUid,
-          }, operationId, "record_test_result",
+          },
+          operationId,
+          "record_test_result",
       ),
     });
   }
@@ -342,19 +389,27 @@ function createOdlaWorkspaceService({adapter}) {
     const finality = adjudication.evaluateFinality({
       findingCode: derived.findingCode,
       openMaterialAppeal: context.openMaterialAppeal === true,
-      unresolvedIntegrityConflict: context.unresolvedIntegrityConflict === true,
+      unresolvedIntegrityConflict:
+        context.unresolvedIntegrityConflict === true,
       missingRequiredEvidence: context.missingRequiredEvidence === true,
     });
     if (finality.allowed && context.singleReporterOnly === true) {
-      fail("failed-precondition", "SINGLE_REPORTER_CANNOT_CREATE_FINAL_FINDING");
+      fail(
+          "failed-precondition",
+          "SINGLE_REPORTER_CANNOT_CREATE_FINAL_FINDING",
+      );
     }
     if (finality.allowed && context.sellerSuppliedSampleSole === true) {
-      fail("failed-precondition", "SELLER_SUPPLIED_SAMPLE_CANNOT_BE_SOLE_FINAL_EVIDENCE");
+      fail(
+          "failed-precondition",
+          "SELLER_SUPPLIED_SAMPLE_CANNOT_BE_SOLE_FINAL_EVIDENCE",
+      );
     }
     let primaryLaboratoryId = null;
     if (data.primaryTestRequestId) {
       const primaryRequest = await adapter.getTestRequest(
-          data.caseId, data.primaryTestRequestId,
+          data.caseId,
+          data.primaryTestRequestId,
       );
       primaryLaboratoryId = primaryRequest.laboratoryId;
     }
@@ -374,11 +429,14 @@ function createOdlaWorkspaceService({adapter}) {
       operationId,
       actorUid: authority.uid,
       auditContext: trustedAuditContext(
-          authority, {
+          authority,
+          {
             ...data,
             tenantId: caseRecord.tenantId,
             brandUid: caseRecord.brandUid,
-          }, operationId, "adjudicate_finding",
+          },
+          operationId,
+          "adjudicate_finding",
       ),
     });
   }
@@ -390,16 +448,20 @@ function createOdlaWorkspaceService({adapter}) {
     const workspace = await adapter.getWorkspace(data.caseId);
     const caseRecord = assertCaseScope(authority, workspace, data);
     const challengedFinding = await adapter.getFinding(
-        data.caseId, data.challengedFindingId,
+        data.caseId,
+        data.challengedFindingId,
     );
     const eligibility = adjudication.evaluateAppealEligibility({
       groundCode: data.groundCode,
     });
-    if (!eligibility.eligible) fail("failed-precondition", eligibility.code);
+    if (!eligibility.eligible) {
+      fail("failed-precondition", eligibility.code);
+    }
     const appealRecord = contracts.validateAppeal({
       appealId: data.appealId,
       challengedFindingId: challengedFinding.findingId,
-      originalPrimaryLaboratoryId: challengedFinding.primaryLaboratoryId || null,
+      originalPrimaryLaboratoryId:
+        challengedFinding.primaryLaboratoryId || null,
       groundCode: data.groundCode,
       state: "opened",
       material: true,
@@ -411,11 +473,14 @@ function createOdlaWorkspaceService({adapter}) {
       operationId,
       actorUid: authority.uid,
       auditContext: trustedAuditContext(
-          authority, {
+          authority,
+          {
             ...data,
             tenantId: caseRecord.tenantId,
             brandUid: caseRecord.brandUid,
-          }, operationId, "open_appeal",
+          },
+          operationId,
+          "open_appeal",
       ),
     });
   }
@@ -434,7 +499,8 @@ function createOdlaWorkspaceService({adapter}) {
       fail("failed-precondition", "APPEAL_TEST_REQUEST_MISSING");
     }
     const appealRequest = await adapter.getTestRequest(
-        data.caseId, appeal.appealTestRequestId,
+        data.caseId,
+        appeal.appealTestRequestId,
     );
     if (appealRequest.appealId !== appeal.appealId) {
       fail("failed-precondition", "APPEAL_TEST_REQUEST_BINDING_MISMATCH");
@@ -443,7 +509,9 @@ function createOdlaWorkspaceService({adapter}) {
         appeal.originalPrimaryLaboratoryId,
         appealRequest.laboratoryId,
     );
-    if (!independence.allowed) fail("failed-precondition", independence.code);
+    if (!independence.allowed) {
+      fail("failed-precondition", independence.code);
+    }
     if (data.conflictingLaboratoryResults === true) {
       return adapter.resolveAppeal({
         caseId: data.caseId,
@@ -451,11 +519,14 @@ function createOdlaWorkspaceService({adapter}) {
         operationId,
         actorUid: authority.uid,
         auditContext: trustedAuditContext(
-            authority, {
+            authority,
+            {
               ...data,
               tenantId: caseRecord.tenantId,
               brandUid: caseRecord.brandUid,
-            }, operationId, "resolve_appeal",
+            },
+            operationId,
+            "resolve_appeal",
         ),
         resolution: {
           state: "conflict_review",
@@ -467,20 +538,28 @@ function createOdlaWorkspaceService({adapter}) {
       });
     }
     const context = await adapter.getAdjudicationContext(
-        data.caseId, data.appealId,
+        data.caseId,
+        data.appealId,
     );
     const derived = adjudication.deriveFinding(data.findingInputs || {});
     const finality = adjudication.evaluateFinality({
       findingCode: derived.findingCode,
       openMaterialAppeal: context.openMaterialAppeal === true,
-      unresolvedIntegrityConflict: context.unresolvedIntegrityConflict === true,
+      unresolvedIntegrityConflict:
+        context.unresolvedIntegrityConflict === true,
       missingRequiredEvidence: context.missingRequiredEvidence === true,
     });
     if (finality.allowed && context.singleReporterOnly === true) {
-      fail("failed-precondition", "SINGLE_REPORTER_CANNOT_CREATE_FINAL_FINDING");
+      fail(
+          "failed-precondition",
+          "SINGLE_REPORTER_CANNOT_CREATE_FINAL_FINDING",
+      );
     }
     if (finality.allowed && context.sellerSuppliedSampleSole === true) {
-      fail("failed-precondition", "SELLER_SUPPLIED_SAMPLE_CANNOT_BE_SOLE_FINAL_EVIDENCE");
+      fail(
+          "failed-precondition",
+          "SELLER_SUPPLIED_SAMPLE_CANNOT_BE_SOLE_FINAL_EVIDENCE",
+      );
     }
     return adapter.resolveAppeal({
       caseId: data.caseId,
@@ -488,11 +567,14 @@ function createOdlaWorkspaceService({adapter}) {
       operationId,
       actorUid: authority.uid,
       auditContext: trustedAuditContext(
-          authority, {
+          authority,
+          {
             ...data,
             tenantId: caseRecord.tenantId,
             brandUid: caseRecord.brandUid,
-          }, operationId, "resolve_appeal",
+          },
+          operationId,
+          "resolve_appeal",
       ),
       resolution: {
         state: "resolved",
