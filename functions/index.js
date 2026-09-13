@@ -104,6 +104,11 @@ const {
     "./digital_detective/digital_detective_dispatch",
 );
 const {
+  buildCreateDigitalDetectiveTask,
+} = require(
+    "./digital_detective/digital_detective_create",
+);
+const {
   buildAiFieldOperationBridge,
 } = require(
     "./digital_detective/ai_field_operation_bridge",
@@ -304,6 +309,8 @@ exports.dispatchDigitalDetectiveTask =
       onDocumentCreated,
       logger,
     });
+exports.createDigitalDetectiveTask =
+    buildCreateDigitalDetectiveTask({db});
 exports.bridgeAiFieldOperation =
     buildAiFieldOperationBridge({
       db,
@@ -559,3 +566,29 @@ exports.adjudicateOdlaFinding = adjudicateOdlaFinding;
 exports.openOdlaAppeal = openOdlaAppeal;
 exports.resolveOdlaAppeal = resolveOdlaAppeal;
 // END ODLA-1G V1 CALLABLE EXPORTS
+
+// BEGIN ODLA AUTHORITY ADMIN PROVISIONING
+const {
+  buildManageOdlaAuthority,
+} = require("./odla/v1/authority_provisioning_callable");
+
+exports.manageOdlaAuthority = buildManageOdlaAuthority({db});
+// END ODLA AUTHORITY ADMIN PROVISIONING
+/* ODLA_2A_M1_BEGIN */
+const __odla2aRegistryCallables = require("./odla/v1/callables");
+
+module.exports.getOdlaLaboratoryRegistryEntry =
+  __odla2aRegistryCallables.getOdlaLaboratoryRegistryEntry;
+module.exports.listOdlaLaboratoriesForAuthorizedWorkspace =
+  __odla2aRegistryCallables.listOdlaLaboratoriesForAuthorizedWorkspace;
+module.exports.getOdlaLaboratoryAccreditationHistory =
+  __odla2aRegistryCallables.getOdlaLaboratoryAccreditationHistory;
+module.exports.registerOdlaLaboratory =
+  __odla2aRegistryCallables.registerOdlaLaboratory;
+module.exports.submitOdlaLaboratoryAccreditation =
+  __odla2aRegistryCallables.submitOdlaLaboratoryAccreditation;
+module.exports.reviewOdlaLaboratoryAccreditation =
+  __odla2aRegistryCallables.reviewOdlaLaboratoryAccreditation;
+module.exports.changeOdlaLaboratoryStatus =
+  __odla2aRegistryCallables.changeOdlaLaboratoryStatus;
+/* ODLA_2A_M1_END */

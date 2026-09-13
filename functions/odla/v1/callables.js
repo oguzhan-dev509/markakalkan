@@ -1,4 +1,5 @@
 "use strict";
+const {resolveOdlaServerAuthority} = require("./server_authority");
 
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
@@ -76,9 +77,14 @@ function mapError(error) {
 
 async function execute(operation, request) {
   try {
-    const authority = assertAuthenticatedRequest(request);
+    const authenticated = assertAuthenticatedRequest(request);
     const data = validateEnvelope(operation, request.data);
     const db = getFirestore();
+    const authority = await resolveOdlaServerAuthority({
+      db,
+      uid: authenticated.uid,
+      data,
+    });
     const adapter = createOdlaFirestoreAdapter({db, FieldValue});
     const service = createOdlaWorkspaceService({adapter});
     if (typeof service[operation] !== "function") {
@@ -127,3 +133,21 @@ module.exports = {
   openOdlaAppeal,
   resolveOdlaAppeal,
 };
+/* ODLA_2A_M1_BEGIN */
+const __odla2aLaboratoryRegistry = require("./laboratory_registry");
+
+module.exports.getOdlaLaboratoryRegistryEntry =
+  __odla2aLaboratoryRegistry.getOdlaLaboratoryRegistryEntry;
+module.exports.listOdlaLaboratoriesForAuthorizedWorkspace =
+  __odla2aLaboratoryRegistry.listOdlaLaboratoriesForAuthorizedWorkspace;
+module.exports.getOdlaLaboratoryAccreditationHistory =
+  __odla2aLaboratoryRegistry.getOdlaLaboratoryAccreditationHistory;
+module.exports.registerOdlaLaboratory =
+  __odla2aLaboratoryRegistry.registerOdlaLaboratory;
+module.exports.submitOdlaLaboratoryAccreditation =
+  __odla2aLaboratoryRegistry.submitOdlaLaboratoryAccreditation;
+module.exports.reviewOdlaLaboratoryAccreditation =
+  __odla2aLaboratoryRegistry.reviewOdlaLaboratoryAccreditation;
+module.exports.changeOdlaLaboratoryStatus =
+  __odla2aLaboratoryRegistry.changeOdlaLaboratoryStatus;
+/* ODLA_2A_M1_END */
