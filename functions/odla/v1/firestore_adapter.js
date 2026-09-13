@@ -165,6 +165,133 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
     return Object.freeze({case: Object.freeze({...snap.data()})});
   }
 
+  async function listCaseChildren(caseId, kind, sequenceKey, idKey) {
+    const allowedKinds = new Set([
+      "custodyEvents",
+      "testRequests",
+      "testResults",
+      "findings",
+      "appeals",
+    ]);
+    if (!allowedKinds.has(kind)) {
+      fail("failed-precondition", "Unsupported ODLA workspace child kind");
+    }
+
+    const collectionRef = db.collection(`${casePath(caseId)}/${kind}`);
+    const query =
+      collectionRef && typeof collectionRef.limit === "function" ?
+        collectionRef.limit(200) :
+        collectionRef;
+    const snapshot = await query.get();
+    const docs = Array.isArray(snapshot.docs) ? snapshot.docs : [];
+
+    const rows = docs.map((doc) => {
+      const raw =
+        doc && typeof doc.data === "function" ?
+          (doc.data() || {}) :
+          {};
+      return {
+        ...raw,
+        [idKey]: raw[idKey] || doc.id,
+      };
+    });
+
+    rows.sort((left, right) => {
+      const leftSequence =
+        sequenceKey && Number.isInteger(left[sequenceKey]) ?
+          left[sequenceKey] :
+          null;
+      const rightSequence =
+        sequenceKey && Number.isInteger(right[sequenceKey]) ?
+          right[sequenceKey] :
+          null;
+
+      if (leftSequence !== null && rightSequence !== null &&
+          leftSequence !== rightSequence) {
+        return leftSequence - rightSequence;
+      }
+      if (leftSequence !== null && rightSequence === null) return -1;
+      if (leftSequence === null && rightSequence !== null) return 1;
+
+      return String(left[idKey] || "").localeCompare(
+          String(right[idKey] || ""),
+      );
+    });
+
+    return Object.freeze(
+        rows.map((row) => Object.freeze({...row})),
+    );
+  }
+
+  async function listCustodyEvents(caseId) {
+    return listCaseChildren(
+        caseId,
+        "custodyEvents",
+        "eventSequence",
+        "eventId",
+    );
+  }
+
+  async function listTestRequests(caseId) {
+    return listCaseChildren(
+        caseId,
+        "testRequests",
+        "requestSequence",
+        "testRequestId",
+    );
+  }
+
+  async function listTestResults(caseId) {
+    return listCaseChildren(
+        caseId,
+        "testResults",
+        null,
+        "testResultId",
+    );
+  }
+
+  async function listFindings(caseId) {
+    return listCaseChildren(
+        caseId,
+        "findings",
+        "findingVersion",
+        "findingId",
+    );
+  }
+
+  async function listAppeals(caseId) {
+    return listCaseChildren(
+        caseId,
+        "appeals",
+        "appealSequence",
+        "appealId",
+    );
+  }
+
+  async function getOperationalWorkspaceDetails(caseId) {
+    const [
+      custodyEvents,
+      testRequests,
+      testResults,
+      findings,
+      appeals,
+    ] = await Promise.all([
+      listCustodyEvents(caseId),
+      listTestRequests(caseId),
+      listTestResults(caseId),
+      listFindings(caseId),
+      listAppeals(caseId),
+    ]);
+
+    return Object.freeze({
+      custodyEvents,
+      testRequests,
+      testResults,
+      findings,
+      appeals,
+    });
+  }
+
   async function getVerificationProfile(profileId) {
     const ref = db.doc(
         `odlaVerificationProfiles/${requireString(profileId, "profileId")}`,
@@ -534,9 +661,43 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
     });
   }
 
+
+  async function listCasesForAuthority({tenantId, brandUids, limit = 100}) {
+    if (typeof tenantId !== "string" || !tenantId.trim()) {
+      throw new Error("ODLA tenant scope required");
+    }
+    if (!Array.isArray(brandUids) || brandUids.length === 0) {
+      throw new Error("ODLA brand scope required");
+    }
+    const boundedLimit = Number.isInteger(limit) ?
+      Math.min(Math.max(limit, 1), 100) :
+      100;
+    const allowedBrands = new Set(brandUids);
+    const snapshot = await db.collection("odlaVerificationCases")
+        .where("tenantId", "==", tenantId)
+        .get();
+    return snapshot.docs
+        .map((doc) => ({id: doc.id, data: doc.data() || {}}))
+        .filter((item) => allowedBrands.has(item.data.brandUid))
+        .slice(0, boundedLimit)
+        .map((item) => Object.freeze({
+          caseId: item.data.caseId || item.id,
+          tenantId: item.data.tenantId,
+          brandUid: item.data.brandUid,
+          state: item.data.state || null,
+          profileId: item.data.profileId || null,
+          profileCode: item.data.profileCode || null,
+          profileVersion: item.data.profileVersion || null,
+          productClassCode: item.data.productClassCode || null,
+          countryCode: item.data.countryCode || null,
+        }));
+  }
+
   return Object.freeze({
+    listCasesForAuthority,
     createCase,
     getWorkspace,
+    getOperationalWorkspaceDetails,
     getVerificationProfile,
     getLatestCustodyEvent,
     appendCustodyEvent,

@@ -605,3 +605,86 @@ test(
       );
     },
 );
+
+test(
+    "ODLA-OWS1-DB-001 operational workspace detail " +
+    "aggregates exact case children",
+    async () => {
+      const db = dbMock({
+        "odlaVerificationCases/c1": baseCase,
+        "odlaVerificationCases/c1/custodyEvents/e2": {
+          eventId: "e2", eventSequence: 2,
+        },
+        "odlaVerificationCases/c1/custodyEvents/e1": {
+          eventId: "e1", eventSequence: 1,
+        },
+        "odlaVerificationCases/c1/testRequests/q1": {
+          testRequestId: "q1", requestSequence: 1,
+        },
+        "odlaVerificationCases/c1/testResults/r1": {
+          testResultId: "r1",
+        },
+        "odlaVerificationCases/c1/findings/f2": {
+          findingId: "f2", findingVersion: 2,
+        },
+        "odlaVerificationCases/c1/findings/f1": {
+          findingId: "f1", findingVersion: 1,
+        },
+        "odlaVerificationCases/c1/appeals/a1": {
+          appealId: "a1", appealSequence: 1,
+        },
+        "odlaVerificationCases/c2/custodyEvents/foreign": {
+          eventId: "foreign", eventSequence: 1,
+        },
+      });
+      const x = createOdlaFirestoreAdapter({db, FieldValue: FV});
+      const detail = await x.getOperationalWorkspaceDetails("c1");
+
+      assert.deepEqual(
+          detail.custodyEvents.map((x) => x.eventId),
+          ["e1", "e2"],
+      );
+      assert.deepEqual(
+          detail.testRequests.map((x) => x.testRequestId),
+          ["q1"],
+      );
+      assert.deepEqual(
+          detail.testResults.map((x) => x.testResultId),
+          ["r1"],
+      );
+      assert.deepEqual(
+          detail.findings.map((x) => x.findingId),
+          ["f1", "f2"],
+      );
+      assert.deepEqual(
+          detail.appeals.map((x) => x.appealId),
+          ["a1"],
+      );
+      assert.equal(
+          detail.custodyEvents.some((x) => x.eventId === "foreign"),
+          false,
+      );
+      assert.equal(Object.hasOwn(detail, "samples"), false);
+    },
+);
+
+test(
+    "ODLA-OWS1-DB-002 operational detail exposes no " +
+    "out-of-scope runtime domains",
+    async () => {
+      const db = dbMock({"odlaVerificationCases/c1": baseCase});
+      const x = createOdlaFirestoreAdapter({db, FieldValue: FV});
+      const detail = await x.getOperationalWorkspaceDetails("c1");
+
+      assert.deepEqual(Object.keys(detail).sort(), [
+        "appeals",
+        "custodyEvents",
+        "findings",
+        "testRequests",
+        "testResults",
+      ]);
+      assert.equal(typeof x.createSample, "undefined");
+      assert.equal(typeof x.getReporterReliability, "undefined");
+      assert.equal(typeof x.createFundingAuthorization, "undefined");
+    },
+);

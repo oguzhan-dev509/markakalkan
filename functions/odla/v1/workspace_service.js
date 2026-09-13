@@ -191,11 +191,39 @@ function createOdlaWorkspaceService({adapter}) {
   }
 
   async function getOdlaVerificationWorkspace({authority, data}) {
-    assertTenantMatch(authority, data);
     assertActionAuthorized(authority, "read_workspace");
-    const workspace = await adapter.getWorkspace(data.caseId);
+    const caseId = typeof data.caseId === "string" ? data.caseId.trim() : "";
+    if (!caseId) {
+      const cases = await adapter.listCasesForAuthority({
+        tenantId: authority.tenantId,
+        brandUids: authority.brandUids,
+        limit: 100,
+      });
+      return Object.freeze({
+        contractVersion: "odla-workspace-discovery-v1",
+        mode: "discovery",
+        tenantId: authority.tenantId,
+        brandUids: Object.freeze([...(authority.brandUids || [])]),
+        roles: Object.freeze([...(authority.roles || [])]),
+        count: cases.length,
+        cases: Object.freeze(cases),
+      });
+    }
+    assertTenantMatch(authority, data);
+    const workspace = await adapter.getWorkspace(caseId);
     assertCaseScope(authority, workspace, data);
-    return workspace;
+    const operational =
+      await adapter.getOperationalWorkspaceDetails(caseId);
+    return Object.freeze({
+      contractVersion: "odla-workspace-detail-v1",
+      mode: "detail",
+      case: workspace.case,
+      custodyEvents: operational.custodyEvents,
+      testRequests: operational.testRequests,
+      testResults: operational.testResults,
+      findings: operational.findings,
+      appeals: operational.appeals,
+    });
   }
 
   async function appendOdlaChainOfCustodyEvent({authority, data}) {

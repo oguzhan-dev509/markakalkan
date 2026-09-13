@@ -75,6 +75,13 @@ function adapter(overrides = {}) {
       return {data: args.caseRecord, idempotent: false};
     },
     getWorkspace: async () => ({case: {...baseCase}}),
+    getOperationalWorkspaceDetails: async () => ({
+      custodyEvents: [],
+      testRequests: [],
+      testResults: [],
+      findings: [],
+      appeals: [],
+    }),
     getVerificationProfile: async () => ({...profile}),
     getLatestCustodyEvent: async () => null,
     appendCustodyEvent: async (args) => {
@@ -221,6 +228,109 @@ test(
           ).case.caseId,
           "c1",
       );
+    },
+);
+
+
+test(
+    "ODLA-BE-SVC-002A workspace discovery is authority scoped",
+    async () => {
+      const base = adapter();
+      const s = createOdlaWorkspaceService({
+        adapter: {
+          ...base,
+          listCasesForAuthority: async ({tenantId, brandUids}) => {
+            assert.equal(tenantId, "t1");
+            assert.deepEqual(brandUids, ["b1"]);
+            return [{
+              caseId: "c1",
+              tenantId: "t1",
+              brandUid: "b1",
+              state: "opened",
+            }];
+          },
+        },
+      });
+      const result = await s.getOdlaVerificationWorkspace({
+        authority: authority(),
+        data: {},
+      });
+      assert.equal(result.contractVersion, "odla-workspace-discovery-v1");
+      assert.equal(result.mode, "discovery");
+      assert.equal(result.count, 1);
+      assert.equal(result.cases[0].caseId, "c1");
+    },
+);
+
+test(
+    "ODLA-OWS1-SVC-001 case detail returns " +
+    "operational workspace contract",
+    async () => {
+      const s = createOdlaWorkspaceService({
+        adapter: adapter({
+          getOperationalWorkspaceDetails: async () => ({
+            custodyEvents: [{eventId: "e1"}],
+            testRequests: [{testRequestId: "q1"}],
+            testResults: [{testResultId: "r1"}],
+            findings: [{findingId: "f1"}],
+            appeals: [{appealId: "a1"}],
+          }),
+        }),
+      });
+
+      const result = await s.getOdlaVerificationWorkspace({
+        authority: authority(),
+        data: {caseId: "c1", tenantId: "t1", brandUid: "b1"},
+      });
+
+      assert.equal(result.contractVersion, "odla-workspace-detail-v1");
+      assert.equal(result.mode, "detail");
+      assert.equal(result.case.caseId, "c1");
+      assert.equal(result.custodyEvents[0].eventId, "e1");
+      assert.equal(result.testRequests[0].testRequestId, "q1");
+      assert.equal(result.testResults[0].testResultId, "r1");
+      assert.equal(result.findings[0].findingId, "f1");
+      assert.equal(result.appeals[0].appealId, "a1");
+    },
+);
+
+test(
+    "ODLA-OWS1-SVC-002 scope failure blocks operational child reads",
+    async () => {
+      let operationalReadCount = 0;
+      const s = createOdlaWorkspaceService({
+        adapter: adapter({
+          getWorkspace: async () => ({
+            case: {
+              caseId: "c1",
+              tenantId: "other",
+              brandUid: "b1",
+            },
+          }),
+          getOperationalWorkspaceDetails: async () => {
+            operationalReadCount += 1;
+            return {
+              custodyEvents: [],
+              testRequests: [],
+              testResults: [],
+              findings: [],
+              appeals: [],
+            };
+          },
+        }),
+      });
+
+      await assert.rejects(() =>
+        s.getOdlaVerificationWorkspace({
+          authority: authority(),
+          data: {
+            caseId: "c1",
+            tenantId: "t1",
+            brandUid: "b1",
+          },
+        }),
+      );
+      assert.equal(operationalReadCount, 0);
     },
 );
 
