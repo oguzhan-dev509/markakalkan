@@ -82,6 +82,17 @@ function adapter(overrides = {}) {
       findings: [],
       appeals: [],
     }),
+    getWorkspaceLaboratoryRegistryContext:
+      async (input) => ({
+        contractVersion:
+          "odla-workspace-laboratory-registry-context-v1",
+        laboratories: [],
+        referencedLaboratoryCount:
+          input.totalReferencedLaboratoryCount || 0,
+        resolvedLaboratoryCount: 0,
+        legacyUnknownCount: 0,
+        truncated: Boolean(input.truncated),
+      }),
     getVerificationProfile: async () => ({...profile}),
     getLatestCustodyEvent: async () => null,
     appendCustodyEvent: async (args) => {
@@ -1234,5 +1245,183 @@ test(
       assert.notEqual(ctx.auditEventId, "CLIENT");
       assert.equal(ctx.actorUid, "u1");
       assert.equal(ctx.action, "create_case");
+    },
+);
+
+test(
+    "ODLA-2A-M2-SVC-001 workspace registry enrichment uses only " +
+    "authorized workspace references",
+    async () => {
+      let captured = null;
+      const s = createOdlaWorkspaceService({
+        adapter: adapter({
+          getOperationalWorkspaceDetails: async () => ({
+            custodyEvents: [],
+            testRequests: [{
+              testRequestId: "q1",
+              laboratoryId: "l1",
+              accreditationIdAtAssignment: "acc1",
+              scopeIdAtAssignment: "scope1",
+              methodCode: "METHOD1",
+            }],
+            testResults: [{
+              testResultId: "r1",
+              laboratoryId: "l1",
+              accreditationIdAtResult: "acc1",
+              scopeIdAtResult: "scope1",
+              accreditationCoverageStatus: "COVERED",
+              accreditationCoverageReasonCode: "COVERED",
+            }],
+            findings: [{
+              findingId: "f1",
+              primaryLaboratoryId: "must-not-enumerate-from-finding",
+            }],
+            appeals: [{
+              appealId: "a1",
+              appealLaboratoryId: "l2",
+            }],
+          }),
+          getWorkspaceLaboratoryRegistryContext: async (input) => {
+            captured = input;
+            return {
+              contractVersion:
+                "odla-workspace-laboratory-registry-context-v1",
+              laboratories: [{
+                laboratoryId: "l1",
+                laboratory: {laboratoryId: "l1", status: "ACTIVE"},
+                registryStatus: "ACTIVE",
+                verificationStatus: "VERIFIED",
+                accreditations: [{accreditationId: "acc1"}],
+                scopes: [{scopeId: "scope1"}],
+                coverageContexts: [],
+                registryResolutionStatus: "RESOLVED",
+              }],
+              referencedLaboratoryCount: 2,
+              resolvedLaboratoryCount: 1,
+              legacyUnknownCount: 1,
+              truncated: false,
+            };
+          },
+        }),
+      });
+
+      const result = await s.getOdlaVerificationWorkspace({
+        authority: authority(),
+        data: {caseId: "c1", tenantId: "t1", brandUid: "b1"},
+      });
+
+      assert.deepEqual(captured.laboratoryIds, ["l1", "l2"]);
+      assert.equal(
+          captured.references.some(
+              (value) =>
+                value.laboratoryId ===
+                "must-not-enumerate-from-finding",
+          ),
+          false,
+      );
+      assert.equal(
+          result.laboratoryRegistryContext
+              .laboratories[0].laboratory.laboratoryId,
+          "l1",
+      );
+      assert.equal(
+          result.laboratoryRegistryContext
+              .laboratories[0].verificationStatus,
+          "VERIFIED",
+      );
+    },
+);
+
+test(
+    "ODLA-2A-M2-SVC-002 case scope failure blocks registry reads",
+    async () => {
+      let registryReadCount = 0;
+      const s = createOdlaWorkspaceService({
+        adapter: adapter({
+          getWorkspace: async () => ({
+            case: {
+              caseId: "c1",
+              tenantId: "other",
+              brandUid: "b1",
+            },
+          }),
+          getWorkspaceLaboratoryRegistryContext: async () => {
+            registryReadCount += 1;
+            return {
+              contractVersion:
+                "odla-workspace-laboratory-registry-context-v1",
+              laboratories: [],
+            };
+          },
+        }),
+      });
+
+      await assert.rejects(() =>
+        s.getOdlaVerificationWorkspace({
+          authority: authority(),
+          data: {
+            caseId: "c1",
+            tenantId: "t1",
+            brandUid: "b1",
+          },
+        }),
+      );
+      assert.equal(registryReadCount, 0);
+    },
+);
+
+test(
+    "ODLA-2A-M2-SVC-003 legacy laboratory reference stays readable " +
+    "as UNKNOWN and UNVERIFIED",
+    async () => {
+      const s = createOdlaWorkspaceService({
+        adapter: adapter({
+          getOperationalWorkspaceDetails: async () => ({
+            custodyEvents: [],
+            testRequests: [{
+              testRequestId: "q-legacy",
+              laboratoryId: "legacy-lab",
+            }],
+            testResults: [],
+            findings: [],
+            appeals: [],
+          }),
+          getWorkspaceLaboratoryRegistryContext: async (input) => ({
+            contractVersion:
+              "odla-workspace-laboratory-registry-context-v1",
+            laboratories: [{
+              laboratoryId: input.laboratoryIds[0],
+              laboratory: null,
+              registryStatus: "UNKNOWN",
+              verificationStatus: "UNVERIFIED",
+              accreditations: [],
+              scopes: [],
+              coverageContexts: [{
+                referenceType: "TEST_REQUEST",
+                referenceId: "q-legacy",
+                persistedCoverageStatus: "UNKNOWN",
+                persistedCoverageReasonCode: "UNKNOWN",
+                verificationStatus: "UNVERIFIED",
+                registryMatchStatus: "UNKNOWN",
+              }],
+              registryResolutionStatus: "UNKNOWN",
+            }],
+            referencedLaboratoryCount: 1,
+            resolvedLaboratoryCount: 0,
+            legacyUnknownCount: 1,
+            truncated: false,
+          }),
+        }),
+      });
+
+      const result = await s.getOdlaVerificationWorkspace({
+        authority: authority(),
+        data: {caseId: "c1", tenantId: "t1", brandUid: "b1"},
+      });
+      const context = result.laboratoryRegistryContext.laboratories[0];
+      assert.equal(context.laboratory, null);
+      assert.equal(context.registryStatus, "UNKNOWN");
+      assert.equal(context.verificationStatus, "UNVERIFIED");
+      assert.equal(context.registryResolutionStatus, "UNKNOWN");
     },
 );

@@ -292,6 +292,200 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
     });
   }
 
+  async function getWorkspaceLaboratoryRegistryContext(input) {
+    const rawLaboratoryIds =
+      input && Array.isArray(input.laboratoryIds) ?
+        input.laboratoryIds :
+        [];
+    const laboratoryIds = [...new Set(
+        rawLaboratoryIds
+            .filter((value) => typeof value === "string" && value.trim())
+            .map((value) => value.trim()),
+    )].slice(0, 20);
+    const references =
+      input && Array.isArray(input.references) ?
+        input.references
+            .filter((value) => value && typeof value === "object")
+            .filter((value) => laboratoryIds.includes(value.laboratoryId))
+            .slice(0, 200) :
+        [];
+
+    if (laboratoryIds.length === 0) {
+      return Object.freeze({
+        contractVersion:
+          "odla-workspace-laboratory-registry-context-v1",
+        laboratories: Object.freeze([]),
+        referencedLaboratoryCount:
+          Number(input && input.totalReferencedLaboratoryCount) || 0,
+        resolvedLaboratoryCount: 0,
+        legacyUnknownCount: 0,
+        truncated: Boolean(input && input.truncated),
+      });
+    }
+
+    const laboratorySnapshots = await Promise.all(
+        laboratoryIds.map((laboratoryId) =>
+          db.doc(`odlaLaboratories/${laboratoryId}`).get(),
+        ),
+    );
+
+    const accreditations = [];
+    for (let offset = 0; offset < laboratoryIds.length; offset += 10) {
+      const chunk = laboratoryIds.slice(offset, offset + 10);
+      const snap = await db
+          .collection("odlaLaboratoryAccreditations")
+          .where("laboratoryId", "in", chunk)
+          .limit(100)
+          .get();
+      const docs = Array.isArray(snap.docs) ? snap.docs : [];
+      for (const doc of docs) {
+        const data =
+          doc && typeof doc.data === "function" ?
+            (doc.data() || {}) :
+            {};
+        accreditations.push({
+          ...data,
+          accreditationId: data.accreditationId || doc.id,
+        });
+        if (accreditations.length >= 100) break;
+      }
+      if (accreditations.length >= 100) break;
+    }
+
+    const accreditationIds = [...new Set(
+        accreditations
+            .map((value) => value.accreditationId)
+            .filter((value) => typeof value === "string" && value.trim()),
+    )].slice(0, 30);
+
+    const scopes = [];
+    for (let offset = 0; offset < accreditationIds.length; offset += 10) {
+      const chunk = accreditationIds.slice(offset, offset + 10);
+      const snap = await db
+          .collection("odlaLaboratoryTestScopes")
+          .where("accreditationId", "in", chunk)
+          .limit(200)
+          .get();
+      const docs = Array.isArray(snap.docs) ? snap.docs : [];
+      for (const doc of docs) {
+        const data =
+          doc && typeof doc.data === "function" ?
+            (doc.data() || {}) :
+            {};
+        scopes.push({
+          ...data,
+          scopeId: data.scopeId || doc.id,
+        });
+        if (scopes.length >= 200) break;
+      }
+      if (scopes.length >= 200) break;
+    }
+
+    const contexts = laboratoryIds.map((laboratoryId, index) => {
+      const labSnap = laboratorySnapshots[index];
+      const laboratory =
+        labSnap && labSnap.exists ?
+          Object.freeze({
+            ...(labSnap.data() || {}),
+            laboratoryId,
+          }) :
+          null;
+      const laboratoryAccreditations = accreditations
+          .filter((value) => value.laboratoryId === laboratoryId)
+          .slice(0, 50);
+      const laboratoryAccreditationIds = new Set(
+          laboratoryAccreditations.map((value) => value.accreditationId),
+      );
+      const laboratoryScopes = scopes
+          .filter((value) =>
+            laboratoryAccreditationIds.has(value.accreditationId),
+          )
+          .slice(0, 100);
+      const laboratoryReferences = references
+          .filter((value) => value.laboratoryId === laboratoryId);
+
+      const coverageContexts = laboratoryReferences.map((reference) => {
+        const accreditationId =
+          typeof reference.accreditationId === "string" ?
+            reference.accreditationId :
+            null;
+        const scopeId =
+          typeof reference.scopeId === "string" ?
+            reference.scopeId :
+            null;
+        const accreditation = accreditationId ?
+          laboratoryAccreditations.find(
+              (value) => value.accreditationId === accreditationId,
+          ) :
+          null;
+        const scope = scopeId ?
+          laboratoryScopes.find((value) => value.scopeId === scopeId) :
+          null;
+        const partialReference =
+          (accreditationId && !accreditation) ||
+          (scopeId && !scope);
+        return Object.freeze({
+          referenceType: reference.referenceType || "UNKNOWN",
+          referenceId: reference.referenceId || null,
+          accreditationId,
+          scopeId,
+          persistedCoverageStatus:
+            reference.accreditationCoverageStatus || "UNKNOWN",
+          persistedCoverageReasonCode:
+            reference.accreditationCoverageReasonCode || "UNKNOWN",
+          verificationStatus:
+            accreditation && accreditation.verificationStatus ?
+              accreditation.verificationStatus :
+              "UNVERIFIED",
+          registryMatchStatus:
+            !laboratory ?
+              "UNKNOWN" :
+              (partialReference ? "PARTIAL" : "RESOLVED"),
+        });
+      });
+
+      return Object.freeze({
+        laboratoryId,
+        laboratory,
+        registryStatus:
+          laboratory && laboratory.status ?
+            laboratory.status :
+            "UNKNOWN",
+        verificationStatus:
+          laboratoryAccreditations.some(
+              (value) => value.verificationStatus === "VERIFIED",
+          ) ?
+            "VERIFIED" :
+            "UNVERIFIED",
+        accreditations: Object.freeze(
+            laboratoryAccreditations.map(
+                (value) => Object.freeze({...value}),
+            ),
+        ),
+        scopes: Object.freeze(
+            laboratoryScopes.map((value) => Object.freeze({...value})),
+        ),
+        coverageContexts: Object.freeze(coverageContexts),
+        registryResolutionStatus:
+          laboratory ? "RESOLVED" : "UNKNOWN",
+      });
+    });
+
+    return Object.freeze({
+      contractVersion:
+        "odla-workspace-laboratory-registry-context-v1",
+      laboratories: Object.freeze(contexts),
+      referencedLaboratoryCount:
+        Number(input && input.totalReferencedLaboratoryCount) ||
+        laboratoryIds.length,
+      resolvedLaboratoryCount:
+        contexts.filter((value) => value.laboratory !== null).length,
+      legacyUnknownCount:
+        contexts.filter((value) => value.laboratory === null).length,
+      truncated: Boolean(input && input.truncated),
+    });
+  }
+
   async function getVerificationProfile(profileId) {
     const ref = db.doc(
         `odlaVerificationProfiles/${requireString(profileId, "profileId")}`,
@@ -698,6 +892,7 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
     createCase,
     getWorkspace,
     getOperationalWorkspaceDetails,
+    getWorkspaceLaboratoryRegistryContext,
     getVerificationProfile,
     getLatestCustodyEvent,
     appendCustodyEvent,

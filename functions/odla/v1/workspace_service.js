@@ -147,6 +147,126 @@ function assertCaseScope(authority, workspace, data) {
   return workspace.case;
 }
 
+const MAX_WORKSPACE_REGISTRY_LABORATORIES = 20;
+const MAX_WORKSPACE_REGISTRY_REFERENCES = 200;
+
+function optionalReferenceString(value) {
+  return typeof value === "string" && value.trim() ?
+    value.trim() :
+    null;
+}
+
+function collectWorkspaceLaboratoryReferences(caseRecord, operational) {
+  const references = [];
+
+  function pushReference(referenceType, referenceId, source, laboratoryId) {
+    const normalizedLaboratoryId = optionalReferenceString(laboratoryId);
+    if (!normalizedLaboratoryId) return;
+    references.push(Object.freeze({
+      referenceType,
+      referenceId: optionalReferenceString(referenceId),
+      laboratoryId: normalizedLaboratoryId,
+      accreditationId:
+        optionalReferenceString(source && (
+          source.accreditationIdAtResult ||
+          source.accreditationIdAtAssignment ||
+          source.accreditationId
+        )),
+      scopeId:
+        optionalReferenceString(source && (
+          source.scopeIdAtResult ||
+          source.scopeIdAtAssignment ||
+          source.scopeId
+        )),
+      testTypeCode:
+        optionalReferenceString(source && (
+          source.requestedTestTypeCode ||
+          source.testTypeCode ||
+          source.testQuestionCode
+        )),
+      methodCode:
+        optionalReferenceString(source && (
+          source.requestedMethodCode ||
+          source.methodCode
+        )),
+      accreditationCoverageStatus:
+        optionalReferenceString(
+            source && source.accreditationCoverageStatus,
+        ),
+      accreditationCoverageReasonCode:
+        optionalReferenceString(
+            source && source.accreditationCoverageReasonCode,
+        ),
+    }));
+  }
+
+  for (const field of [
+    "laboratoryId",
+    "primaryLaboratoryId",
+    "assignedLaboratoryId",
+  ]) {
+    pushReference(
+        "CASE",
+        caseRecord && caseRecord.caseId,
+        caseRecord,
+        caseRecord && caseRecord[field],
+    );
+  }
+
+  for (const request of operational.testRequests || []) {
+    pushReference(
+        "TEST_REQUEST",
+        request.testRequestId,
+        request,
+        request.laboratoryId,
+    );
+  }
+
+  for (const result of operational.testResults || []) {
+    pushReference(
+        "TEST_RESULT",
+        result.testResultId,
+        result,
+        result.laboratoryId,
+    );
+  }
+
+  for (const appeal of operational.appeals || []) {
+    for (const field of [
+      "laboratoryId",
+      "originalPrimaryLaboratoryId",
+      "appealLaboratoryId",
+    ]) {
+      pushReference(
+          "APPEAL",
+          appeal.appealId,
+          appeal,
+          appeal[field],
+      );
+    }
+  }
+
+  const allLaboratoryIds = [...new Set(
+      references.map((value) => value.laboratoryId),
+  )].sort();
+  const laboratoryIds =
+    allLaboratoryIds.slice(0, MAX_WORKSPACE_REGISTRY_LABORATORIES);
+  const allowedLaboratoryIds = new Set(laboratoryIds);
+  const boundedReferences = references
+      .filter((value) => allowedLaboratoryIds.has(value.laboratoryId))
+      .slice(0, MAX_WORKSPACE_REGISTRY_REFERENCES);
+
+  return Object.freeze({
+    laboratoryIds: Object.freeze(laboratoryIds),
+    references: Object.freeze(boundedReferences),
+    totalReferencedLaboratoryCount: allLaboratoryIds.length,
+    totalReferenceCount: references.length,
+    truncated:
+      allLaboratoryIds.length > MAX_WORKSPACE_REGISTRY_LABORATORIES ||
+      references.length > MAX_WORKSPACE_REGISTRY_REFERENCES,
+  });
+}
+
 function createOdlaWorkspaceService({adapter}) {
   if (!adapter || typeof adapter !== "object") {
     fail("failed-precondition", "ODLA persistence adapter required");
@@ -214,6 +334,12 @@ function createOdlaWorkspaceService({adapter}) {
     assertCaseScope(authority, workspace, data);
     const operational =
       await adapter.getOperationalWorkspaceDetails(caseId);
+    const registryReferences =
+      collectWorkspaceLaboratoryReferences(workspace.case, operational);
+    const laboratoryRegistryContext =
+      await adapter.getWorkspaceLaboratoryRegistryContext(
+          registryReferences,
+      );
     return Object.freeze({
       contractVersion: "odla-workspace-detail-v1",
       mode: "detail",
@@ -223,6 +349,7 @@ function createOdlaWorkspaceService({adapter}) {
       testResults: operational.testResults,
       findings: operational.findings,
       appeals: operational.appeals,
+      laboratoryRegistryContext,
     });
   }
 

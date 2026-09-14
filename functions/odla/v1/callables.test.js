@@ -5,6 +5,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const c = require("./callables");
 const src = fs.readFileSync(path.join(__dirname, "callables.js"), "utf8");
+const adapterSrc = fs.readFileSync(
+    path.join(__dirname, "firestore_adapter.js"),
+    "utf8",
+);
+const serviceSrc = fs.readFileSync(
+    path.join(__dirname, "workspace_service.js"),
+    "utf8",
+);
 const expected = [
   "createOdlaVerificationCase",
   "getOdlaVerificationWorkspace",
@@ -14,6 +22,13 @@ const expected = [
   "adjudicateOdlaFinding",
   "openOdlaAppeal",
   "resolveOdlaAppeal",
+  "getOdlaLaboratoryRegistryEntry",
+  "listOdlaLaboratoriesForAuthorizedWorkspace",
+  "getOdlaLaboratoryAccreditationHistory",
+  "registerOdlaLaboratory",
+  "submitOdlaLaboratoryAccreditation",
+  "reviewOdlaLaboratoryAccreditation",
+  "changeOdlaLaboratoryStatus",
 ].sort();
 
 function extractWriteOperations(source) {
@@ -88,5 +103,94 @@ test(
           "utf8",
       );
       assert.equal(/request\.data\.role/.test(authSrc), false);
+    },
+);
+test(
+    "ODLA-BE-CALL-013 authority comes from server-side resolver",
+    () => {
+      assert.match(src, /resolveOdlaServerAuthority/);
+      assert.ok(
+          src.indexOf("assertAuthenticatedRequest(request)") <
+          src.indexOf("getFirestore()"),
+      );
+      assert.ok(
+          src.indexOf("getFirestore()") <
+          src.indexOf("await resolveOdlaServerAuthority"),
+      );
+    },
+);
+
+test(
+    "ODLA-2A-M2-CALL-001 workspace registry enrichment adds no callable",
+    () => {
+      const exported = Object.keys(c).sort();
+      for (const name of [
+        "getOdlaLaboratoryRegistryEntry",
+        "listOdlaLaboratoriesForAuthorizedWorkspace",
+        "getOdlaLaboratoryAccreditationHistory",
+      ]) {
+        assert.ok(exported.includes(name));
+      }
+      assert.equal(
+          exported.includes("getOdlaWorkspaceLaboratoryRegistryContext"),
+          false,
+      );
+    },
+);
+
+test(
+    "ODLA-2A-M2-CALL-002 workspace registry adapter read is bounded " +
+    "and performs zero writes",
+    () => {
+      const start = adapterSrc.indexOf(
+          "async function getWorkspaceLaboratoryRegistryContext",
+      );
+      const end = adapterSrc.indexOf(
+          "\n  async function getVerificationProfile",
+          start,
+      );
+      assert.ok(start >= 0);
+      assert.ok(end > start);
+      const body = adapterSrc.slice(start, end);
+
+      assert.match(body, /slice\(0,\s*20\)/);
+      assert.match(body, /\.limit\(100\)/);
+      assert.match(body, /\.limit\(200\)/);
+      assert.equal(
+          body.includes("db.collection(\"odlaLaboratories\")"),
+          false,
+      );
+      for (const forbidden of [
+        "runTransaction(",
+        ".create(",
+        ".set(",
+        ".update(",
+        ".delete(",
+      ]) {
+        assert.equal(body.includes(forbidden), false);
+      }
+      assert.ok(body.includes("\"UNKNOWN\""));
+      assert.ok(body.includes("\"UNVERIFIED\""));
+    },
+);
+
+test(
+    "ODLA-2A-M2-CALL-003 authorization check precedes registry read",
+    () => {
+      const scope = serviceSrc.indexOf(
+          "assertCaseScope(authority, workspace, data);",
+      );
+      const registry = serviceSrc.indexOf(
+          "await adapter.getWorkspaceLaboratoryRegistryContext",
+      );
+      assert.ok(scope >= 0);
+      assert.ok(registry > scope);
+      assert.equal(
+          serviceSrc.includes(
+              "collectWorkspaceLaboratoryReferences(" +
+              "workspace.case, operational)",
+          ),
+          true,
+      );
     },
 );
