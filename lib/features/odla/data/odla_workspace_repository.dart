@@ -2,6 +2,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 const String odlaDiscoveryContractVersion = 'odla-workspace-discovery-v1';
 const String odlaDetailContractVersion = 'odla-workspace-detail-v1';
+const String odlaLaboratoryRegistryContextContractVersion =
+    'odla-workspace-laboratory-registry-context-v1';
 const String odlaWorkspaceCallableName = 'getOdlaVerificationWorkspace';
 
 typedef OdlaCallable =
@@ -16,10 +18,10 @@ final class CallableOdlaWorkspaceRepository implements OdlaWorkspaceRepository {
   CallableOdlaWorkspaceRepository({
     FirebaseFunctions? functions,
     OdlaCallable? callable,
-  })  : _functions = callable == null
-            ? functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3')
-            : null,
-        _callable = callable;
+  }) : _functions = callable == null
+           ? functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3')
+           : null,
+       _callable = callable;
 
   final FirebaseFunctions? _functions;
   final OdlaCallable? _callable;
@@ -29,8 +31,9 @@ final class CallableOdlaWorkspaceRepository implements OdlaWorkspaceRepository {
     if (injected != null) {
       return injected(odlaWorkspaceCallableName, request);
     }
-    final result =
-        await _functions!.httpsCallable(odlaWorkspaceCallableName).call(request);
+    final result = await _functions!
+        .httpsCallable(odlaWorkspaceCallableName)
+        .call(request);
     return result.data;
   }
 
@@ -60,7 +63,10 @@ final class OdlaDiscoverySnapshot {
   });
 
   factory OdlaDiscoverySnapshot.fromMap(Map<String, Object?> map) {
-    final version = _requiredString(map['contractVersion'], r'$.contractVersion');
+    final version = _requiredString(
+      map['contractVersion'],
+      r'$.contractVersion',
+    );
     if (version != odlaDiscoveryContractVersion) {
       throw const FormatException('ODLA keşif sözleşmesi desteklenmiyor.');
     }
@@ -71,11 +77,7 @@ final class OdlaDiscoverySnapshot {
       tenantId: _requiredString(map['tenantId'], r'$.tenantId'),
       brandUids: _stringList(map['brandUids'], r'$.brandUids'),
       roles: _stringList(map['roles'], r'$.roles'),
-      cases: _typedList(
-        map['cases'],
-        r'$.cases',
-        OdlaCaseSummary.fromMap,
-      ),
+      cases: _typedList(map['cases'], r'$.cases', OdlaCaseSummary.fromMap),
     );
   }
 
@@ -131,10 +133,14 @@ final class OdlaWorkspaceDetail {
     required this.testResults,
     required this.findings,
     required this.appeals,
+    required this.laboratoryRegistryContext,
   });
 
   factory OdlaWorkspaceDetail.fromMap(Map<String, Object?> map) {
-    final version = _requiredString(map['contractVersion'], r'$.contractVersion');
+    final version = _requiredString(
+      map['contractVersion'],
+      r'$.contractVersion',
+    );
     if (version != odlaDetailContractVersion) {
       throw const FormatException('ODLA ayrıntı sözleşmesi desteklenmiyor.');
     }
@@ -157,15 +163,13 @@ final class OdlaWorkspaceDetail {
         r'$.testResults',
         OdlaTestResult.fromMap,
       ),
-      findings: _typedList(
-        map['findings'],
-        r'$.findings',
-        OdlaFinding.fromMap,
-      ),
-      appeals: _typedList(
-        map['appeals'],
-        r'$.appeals',
-        OdlaAppeal.fromMap,
+      findings: _typedList(map['findings'], r'$.findings', OdlaFinding.fromMap),
+      appeals: _typedList(map['appeals'], r'$.appeals', OdlaAppeal.fromMap),
+      laboratoryRegistryContext: OdlaLaboratoryRegistryContext.fromMap(
+        _requiredMap(
+          map['laboratoryRegistryContext'],
+          r'$.laboratoryRegistryContext',
+        ),
       ),
     );
   }
@@ -176,6 +180,7 @@ final class OdlaWorkspaceDetail {
   final List<OdlaTestResult> testResults;
   final List<OdlaFinding> findings;
   final List<OdlaAppeal> appeals;
+  final OdlaLaboratoryRegistryContext laboratoryRegistryContext;
 
   String get caseId => _optionalString(caseRecord['caseId']) ?? '';
   String get state => _optionalString(caseRecord['state']) ?? 'unknown';
@@ -184,7 +189,185 @@ final class OdlaWorkspaceDetail {
   String? get countryCode => _optionalString(caseRecord['countryCode']);
   String? get profileCode => _optionalString(caseRecord['profileCode']);
   int? get profileVersion => _optionalInt(caseRecord['profileVersion']);
-  String? get productClassCode => _optionalString(caseRecord['productClassCode']);
+  String? get productClassCode =>
+      _optionalString(caseRecord['productClassCode']);
+}
+
+final class OdlaLaboratoryRegistryContext {
+  const OdlaLaboratoryRegistryContext({
+    required this.contractVersion,
+    required this.laboratories,
+    required this.referencedLaboratoryCount,
+    required this.resolvedLaboratoryCount,
+    required this.legacyUnknownCount,
+    required this.truncated,
+  });
+
+  factory OdlaLaboratoryRegistryContext.fromMap(Map<String, Object?> map) {
+    final version = _requiredString(
+      map['contractVersion'],
+      r'$.laboratoryRegistryContext.contractVersion',
+    );
+    if (version != odlaLaboratoryRegistryContextContractVersion) {
+      throw const FormatException(
+        'ODLA laboratuvar sicili bağlamı sözleşmesi desteklenmiyor.',
+      );
+    }
+    return OdlaLaboratoryRegistryContext(
+      contractVersion: version,
+      laboratories: _typedList(
+        map['laboratories'],
+        r'$.laboratoryRegistryContext.laboratories',
+        OdlaLaboratoryContext.fromMap,
+      ),
+      referencedLaboratoryCount:
+          _optionalInt(map['referencedLaboratoryCount']) ?? 0,
+      resolvedLaboratoryCount:
+          _optionalInt(map['resolvedLaboratoryCount']) ?? 0,
+      legacyUnknownCount: _optionalInt(map['legacyUnknownCount']) ?? 0,
+      truncated: map['truncated'] == true,
+    );
+  }
+
+  final String contractVersion;
+  final List<OdlaLaboratoryContext> laboratories;
+  final int referencedLaboratoryCount;
+  final int resolvedLaboratoryCount;
+  final int legacyUnknownCount;
+  final bool truncated;
+
+  OdlaLaboratoryContext? laboratoryById(String? laboratoryId) {
+    if (laboratoryId == null || laboratoryId.isEmpty) return null;
+    for (final laboratory in laboratories) {
+      if (laboratory.laboratoryId == laboratoryId) return laboratory;
+    }
+    return null;
+  }
+}
+
+final class OdlaLaboratoryContext {
+  const OdlaLaboratoryContext({
+    required this.laboratoryId,
+    required this.laboratory,
+    required this.registryStatus,
+    required this.verificationStatus,
+    required this.accreditations,
+    required this.scopes,
+    required this.coverageContexts,
+    required this.registryResolutionStatus,
+  });
+
+  factory OdlaLaboratoryContext.fromMap(Map<String, Object?> map) {
+    final laboratoryValue = map['laboratory'];
+    return OdlaLaboratoryContext(
+      laboratoryId: _requiredString(
+        map['laboratoryId'],
+        r'$.laboratoryRegistryContext.laboratories[].laboratoryId',
+      ),
+      laboratory: laboratoryValue == null
+          ? null
+          : Map<String, Object?>.unmodifiable(
+              _requiredMap(
+                laboratoryValue,
+                r'$.laboratoryRegistryContext.laboratories[].laboratory',
+              ),
+            ),
+      registryStatus: _optionalString(map['registryStatus']) ?? 'UNKNOWN',
+      verificationStatus:
+          _optionalString(map['verificationStatus']) ?? 'UNVERIFIED',
+      accreditations: _typedList(
+        map['accreditations'],
+        r'$.laboratoryRegistryContext.laboratories[].accreditations',
+        OdlaLaboratoryAccreditation.fromMap,
+      ),
+      scopes: _typedList(
+        map['scopes'],
+        r'$.laboratoryRegistryContext.laboratories[].scopes',
+        OdlaLaboratoryScope.fromMap,
+      ),
+      coverageContexts: _typedList(
+        map['coverageContexts'],
+        r'$.laboratoryRegistryContext.laboratories[].coverageContexts',
+        OdlaLaboratoryCoverageContext.fromMap,
+      ),
+      registryResolutionStatus:
+          _optionalString(map['registryResolutionStatus']) ?? 'UNKNOWN',
+    );
+  }
+
+  final String laboratoryId;
+  final Map<String, Object?>? laboratory;
+  final String registryStatus;
+  final String verificationStatus;
+  final List<OdlaLaboratoryAccreditation> accreditations;
+  final List<OdlaLaboratoryScope> scopes;
+  final List<OdlaLaboratoryCoverageContext> coverageContexts;
+  final String registryResolutionStatus;
+
+  String? get displayName => _optionalString(laboratory?['displayName']);
+  String? get legalName => _optionalString(laboratory?['legalName']);
+  String? get countryCode => _optionalString(laboratory?['countryCode']);
+  String? get registrationAuthorityId =>
+      _optionalString(laboratory?['registrationAuthorityId']);
+  String? get registrationNumber =>
+      _optionalString(laboratory?['registrationNumber']);
+}
+
+final class OdlaLaboratoryAccreditation {
+  const OdlaLaboratoryAccreditation._(this.raw);
+
+  factory OdlaLaboratoryAccreditation.fromMap(Map<String, Object?> map) =>
+      OdlaLaboratoryAccreditation._(Map<String, Object?>.unmodifiable(map));
+
+  final Map<String, Object?> raw;
+
+  String? get accreditationId => _optionalString(raw['accreditationId']);
+  String? get standardCode => _optionalString(raw['standardCode']);
+  String? get certificateNumber => _optionalString(raw['certificateNumber']);
+  String? get accreditationBodyId =>
+      _optionalString(raw['accreditationBodyId']);
+  String? get accreditationBodyTypeCode =>
+      _optionalString(raw['accreditationBodyTypeCode']);
+  String? get validFrom => _optionalString(raw['validFrom']);
+  String? get validUntil => _optionalString(raw['validUntil']);
+  String? get status => _optionalString(raw['status']);
+  String? get verificationStatus => _optionalString(raw['verificationStatus']);
+}
+
+final class OdlaLaboratoryScope {
+  const OdlaLaboratoryScope._(this.raw);
+
+  factory OdlaLaboratoryScope.fromMap(Map<String, Object?> map) =>
+      OdlaLaboratoryScope._(Map<String, Object?>.unmodifiable(map));
+
+  final Map<String, Object?> raw;
+
+  String? get scopeId => _optionalString(raw['scopeId']);
+  String? get accreditationId => _optionalString(raw['accreditationId']);
+  String? get testTypeCode => _optionalString(raw['testTypeCode']);
+  String? get methodCode => _optionalString(raw['methodCode']);
+  String? get status => _optionalString(raw['status']);
+}
+
+final class OdlaLaboratoryCoverageContext {
+  const OdlaLaboratoryCoverageContext._(this.raw);
+
+  factory OdlaLaboratoryCoverageContext.fromMap(Map<String, Object?> map) =>
+      OdlaLaboratoryCoverageContext._(Map<String, Object?>.unmodifiable(map));
+
+  final Map<String, Object?> raw;
+
+  String? get referenceType => _optionalString(raw['referenceType']);
+  String? get referenceId => _optionalString(raw['referenceId']);
+  String? get accreditationId => _optionalString(raw['accreditationId']);
+  String? get scopeId => _optionalString(raw['scopeId']);
+  String? get persistedCoverageStatus =>
+      _optionalString(raw['persistedCoverageStatus']);
+  String? get persistedCoverageReasonCode =>
+      _optionalString(raw['persistedCoverageReasonCode']);
+  String? get verificationStatus => _optionalString(raw['verificationStatus']);
+  String? get registryMatchStatus =>
+      _optionalString(raw['registryMatchStatus']);
 }
 
 final class OdlaCustodyEvent {
@@ -218,7 +401,8 @@ final class OdlaTestRequest {
   String? get testQuestionCode => _optionalString(raw['testQuestionCode']);
   String? get methodCode => _optionalString(raw['methodCode']);
   int? get requestSequence => _optionalInt(raw['requestSequence']);
-  String? get appealOfTestRequestId => _optionalString(raw['appealOfTestRequestId']);
+  String? get appealOfTestRequestId =>
+      _optionalString(raw['appealOfTestRequestId']);
   String? get requestedByType => _optionalString(raw['requestedByType']);
   String? get state => _optionalString(raw['state']);
   String? get createdAt => _optionalScalarText(raw['createdAt']);
@@ -239,8 +423,10 @@ final class OdlaTestResult {
   String? get methodCode => _optionalString(raw['methodCode']);
   String? get resultCode => _optionalString(raw['resultCode']);
   String? get resultSummaryCode => _optionalString(raw['resultSummaryCode']);
-  bool? get custodyIntegrityVerified => _optionalBool(raw['custodyIntegrityVerified']);
-  bool? get referenceIntegrityVerified => _optionalBool(raw['referenceIntegrityVerified']);
+  bool? get custodyIntegrityVerified =>
+      _optionalBool(raw['custodyIntegrityVerified']);
+  bool? get referenceIntegrityVerified =>
+      _optionalBool(raw['referenceIntegrityVerified']);
   String? get reportedAt => _optionalScalarText(raw['reportedAt']);
   String? get receivedAt => _optionalScalarText(raw['receivedAt']);
   String? get reportSha256 => _optionalString(raw['reportSha256']);
@@ -260,8 +446,10 @@ final class OdlaFinding {
   String? get healthSafetyImpact => _optionalString(raw['healthSafetyImpact']);
   String? get marketplaceRecommendationCode =>
       _optionalString(raw['marketplaceRecommendationCode']);
-  String? get authorityEscalationCode => _optionalString(raw['authorityEscalationCode']);
-  String? get supersedesFindingId => _optionalString(raw['supersedesFindingId']);
+  String? get authorityEscalationCode =>
+      _optionalString(raw['authorityEscalationCode']);
+  String? get supersedesFindingId =>
+      _optionalString(raw['supersedesFindingId']);
   String? get createdAt => _optionalScalarText(raw['createdAt']);
 }
 
@@ -274,8 +462,10 @@ final class OdlaAppeal {
   String? get appealId => _optionalString(raw['appealId']);
   int? get appealSequence => _optionalInt(raw['appealSequence']);
   String? get appellantType => _optionalString(raw['appellantType']);
-  String? get challengedFindingId => _optionalString(raw['challengedFindingId']);
-  String? get requestedRemedyCode => _optionalString(raw['requestedRemedyCode']);
+  String? get challengedFindingId =>
+      _optionalString(raw['challengedFindingId']);
+  String? get requestedRemedyCode =>
+      _optionalString(raw['requestedRemedyCode']);
   String? get reserveSampleId => _optionalString(raw['reserveSampleId']);
   String? get secondLaboratoryId => _optionalString(raw['secondLaboratoryId']);
   String? get state => _optionalString(raw['state']);
@@ -299,17 +489,18 @@ List<T> _typedList<T>(
   Object? value,
   String path,
   T Function(Map<String, Object?> map) decoder,
-) =>
-    List<T>.unmodifiable(
-      _requiredList(value, path).asMap().entries.map(
-        (entry) => decoder(_requiredMap(entry.value, '$path[${entry.key}]')),
-      ),
-    );
+) => List<T>.unmodifiable(
+  _requiredList(value, path).asMap().entries.map(
+    (entry) => decoder(_requiredMap(entry.value, '$path[${entry.key}]')),
+  ),
+);
 
 List<String> _stringList(Object? value, String path) =>
     List<String>.unmodifiable(
-      _requiredList(value, path)
-          .map((item) => _requiredString(item, '$path[]')),
+      _requiredList(
+        value,
+        path,
+      ).map((item) => _requiredString(item, '$path[]')),
     );
 
 String _requiredString(Object? value, String path) {
@@ -347,7 +538,9 @@ String? _optionalScalarText(Object? value) {
     final cleaned = value.trim();
     return cleaned.isEmpty ? null : cleaned;
   }
-  if (value is num || value is bool || value is DateTime) return value.toString();
+  if (value is num || value is bool || value is DateTime) {
+    return value.toString();
+  }
   if (value is Map) {
     final seconds = value['_seconds'] ?? value['seconds'];
     final nanos = value['_nanoseconds'] ?? value['nanoseconds'];

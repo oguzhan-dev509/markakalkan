@@ -120,7 +120,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('ODLA Operasyon Merkezi'), findsOneWidget);
-      expect(find.text('ODLA hazır — görüntülenebilir vaka henüz yok'), findsOneWidget);
+      expect(
+        find.text('ODLA hazır — görüntülenebilir vaka henüz yok'),
+        findsOneWidget,
+      );
       expect(find.text('Doğrulama akışı'), findsOneWidget);
       expect(find.text('Yetkili inceleyici'), findsOneWidget);
       expect(find.text('Salt okunur'), findsOneWidget);
@@ -133,36 +136,36 @@ void main() {
     },
   );
 
-  testWidgets(
-    'mobile rich empty state renders without overflow',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(390, 844));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('mobile rich empty state renders without overflow', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final repository = _FakeOdlaWorkspaceRepository(
-        discovery: _discovery(cases: const <Object?>[]),
-        detail: _detail(),
-      );
+    final repository = _FakeOdlaWorkspaceRepository(
+      discovery: _discovery(cases: const <Object?>[]),
+      detail: _detail(),
+    );
 
-      await tester.pumpWidget(_app(repository));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_app(repository));
+    await tester.pumpAndSettle();
 
-      expect(find.text('ODLA Operasyon Merkezi'), findsOneWidget);
-      expect(find.text('Yetkili inceleyici'), findsOneWidget);
+    expect(find.text('ODLA Operasyon Merkezi'), findsOneWidget);
+    expect(find.text('Yetkili inceleyici'), findsOneWidget);
 
-      final emptyStateTitle =
-          find.text('ODLA hazır — görüntülenebilir vaka henüz yok');
-      await tester.scrollUntilVisible(
-        emptyStateTitle,
-        260,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
+    final emptyStateTitle = find.text(
+      'ODLA hazır — görüntülenebilir vaka henüz yok',
+    );
+    await tester.scrollUntilVisible(
+      emptyStateTitle,
+      260,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
 
-      expect(emptyStateTitle, findsOneWidget);
-      _expectNoRenderException(tester);
-    },
-  );
+    expect(emptyStateTitle, findsOneWidget);
+    _expectNoRenderException(tester);
+  });
 
   testWidgets(
     'case card tap opens detail and renders all five operational domains',
@@ -196,7 +199,11 @@ void main() {
         'Bulgular',
         'İtirazlar',
       ]) {
-        expect(find.text(title), findsWidgets, reason: '$title render edilmedi');
+        expect(
+          find.text(title),
+          findsWidgets,
+          reason: '$title render edilmedi',
+        );
       }
 
       for (final recordTitle in <String>[
@@ -313,30 +320,29 @@ void main() {
     },
   );
 
-  testWidgets(
-    'permission error renders fail-closed ODLA error state',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(900, 700));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('permission error renders fail-closed ODLA error state', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final repository = _FakeOdlaWorkspaceRepository(
-        discovery: _discovery(cases: const <Object?>[]),
-        detail: _detail(),
-        discoveryError: StateError('permission-denied'),
-      );
+    final repository = _FakeOdlaWorkspaceRepository(
+      discovery: _discovery(cases: const <Object?>[]),
+      detail: _detail(),
+      discoveryError: StateError('permission-denied'),
+    );
 
-      await tester.pumpWidget(_app(repository));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_app(repository));
+    await tester.pumpAndSettle();
 
-      expect(find.text('ODLA çalışma alanı açılamadı'), findsOneWidget);
-      expect(
-        find.text('Bu ODLA çalışma alanı için yetkiniz bulunmuyor.'),
-        findsOneWidget,
-      );
-      expect(find.text('Tekrar dene'), findsOneWidget);
-      _expectNoRenderException(tester);
-    },
-  );
+    expect(find.text('ODLA çalışma alanı açılamadı'), findsOneWidget);
+    expect(
+      find.text('Bu ODLA çalışma alanı için yetkiniz bulunmuyor.'),
+      findsOneWidget,
+    );
+    expect(find.text('Tekrar dene'), findsOneWidget);
+    _expectNoRenderException(tester);
+  });
 }
 
 Widget _app(OdlaWorkspaceRepository repository) {
@@ -454,6 +460,67 @@ Map<String, Object?> _detail() {
         'state': 'second_lab_in_progress',
       },
     ],
+
+    'laboratoryRegistryContext': <String, Object?>{
+      'contractVersion': odlaLaboratoryRegistryContextContractVersion,
+      'laboratories': <Object?>[
+        <String, Object?>{
+          'laboratoryId': 'lab-1',
+          'laboratory': <String, Object?>{
+            'laboratoryId': 'lab-1',
+            'legalName': 'Anadolu Doğrulama Laboratuvarı A.Ş.',
+            'displayName': 'Anadolu Doğrulama Lab',
+            'countryCode': 'TR',
+            'registrationAuthorityId': 'TR-LAB-AUTH',
+            'registrationNumber': 'LAB-0001',
+            'status': 'ACTIVE',
+          },
+          'registryStatus': 'ACTIVE',
+          'verificationStatus': 'VERIFIED',
+          'accreditations': <Object?>[
+            <String, Object?>{
+              'accreditationId': 'acc-1',
+              'laboratoryId': 'lab-1',
+              'standardCode': 'ISO_IEC_17025',
+              'certificateNumber': 'CERT-0001',
+              'accreditationBodyTypeCode': 'NATIONAL',
+              'accreditationBodyId': 'TURKAK',
+              'validFrom': '2026-01-01T00:00:00Z',
+              'validUntil': '2027-01-01T00:00:00Z',
+              'status': 'ACTIVE',
+              'verificationStatus': 'VERIFIED',
+            },
+          ],
+          'scopes': <Object?>[
+            <String, Object?>{
+              'scopeId': 'scope-1',
+              'laboratoryId': 'lab-1',
+              'accreditationId': 'acc-1',
+              'testTypeCode': 'AUTHENTICITY',
+              'methodCode': 'M-1',
+              'status': 'ACTIVE',
+            },
+          ],
+          'coverageContexts': <Object?>[
+            <String, Object?>{
+              'referenceType': 'TEST_REQUEST',
+              'referenceId': 'q1',
+              'accreditationId': 'acc-1',
+              'scopeId': 'scope-1',
+              'persistedCoverageStatus': 'COVERED',
+              'persistedCoverageReasonCode': 'SCOPE_MATCH',
+              'verificationStatus': 'VERIFIED',
+              'registryMatchStatus': 'RESOLVED',
+            },
+          ],
+          'registryResolutionStatus': 'RESOLVED',
+        },
+      ],
+      'referencedLaboratoryCount': 1,
+      'resolvedLaboratoryCount': 1,
+      'legacyUnknownCount': 0,
+      'truncated': false,
+    },
   };
 }
 
@@ -462,8 +529,8 @@ final class _FakeOdlaWorkspaceRepository implements OdlaWorkspaceRepository {
     required Map<String, Object?> discovery,
     required Map<String, Object?> detail,
     this.discoveryError,
-  })  : _discovery = discovery,
-        _detail = detail;
+  }) : _discovery = discovery,
+       _detail = detail;
 
   final Map<String, Object?> _discovery;
   final Map<String, Object?> _detail;

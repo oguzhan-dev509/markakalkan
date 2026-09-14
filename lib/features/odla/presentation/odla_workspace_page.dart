@@ -32,10 +32,8 @@ class _OdlaWorkspacePageState extends State<OdlaWorkspacePage> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/odla/workspace-detail'),
-        builder: (_) => _OdlaWorkspaceDetailPage(
-          repository: _repository,
-          summary: summary,
-        ),
+        builder: (_) =>
+            _OdlaWorkspaceDetailPage(repository: _repository, summary: summary),
       ),
     );
   }
@@ -71,8 +69,9 @@ class _OdlaWorkspacePageState extends State<OdlaWorkspacePage> {
           final discovery = snapshot.requireData;
           return LayoutBuilder(
             builder: (context, constraints) {
-              final horizontalPadding =
-                  constraints.maxWidth >= 900 ? 32.0 : 16.0;
+              final horizontalPadding = constraints.maxWidth >= 900
+                  ? 32.0
+                  : 16.0;
               return RefreshIndicator(
                 onRefresh: () async {
                   _refresh();
@@ -148,9 +147,8 @@ class _WorkspaceHero extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'ODLA Operasyon Merkezi',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
@@ -187,11 +185,7 @@ class _WorkspaceHero extends StatelessWidget {
           if (!wide) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                identity,
-                const SizedBox(height: 20),
-                scope,
-              ],
+              children: [identity, const SizedBox(height: 20), scope],
             );
           }
           return Row(
@@ -225,9 +219,9 @@ class _ScopeCard extends StatelessWidget {
           children: [
             Text(
               'Yetki kapsamı',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             _KeyValueLine(label: 'Tenant', value: _shortId(tenantId)),
@@ -251,8 +245,9 @@ class _DiscoveryStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active =
-        discovery.cases.where((item) => !_terminalCase(item.state)).length;
+    final active = discovery.cases
+        .where((item) => !_terminalCase(item.state))
+        .length;
     final closed = discovery.cases.length - active;
     final stats = [
       _StatData(
@@ -282,8 +277,8 @@ class _DiscoveryStats extends StatelessWidget {
         final columns = constraints.maxWidth >= 1100
             ? 4
             : constraints.maxWidth >= 620
-                ? 2
-                : 1;
+            ? 2
+            : 1;
         const gap = 12.0;
         final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
         return Wrap(
@@ -337,8 +332,8 @@ class _StatCard extends StatelessWidget {
                   Text(
                     data.value,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   Text(data.label),
                 ],
@@ -401,9 +396,9 @@ class _RichEmptyState extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               'ODLA hazır — görüntülenebilir vaka henüz yok',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -414,9 +409,9 @@ class _RichEmptyState extends StatelessWidget {
             const SizedBox(height: 20),
             Text(
               'Doğrulama akışı',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
             LayoutBuilder(
@@ -424,8 +419,8 @@ class _RichEmptyState extends StatelessWidget {
                 final columns = constraints.maxWidth >= 1050
                     ? 5
                     : constraints.maxWidth >= 640
-                        ? 2
-                        : 1;
+                    ? 2
+                    : 1;
                 const gap = 12.0;
                 final width =
                     (constraints.maxWidth - (columns - 1) * gap) / columns;
@@ -485,10 +480,7 @@ class _CapabilityCard extends StatelessWidget {
         children: [
           Icon(data.icon),
           const SizedBox(height: 12),
-          Text(
-            data.title,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
+          Text(data.title, style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Text(data.description),
         ],
@@ -498,10 +490,7 @@ class _CapabilityCard extends StatelessWidget {
 }
 
 class _CaseCollection extends StatelessWidget {
-  const _CaseCollection({
-    required this.cases,
-    required this.onOpen,
-  });
+  const _CaseCollection({required this.cases, required this.onOpen});
 
   final List<OdlaCaseSummary> cases;
   final ValueChanged<OdlaCaseSummary> onOpen;
@@ -513,9 +502,9 @@ class _CaseCollection extends StatelessWidget {
       children: [
         Text(
           'Yetkili vakalar',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 6),
         const Text(
@@ -551,10 +540,7 @@ class _CaseCollection extends StatelessWidget {
 }
 
 class _CaseCard extends StatelessWidget {
-  const _CaseCard({
-    required this.summary,
-    required this.onTap,
-  });
+  const _CaseCard({required this.summary, required this.onTap});
 
   final OdlaCaseSummary summary;
   final VoidCallback onTap;
@@ -580,8 +566,8 @@ class _CaseCard extends StatelessWidget {
                     child: Text(
                       'Vaka ${_shortId(summary.caseId)}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   _StatePill(state: summary.state),
@@ -593,10 +579,7 @@ class _CaseCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   if (summary.countryCode != null)
-                    _MetaPill(
-                      icon: Icons.public,
-                      text: summary.countryCode!,
-                    ),
+                    _MetaPill(icon: Icons.public, text: summary.countryCode!),
                   if (summary.productClassCode != null)
                     _MetaPill(
                       icon: Icons.category_outlined,
@@ -643,8 +626,7 @@ class _OdlaWorkspaceDetailPage extends StatefulWidget {
       _OdlaWorkspaceDetailPageState();
 }
 
-class _OdlaWorkspaceDetailPageState
-    extends State<_OdlaWorkspaceDetailPage> {
+class _OdlaWorkspaceDetailPageState extends State<_OdlaWorkspaceDetailPage> {
   late Future<OdlaWorkspaceDetail> _future;
 
   @override
@@ -690,8 +672,9 @@ class _OdlaWorkspaceDetailPageState
           final detail = snapshot.requireData;
           return LayoutBuilder(
             builder: (context, constraints) {
-              final horizontalPadding =
-                  constraints.maxWidth >= 900 ? 32.0 : 16.0;
+              final horizontalPadding = constraints.maxWidth >= 900
+                  ? 32.0
+                  : 16.0;
               return RefreshIndicator(
                 onRefresh: () async {
                   _retry();
@@ -706,10 +689,7 @@ class _OdlaWorkspaceDetailPageState
                     40,
                   ),
                   children: [
-                    _CaseDetailHero(
-                      summary: widget.summary,
-                      detail: detail,
-                    ),
+                    _CaseDetailHero(summary: widget.summary, detail: detail),
                     const SizedBox(height: 16),
                     _OperationalCounters(detail: detail),
                     const SizedBox(height: 16),
@@ -728,10 +708,7 @@ class _OdlaWorkspaceDetailPageState
 }
 
 class _CaseDetailHero extends StatelessWidget {
-  const _CaseDetailHero({
-    required this.summary,
-    required this.detail,
-  });
+  const _CaseDetailHero({required this.summary, required this.detail});
 
   final OdlaCaseSummary summary;
   final OdlaWorkspaceDetail detail;
@@ -769,8 +746,8 @@ class _CaseDetailHero extends StatelessWidget {
                   child: Text(
                     'Vaka Operasyon Görünümü',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 _StatePill(state: detail.state),
@@ -825,10 +802,10 @@ class _OperationalCounters extends StatelessWidget {
         final columns = constraints.maxWidth >= 1180
             ? 5
             : constraints.maxWidth >= 720
-                ? 3
-                : constraints.maxWidth >= 440
-                    ? 2
-                    : 1;
+            ? 3
+            : constraints.maxWidth >= 440
+            ? 2
+            : 1;
         const gap = 10.0;
         final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
         return Wrap(
@@ -903,22 +880,113 @@ class _OperationalWorkspace extends StatelessWidget {
                   if (event.occurredAt != null) event.occurredAt!,
                 ].join(' • '),
                 state: null,
+                rows: _displayRows(event.raw, const [
+                  'eventId',
+                  'eventSequence',
+                  'eventType',
+                  'sampleId',
+                  'occurredAt',
+                  'recordedAt',
+                  'actorType',
+                  'actorId',
+                  'locationCode',
+                  'sealId',
+                  'previousEventId',
+                  'evidenceRefs',
+                  'appendOnly',
+                ]),
+              ),
+            )
+            .toList(growable: false),
+      ),
+
+      _OperationalSection(
+        title: 'Laboratuvar & Akreditasyon',
+        description:
+            'Vakada referans verilen laboratuvarların sicil kimliği, akreditasyon doğrulaması, test kapsamı ve eşleşme durumu gösterilir.',
+        icon: Icons.verified_outlined,
+        count: detail.laboratoryRegistryContext.laboratories.length,
+        emptyText:
+            'Bu vakada laboratuvar sicili ile ilişkilendirilebilen kayıt bulunmuyor.',
+        records: detail.laboratoryRegistryContext.laboratories
+            .map(
+              (laboratory) => _RecordView(
+                title:
+                    laboratory.displayName ??
+                    laboratory.legalName ??
+                    'Lab ${_shortId(laboratory.laboratoryId)}',
+                subtitle: [
+                  'Lab ${_shortId(laboratory.laboratoryId)}',
+                  if (laboratory.countryCode != null) laboratory.countryCode!,
+                  '${laboratory.accreditations.length} akreditasyon',
+                  '${laboratory.scopes.length} kapsam',
+                ].join(' • '),
+                state: laboratory.verificationStatus,
                 rows: _displayRows(
-                  event.raw,
+                  <String, Object?>{
+                    'laboratoryId': laboratory.laboratoryId,
+                    'displayName': laboratory.displayName,
+                    'legalName': laboratory.legalName,
+                    'countryCode': laboratory.countryCode,
+                    'registrationAuthorityId':
+                        laboratory.registrationAuthorityId,
+                    'registrationNumber': laboratory.registrationNumber,
+                    'registryStatus': laboratory.registryStatus,
+                    'verificationStatus': laboratory.verificationStatus,
+                    'registryResolutionStatus':
+                        laboratory.registryResolutionStatus,
+                    'accreditations': laboratory.accreditations
+                        .map(
+                          (accreditation) => [
+                            if (accreditation.standardCode != null)
+                              accreditation.standardCode!,
+                            if (accreditation.certificateNumber != null)
+                              accreditation.certificateNumber!,
+                            if (accreditation.accreditationBodyId != null)
+                              accreditation.accreditationBodyId!,
+                            if (accreditation.verificationStatus != null)
+                              accreditation.verificationStatus!,
+                            if (accreditation.validUntil != null)
+                              '→ ${accreditation.validUntil!}',
+                          ].join(' • '),
+                        )
+                        .toList(growable: false),
+                    'scopes': laboratory.scopes
+                        .map(
+                          (scope) => [
+                            if (scope.testTypeCode != null) scope.testTypeCode!,
+                            if (scope.methodCode != null) scope.methodCode!,
+                          ].join(' • '),
+                        )
+                        .toList(growable: false),
+                    'coverageContexts': laboratory.coverageContexts
+                        .map(
+                          (coverage) => [
+                            if (coverage.referenceType != null)
+                              coverage.referenceType!,
+                            if (coverage.registryMatchStatus != null)
+                              coverage.registryMatchStatus!,
+                            if (coverage.persistedCoverageStatus != null)
+                              coverage.persistedCoverageStatus!,
+                            if (coverage.verificationStatus != null)
+                              coverage.verificationStatus!,
+                          ].join(' • '),
+                        )
+                        .toList(growable: false),
+                  },
                   const [
-                    'eventId',
-                    'eventSequence',
-                    'eventType',
-                    'sampleId',
-                    'occurredAt',
-                    'recordedAt',
-                    'actorType',
-                    'actorId',
-                    'locationCode',
-                    'sealId',
-                    'previousEventId',
-                    'evidenceRefs',
-                    'appendOnly',
+                    'laboratoryId',
+                    'displayName',
+                    'legalName',
+                    'countryCode',
+                    'registrationAuthorityId',
+                    'registrationNumber',
+                    'registryStatus',
+                    'verificationStatus',
+                    'registryResolutionStatus',
+                    'accreditations',
+                    'scopes',
+                    'coverageContexts',
                   ],
                 ),
               ),
@@ -944,26 +1012,23 @@ class _OperationalWorkspace extends StatelessWidget {
                     'Lab ${_shortId(request.laboratoryId!)}',
                 ].join(' • '),
                 state: request.state,
-                rows: _displayRows(
-                  request.raw,
-                  const [
-                    'testRequestId',
-                    'requestSequence',
-                    'sampleId',
-                    'laboratoryId',
-                    'profileCode',
-                    'profileVersion',
-                    'testQuestionCode',
-                    'methodCode',
-                    'referenceMaterialRefs',
-                    'appealOfTestRequestId',
-                    'requestedByType',
-                    'requestedById',
-                    'state',
-                    'createdAt',
-                    'updatedAt',
-                  ],
-                ),
+                rows: _displayRows(request.raw, const [
+                  'testRequestId',
+                  'requestSequence',
+                  'sampleId',
+                  'laboratoryId',
+                  'profileCode',
+                  'profileVersion',
+                  'testQuestionCode',
+                  'methodCode',
+                  'referenceMaterialRefs',
+                  'appealOfTestRequestId',
+                  'requestedByType',
+                  'requestedById',
+                  'state',
+                  'createdAt',
+                  'updatedAt',
+                ]),
               ),
             )
             .toList(growable: false),
@@ -978,7 +1043,8 @@ class _OperationalWorkspace extends StatelessWidget {
         records: detail.testResults
             .map(
               (result) => _RecordView(
-                title: result.resultSummaryCode ??
+                title:
+                    result.resultSummaryCode ??
                     result.resultCode ??
                     'Laboratuvar sonucu',
                 subtitle: [
@@ -988,27 +1054,24 @@ class _OperationalWorkspace extends StatelessWidget {
                   if (result.reportedAt != null) result.reportedAt!,
                 ].join(' • '),
                 state: null,
-                rows: _displayRows(
-                  result.raw,
-                  const [
-                    'testResultId',
-                    'testRequestId',
-                    'sampleId',
-                    'laboratoryId',
-                    'laboratoryReportId',
-                    'methodCode',
-                    'resultCode',
-                    'resultSummaryCode',
-                    'measurementRefs',
-                    'reportArtifactRef',
-                    'reportSha256',
-                    'custodyIntegrityVerified',
-                    'referenceIntegrityVerified',
-                    'reportedAt',
-                    'receivedAt',
-                    'appendOnly',
-                  ],
-                ),
+                rows: _displayRows(result.raw, const [
+                  'testResultId',
+                  'testRequestId',
+                  'sampleId',
+                  'laboratoryId',
+                  'laboratoryReportId',
+                  'methodCode',
+                  'resultCode',
+                  'resultSummaryCode',
+                  'measurementRefs',
+                  'reportArtifactRef',
+                  'reportSha256',
+                  'custodyIntegrityVerified',
+                  'referenceIntegrityVerified',
+                  'reportedAt',
+                  'receivedAt',
+                  'appendOnly',
+                ]),
               ),
             )
             .toList(growable: false),
@@ -1027,30 +1090,26 @@ class _OperationalWorkspace extends StatelessWidget {
                 subtitle: [
                   if (finding.findingVersion != null)
                     'v${finding.findingVersion}',
-                  if (finding.confidenceBand != null)
-                    finding.confidenceBand!,
+                  if (finding.confidenceBand != null) finding.confidenceBand!,
                   if (finding.createdAt != null) finding.createdAt!,
                 ].join(' • '),
                 state: null,
-                rows: _displayRows(
-                  finding.raw,
-                  const [
-                    'findingId',
-                    'findingVersion',
-                    'findingCode',
-                    'confidenceBand',
-                    'evidenceRefs',
-                    'reasonCodes',
-                    'healthSafetyImpact',
-                    'marketplaceRecommendationCode',
-                    'authorityEscalationCode',
-                    'supersedesFindingId',
-                    'createdByType',
-                    'createdById',
-                    'createdAt',
-                    'appendOnly',
-                  ],
-                ),
+                rows: _displayRows(finding.raw, const [
+                  'findingId',
+                  'findingVersion',
+                  'findingCode',
+                  'confidenceBand',
+                  'evidenceRefs',
+                  'reasonCodes',
+                  'healthSafetyImpact',
+                  'marketplaceRecommendationCode',
+                  'authorityEscalationCode',
+                  'supersedesFindingId',
+                  'createdByType',
+                  'createdById',
+                  'createdAt',
+                  'appendOnly',
+                ]),
               ),
             )
             .toList(growable: false),
@@ -1075,22 +1134,19 @@ class _OperationalWorkspace extends StatelessWidget {
                     '2. Lab ${_shortId(appeal.secondLaboratoryId!)}',
                 ].join(' • '),
                 state: appeal.state,
-                rows: _displayRows(
-                  appeal.raw,
-                  const [
-                    'appealId',
-                    'appealSequence',
-                    'appellantType',
-                    'appellantId',
-                    'challengedFindingId',
-                    'requestedRemedyCode',
-                    'reserveSampleId',
-                    'secondLaboratoryId',
-                    'state',
-                    'createdAt',
-                    'updatedAt',
-                  ],
-                ),
+                rows: _displayRows(appeal.raw, const [
+                  'appealId',
+                  'appealSequence',
+                  'appellantType',
+                  'appellantId',
+                  'challengedFindingId',
+                  'requestedRemedyCode',
+                  'reserveSampleId',
+                  'secondLaboratoryId',
+                  'state',
+                  'createdAt',
+                  'updatedAt',
+                ]),
               ),
             )
             .toList(growable: false),
@@ -1172,8 +1228,8 @@ class _OperationalSection extends StatelessWidget {
                   child: Text(
                     title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 _CountPill(count: count),
@@ -1301,7 +1357,8 @@ class _StatePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final terminal = _terminalCase(state) ||
+    final terminal =
+        _terminalCase(state) ||
         state == 'completed' ||
         state == 'resolved' ||
         state == 'rejected_ineligible';
@@ -1342,11 +1399,7 @@ class _MetaPill extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          Text(text),
-        ],
+        children: [Icon(icon, size: 16), const SizedBox(width: 6), Text(text)],
       ),
     );
   }
@@ -1366,8 +1419,7 @@ class _ResponsiveKeyValueGrid extends StatelessWidget {
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 700 ? 2 : 1;
         const gap = 10.0;
-        final width =
-            (constraints.maxWidth - (columns - 1) * gap) / columns;
+        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
         return Wrap(
           spacing: gap,
           runSpacing: gap,
@@ -1389,10 +1441,7 @@ class _ResponsiveKeyValueGrid extends StatelessWidget {
 }
 
 class _KeyValueTile extends StatelessWidget {
-  const _KeyValueTile({
-    required this.label,
-    required this.value,
-  });
+  const _KeyValueTile({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1410,9 +1459,9 @@ class _KeyValueTile extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 4),
           SelectableText(value),
@@ -1423,10 +1472,7 @@ class _KeyValueTile extends StatelessWidget {
 }
 
 class _KeyValueLine extends StatelessWidget {
-  const _KeyValueLine({
-    required this.label,
-    required this.value,
-  });
+  const _KeyValueLine({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1476,10 +1522,7 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorView({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -1496,9 +1539,9 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'ODLA çalışma alanı açılamadı',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
@@ -1578,6 +1621,16 @@ String _fieldLabel(String key) {
     'testRequestId': 'Test talebi',
     'requestSequence': 'Talep sırası',
     'laboratoryId': 'Laboratuvar',
+    'displayName': 'Görünen ad',
+    'legalName': 'Yasal unvan',
+    'registrationAuthorityId': 'Sicil kurumu',
+    'registrationNumber': 'Sicil numarası',
+    'registryStatus': 'Sicil durumu',
+    'verificationStatus': 'Doğrulama durumu',
+    'registryResolutionStatus': 'Sicil eşleşmesi',
+    'accreditations': 'Akreditasyonlar',
+    'scopes': 'Test kapsamları',
+    'coverageContexts': 'Kapsam eşleşmeleri',
     'profileCode': 'Doğrulama profili',
     'profileVersion': 'Profil sürümü',
     'testQuestionCode': 'Test sorusu',
