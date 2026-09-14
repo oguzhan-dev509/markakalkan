@@ -2,6 +2,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 const String odlaDiscoveryContractVersion = 'odla-workspace-discovery-v1';
 const String odlaDetailContractVersion = 'odla-workspace-detail-v1';
+const String odlaCustodyIntegrityContextContractVersion =
+    'odla-custody-integrity-context-v1';
 const String odlaLaboratoryRegistryContextContractVersion =
     'odla-workspace-laboratory-registry-context-v1';
 const String odlaWorkspaceCallableName = 'getOdlaVerificationWorkspace';
@@ -133,6 +135,7 @@ final class OdlaWorkspaceDetail {
     required this.testResults,
     required this.findings,
     required this.appeals,
+    required this.custodyIntegrityContext,
     required this.laboratoryRegistryContext,
   });
 
@@ -165,6 +168,14 @@ final class OdlaWorkspaceDetail {
       ),
       findings: _typedList(map['findings'], r'$.findings', OdlaFinding.fromMap),
       appeals: _typedList(map['appeals'], r'$.appeals', OdlaAppeal.fromMap),
+      custodyIntegrityContext: map['custodyIntegrityContext'] == null
+          ? OdlaCustodyIntegrityContext.empty()
+          : OdlaCustodyIntegrityContext.fromMap(
+              _requiredMap(
+                map['custodyIntegrityContext'],
+                r'$.custodyIntegrityContext',
+              ),
+            ),
       laboratoryRegistryContext: OdlaLaboratoryRegistryContext.fromMap(
         _requiredMap(
           map['laboratoryRegistryContext'],
@@ -180,6 +191,7 @@ final class OdlaWorkspaceDetail {
   final List<OdlaTestResult> testResults;
   final List<OdlaFinding> findings;
   final List<OdlaAppeal> appeals;
+  final OdlaCustodyIntegrityContext custodyIntegrityContext;
   final OdlaLaboratoryRegistryContext laboratoryRegistryContext;
 
   String get caseId => _optionalString(caseRecord['caseId']) ?? '';
@@ -191,6 +203,104 @@ final class OdlaWorkspaceDetail {
   int? get profileVersion => _optionalInt(caseRecord['profileVersion']);
   String? get productClassCode =>
       _optionalString(caseRecord['productClassCode']);
+}
+
+final class OdlaCustodyIntegrityContext {
+  const OdlaCustodyIntegrityContext({
+    required this.contractVersion,
+    required this.samples,
+    required this.referencedSampleCount,
+    required this.establishedSampleCount,
+    required this.notEstablishedSampleCount,
+    required this.truncated,
+  });
+
+  factory OdlaCustodyIntegrityContext.empty() =>
+      const OdlaCustodyIntegrityContext(
+        contractVersion: odlaCustodyIntegrityContextContractVersion,
+        samples: <OdlaSampleCustodyIntegrity>[],
+        referencedSampleCount: 0,
+        establishedSampleCount: 0,
+        notEstablishedSampleCount: 0,
+        truncated: false,
+      );
+
+  factory OdlaCustodyIntegrityContext.fromMap(Map<String, Object?> map) {
+    final version = _requiredString(
+      map['contractVersion'],
+      r'$.custodyIntegrityContext.contractVersion',
+    );
+    if (version != odlaCustodyIntegrityContextContractVersion) {
+      throw const FormatException(
+        'ODLA numune bütünlüğü sözleşmesi desteklenmiyor.',
+      );
+    }
+    return OdlaCustodyIntegrityContext(
+      contractVersion: version,
+      samples: _typedList(
+        map['samples'],
+        r'$.custodyIntegrityContext.samples',
+        OdlaSampleCustodyIntegrity.fromMap,
+      ),
+      referencedSampleCount: _optionalInt(map['referencedSampleCount']) ?? 0,
+      establishedSampleCount: _optionalInt(map['establishedSampleCount']) ?? 0,
+      notEstablishedSampleCount:
+          _optionalInt(map['notEstablishedSampleCount']) ?? 0,
+      truncated: map['truncated'] == true,
+    );
+  }
+
+  final String contractVersion;
+  final List<OdlaSampleCustodyIntegrity> samples;
+  final int referencedSampleCount;
+  final int establishedSampleCount;
+  final int notEstablishedSampleCount;
+  final bool truncated;
+}
+
+final class OdlaSampleCustodyIntegrity {
+  const OdlaSampleCustodyIntegrity._(this.raw);
+
+  factory OdlaSampleCustodyIntegrity.fromMap(Map<String, Object?> map) =>
+      OdlaSampleCustodyIntegrity._(Map<String, Object?>.unmodifiable(map));
+
+  final Map<String, Object?> raw;
+
+  String get sampleId => _requiredString(raw['sampleId'], r'$.sampleId');
+  int get eventCount => _optionalInt(raw['eventCount']) ?? 0;
+  String? get latestEventId => _optionalString(raw['latestEventId']);
+  int? get latestEventSequence => _optionalInt(raw['latestEventSequence']);
+  String? get currentSealId => _optionalString(raw['currentSealId']);
+  List<String> get sealIds => _optionalStringList(raw['sealIds']);
+  int get sealChangeCount => _optionalInt(raw['sealChangeCount']) ?? 0;
+  int get openingEventCount => _optionalInt(raw['openingEventCount']) ?? 0;
+  bool get hasSealChange => raw['hasSealChange'] == true;
+  String get appendOnlyStatus =>
+      _optionalString(raw['appendOnlyStatus']) ?? 'NOT_ESTABLISHED';
+  String get integrityStatus =>
+      _optionalString(raw['integrityStatus']) ?? 'NOT_ESTABLISHED';
+  String get integrityCode =>
+      _optionalString(raw['integrityCode']) ?? 'NO_CUSTODY_EVENTS';
+  String get hashIntegrityStatus =>
+      _optionalString(raw['hashIntegrityStatus']) ?? 'NOT_ESTABLISHED';
+  String get sequenceIntegrityStatus =>
+      _optionalString(raw['sequenceIntegrityStatus']) ?? 'NOT_ESTABLISHED';
+  String get predecessorIntegrityStatus =>
+      _optionalString(raw['predecessorIntegrityStatus']) ?? 'NOT_ESTABLISHED';
+  int get evidenceReferenceCount =>
+      _optionalInt(raw['evidenceReferenceCount']) ?? 0;
+  List<String> get testRequestIds => _optionalStringList(raw['testRequestIds']);
+  List<String> get testResultIds => _optionalStringList(raw['testResultIds']);
+  List<String> get appealIds => _optionalStringList(raw['appealIds']);
+  Map<String, Object?> get testResultIntegritySummary =>
+      raw['testResultIntegritySummary'] is Map
+      ? Map<String, Object?>.unmodifiable(
+          _requiredMap(
+            raw['testResultIntegritySummary'],
+            r'$.testResultIntegritySummary',
+          ),
+        )
+      : const <String, Object?>{};
 }
 
 final class OdlaLaboratoryRegistryContext {

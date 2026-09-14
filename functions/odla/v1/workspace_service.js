@@ -267,6 +267,229 @@ function collectWorkspaceLaboratoryReferences(caseRecord, operational) {
   });
 }
 
+
+const MAX_WORKSPACE_CUSTODY_SAMPLES = 50;
+
+function optionalSampleId(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizedCustodyEventForIntegrity(event) {
+  return Object.freeze({
+    ...custodyEventHashPayload(event),
+    eventPayloadSha256: event.eventPayloadSha256,
+  });
+}
+
+function custodyDimensionStatus(events, dimension) {
+  if (!events.length) return "NOT_ESTABLISHED";
+  if (dimension === "hash") {
+    return events.every((event) =>
+      contracts.sha256Hex(
+          contracts.canonicalJson(custodyEventHashPayload(event)),
+      ) === event.eventPayloadSha256,
+    ) ? "VERIFIED" : "FAILED";
+  }
+  if (dimension === "sequence") {
+    return events.every((event, index) =>
+      Number.isInteger(event.eventSequence) &&
+      event.eventSequence === index + 1,
+    ) ? "VERIFIED" : "FAILED";
+  }
+  if (dimension === "predecessor") {
+    return events.every((event, index) => {
+      if (index === 0) {
+        return event.previousEventId == null &&
+          event.previousEventPayloadSha256 == null;
+      }
+      const previous = events[index - 1];
+      return event.previousEventId === previous.eventId &&
+        event.previousEventPayloadSha256 ===
+          previous.eventPayloadSha256;
+    }) ? "VERIFIED" : "FAILED";
+  }
+  return "UNKNOWN";
+}
+
+function buildCustodyIntegrityContext(caseRecord, operational) {
+  const sampleIds = new Set();
+  const pushSample = (value) => {
+    const sampleId = optionalSampleId(value);
+    if (sampleId) sampleIds.add(sampleId);
+  };
+
+  for (const field of ["sampleId", "primarySampleId", "reserveSampleId"]) {
+    pushSample(caseRecord && caseRecord[field]);
+  }
+  for (const event of operational.custodyEvents || []) {
+    pushSample(event && event.sampleId);
+  }
+  for (const request of operational.testRequests || []) {
+    pushSample(request && request.sampleId);
+  }
+  for (const result of operational.testResults || []) {
+    pushSample(result && result.sampleId);
+  }
+  for (const appeal of operational.appeals || []) {
+    pushSample(appeal && appeal.sampleId);
+    pushSample(appeal && appeal.reserveSampleId);
+  }
+
+  const allSampleIds = [...sampleIds].sort();
+  const boundedSampleIds =
+    allSampleIds.slice(0, MAX_WORKSPACE_CUSTODY_SAMPLES);
+
+  const samples = boundedSampleIds.map((sampleId) => {
+    const events = (operational.custodyEvents || [])
+        .filter(
+            (event) =>
+              optionalSampleId(event && event.sampleId) === sampleId,
+        )
+        .slice()
+        .sort((left, right) => {
+          const a = Number.isInteger(left.eventSequence) ?
+            left.eventSequence :
+            Number.MAX_SAFE_INTEGER;
+          const b = Number.isInteger(right.eventSequence) ?
+            right.eventSequence :
+            Number.MAX_SAFE_INTEGER;
+          if (a !== b) return a - b;
+          return String(left.eventId || "").localeCompare(
+              String(right.eventId || ""),
+          );
+        });
+
+    const testRequests = (operational.testRequests || []).filter(
+        (value) =>
+          optionalSampleId(value && value.sampleId) === sampleId,
+    );
+    const testResults = (operational.testResults || []).filter(
+        (value) =>
+          optionalSampleId(value && value.sampleId) === sampleId,
+    );
+    const appeals = (operational.appeals || []).filter(
+        (value) =>
+          optionalSampleId(value && value.sampleId) === sampleId ||
+          optionalSampleId(value && value.reserveSampleId) === sampleId,
+    );
+
+    let integrity = {ok: false, code: "NO_CUSTODY_EVENTS"};
+    if (events.length) {
+      try {
+        integrity = custody.classifyCustodyIntegrity(
+            events.map(normalizedCustodyEventForIntegrity),
+        );
+      } catch (error) {
+        integrity = {
+          ok: false,
+          code: "CUSTODY_INTEGRITY_EVALUATION_ERROR",
+        };
+      }
+    }
+
+    const seals = events
+        .map((event) => optionalReferenceString(event && event.sealId))
+        .filter((value) => value !== null);
+    const uniqueSeals = [...new Set(seals)];
+    let sealChangeCount = 0;
+    for (let i = 1; i < seals.length; i++) {
+      if (seals[i] !== seals[i - 1]) sealChangeCount += 1;
+    }
+    const openingEventCount = events.filter(
+        (event) =>
+          event && (
+            event.eventType === "package_opened" ||
+            event.eventType === "lab_opened"
+          ),
+    ).length;
+    const evidenceReferenceCount = events.reduce(
+        (total, event) =>
+          total + (
+            Array.isArray(event && event.evidenceRefs) ?
+              event.evidenceRefs.length :
+              0
+          ),
+        0,
+    );
+
+    const reportedResults = testResults.filter(
+        (result) => typeof result.custodyIntegrityVerified === "boolean",
+    );
+    const verifiedResultCount = reportedResults.filter(
+        (result) => result.custodyIntegrityVerified === true,
+    ).length;
+    const failedResultCount = reportedResults.filter(
+        (result) => result.custodyIntegrityVerified === false,
+    ).length;
+    const resultIntegrityStatus = reportedResults.length === 0 ?
+      "NOT_REPORTED" :
+      (failedResultCount > 0 ? "FAILED" : "VERIFIED");
+
+    const latest = events.length ? events[events.length - 1] : null;
+    return Object.freeze({
+      sampleId,
+      eventCount: events.length,
+      latestEventId: latest ? latest.eventId || null : null,
+      latestEventSequence:
+        latest && Number.isInteger(latest.eventSequence) ?
+          latest.eventSequence :
+          null,
+      currentSealId: latest ? latest.sealId ?? null : null,
+      sealIds: Object.freeze(uniqueSeals),
+      sealChangeCount,
+      openingEventCount,
+      hasSealChange: sealChangeCount > 0,
+      appendOnlyStatus: events.length ?
+        (events.every((event) => event.appendOnly === true) ?
+          "VERIFIED" :
+          "FAILED") :
+        "NOT_ESTABLISHED",
+      integrityStatus: events.length ?
+        (integrity.ok ? "VERIFIED" : "FAILED") :
+        "NOT_ESTABLISHED",
+      integrityCode: events.length ? integrity.code : "NO_CUSTODY_EVENTS",
+      hashIntegrityStatus: custodyDimensionStatus(events, "hash"),
+      sequenceIntegrityStatus: custodyDimensionStatus(events, "sequence"),
+      predecessorIntegrityStatus:
+        custodyDimensionStatus(events, "predecessor"),
+      evidenceReferenceCount,
+      testRequestIds: Object.freeze(
+          testRequests
+              .map((value) => optionalReferenceString(value.testRequestId))
+              .filter((value) => value !== null),
+      ),
+      testResultIds: Object.freeze(
+          testResults
+              .map((value) => optionalReferenceString(value.testResultId))
+              .filter((value) => value !== null),
+      ),
+      appealIds: Object.freeze(
+          appeals
+              .map((value) => optionalReferenceString(value.appealId))
+              .filter((value) => value !== null),
+      ),
+      testResultIntegritySummary: Object.freeze({
+        status: resultIntegrityStatus,
+        reportedCount: reportedResults.length,
+        verifiedCount: verifiedResultCount,
+        failedCount: failedResultCount,
+        unknownCount: testResults.length - reportedResults.length,
+      }),
+    });
+  });
+
+  return Object.freeze({
+    contractVersion: "odla-custody-integrity-context-v1",
+    samples: Object.freeze(samples),
+    referencedSampleCount: allSampleIds.length,
+    establishedSampleCount:
+      samples.filter((sample) => sample.eventCount > 0).length,
+    notEstablishedSampleCount:
+      samples.filter((sample) => sample.eventCount === 0).length,
+    truncated: allSampleIds.length > MAX_WORKSPACE_CUSTODY_SAMPLES,
+  });
+}
+
 function createOdlaWorkspaceService({adapter}) {
   if (!adapter || typeof adapter !== "object") {
     fail("failed-precondition", "ODLA persistence adapter required");
@@ -334,6 +557,8 @@ function createOdlaWorkspaceService({adapter}) {
     assertCaseScope(authority, workspace, data);
     const operational =
       await adapter.getOperationalWorkspaceDetails(caseId);
+    const custodyIntegrityContext =
+      buildCustodyIntegrityContext(workspace.case, operational);
     const registryReferences =
       collectWorkspaceLaboratoryReferences(workspace.case, operational);
     const laboratoryRegistryContext =
@@ -349,6 +574,7 @@ function createOdlaWorkspaceService({adapter}) {
       testResults: operational.testResults,
       findings: operational.findings,
       appeals: operational.appeals,
+      custodyIntegrityContext,
       laboratoryRegistryContext,
     });
   }
@@ -359,7 +585,10 @@ function createOdlaWorkspaceService({adapter}) {
     const operationId = requireOperationId(data);
     const workspace = await adapter.getWorkspace(data.caseId);
     assertCaseScope(authority, workspace, data);
-    const previous = await adapter.getLatestCustodyEvent(data.caseId);
+    const previous = await adapter.getLatestCustodyEvent(
+        data.caseId,
+        data.sampleId,
+    );
     if (previous) assertStoredCustodyEventSelfHash(previous);
     const event = custody.buildCustodyEvent({
       tenantId: workspace.case.tenantId,

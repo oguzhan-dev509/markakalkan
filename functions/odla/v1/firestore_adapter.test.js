@@ -166,6 +166,9 @@ test("ODLA-BE-DB-006 custody append uses transaction", async () => {
   await x.appendCustodyEvent({
     event: {
       caseId: "c1",
+      sampleId: "s1",
+      previousEventId: null,
+      previousEventPayloadSha256: null,
       eventId: "e1",
       eventSequence: 1,
       eventPayloadSha256: "h",
@@ -209,6 +212,9 @@ test(
       await x.appendCustodyEvent({
         event: {
           caseId: "c1",
+          sampleId: "s1",
+          previousEventId: null,
+          previousEventPayloadSha256: null,
           eventId: "e1",
           eventSequence: 1,
           eventPayloadSha256: "abc",
@@ -466,6 +472,9 @@ test(
       await x.appendCustodyEvent({
         event: {
           caseId: "c1",
+          sampleId: "s1",
+          previousEventId: null,
+          previousEventPayloadSha256: null,
           eventId: "e1",
           eventSequence: 1,
           eventPayloadSha256: "h",
@@ -686,5 +695,104 @@ test(
       assert.equal(typeof x.createSample, "undefined");
       assert.equal(typeof x.getReporterReliability, "undefined");
       assert.equal(typeof x.createFundingAuthorization, "undefined");
+    },
+);
+
+test(
+    "ODLA-2B-DB-001 independent sample head allows sequence one",
+    async () => {
+      const db = dbMock({
+        "odlaVerificationCases/c1": {
+          ...baseCase,
+          latestCustodySequence: 9,
+          latestCustodyEventId: "legacy-s1",
+          latestCustodyEventPayloadSha256: "legacy-hash",
+        },
+        "odlaVerificationCases/c1/custodyEvents/legacy-s1": {
+          caseId: "c1",
+          sampleId: "s1",
+          eventId: "legacy-s1",
+          eventSequence: 9,
+          eventPayloadSha256: "legacy-hash",
+        },
+      });
+      const x = createOdlaFirestoreAdapter({db, FieldValue: FV});
+      await x.appendCustodyEvent({
+        event: {
+          caseId: "c1",
+          sampleId: "s2",
+          eventId: "s2-e1",
+          eventSequence: 1,
+          eventPayloadSha256: "s2-h1",
+          sealId: "S2",
+          previousEventId: null,
+          previousEventPayloadSha256: null,
+        },
+        operationId: "odla2b-db-op1",
+        actorUid: "u1",
+        auditContext: audit("append_custody", "odla2b-db-op1"),
+      });
+
+      const samplePath =
+        "odlaVerificationCases/c1/samples/s_" +
+        Buffer.from("s2", "utf8").toString("base64url");
+      assert.equal(db.docs.get(samplePath).sampleId, "s2");
+      assert.equal(
+          db.docs.get(samplePath).latestCustodySequence,
+          1,
+      );
+      assert.equal(
+          db.docs.get(samplePath).latestCustodyEventId,
+          "s2-e1",
+      );
+    },
+);
+
+test(
+    "ODLA-2B-DB-002 legacy predecessor bootstraps matching sample head",
+    async () => {
+      const db = dbMock({
+        "odlaVerificationCases/c1": {
+          ...baseCase,
+          latestCustodySequence: 1,
+          latestCustodyEventId: "s1-e1",
+          latestCustodyEventPayloadSha256: "s1-h1",
+        },
+        "odlaVerificationCases/c1/custodyEvents/s1-e1": {
+          caseId: "c1",
+          sampleId: "s1",
+          eventId: "s1-e1",
+          eventSequence: 1,
+          eventPayloadSha256: "s1-h1",
+        },
+      });
+      const x = createOdlaFirestoreAdapter({db, FieldValue: FV});
+      await x.appendCustodyEvent({
+        event: {
+          caseId: "c1",
+          sampleId: "s1",
+          eventId: "s1-e2",
+          eventSequence: 2,
+          eventPayloadSha256: "s1-h2",
+          sealId: "S1",
+          previousEventId: "s1-e1",
+          previousEventPayloadSha256: "s1-h1",
+        },
+        operationId: "odla2b-db-op2",
+        actorUid: "u1",
+        auditContext: audit("append_custody", "odla2b-db-op2"),
+      });
+
+      const samplePath =
+        "odlaVerificationCases/c1/samples/s_" +
+        Buffer.from("s1", "utf8").toString("base64url");
+      assert.equal(
+          db.docs.get(samplePath).latestCustodySequence,
+          2,
+      );
+      assert.equal(
+          db.docs.get(samplePath).latestCustodyEventId,
+          "s1-e2",
+      );
     },
 );

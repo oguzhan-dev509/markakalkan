@@ -1425,3 +1425,109 @@ test(
       assert.equal(context.registryResolutionStatus, "UNKNOWN");
     },
 );
+
+test(
+    "ODLA-2B-SVC-001 workspace exposes per-sample custody integrity context",
+    async () => {
+      const core = require("../chain_of_custody");
+      const e1 = core.buildCustodyEvent({
+        tenantId: "t1",
+        brandUid: "b1",
+        caseId: "c1",
+        sampleId: "s1",
+        eventSequence: 1,
+        eventType: "sealed",
+        occurredAt: "2026-01-01T00:00:00Z",
+        recordedAt: "2026-01-01T00:00:00Z",
+        actorType: "operator",
+        actorId: "u1",
+        locationCode: "TR",
+        sealId: "S1",
+        evidenceRefs: ["ev1"],
+      });
+      const s = createOdlaWorkspaceService({
+        adapter: adapter({
+          getOperationalWorkspaceDetails: async () => ({
+            custodyEvents: [e1],
+            testRequests: [{
+              testRequestId: "q1",
+              sampleId: "s1",
+              laboratoryId: "lab1",
+            }],
+            testResults: [{
+              testResultId: "r1",
+              sampleId: "s1",
+              laboratoryId: "lab1",
+              custodyIntegrityVerified: true,
+            }],
+            findings: [],
+            appeals: [{
+              appealId: "a1",
+              reserveSampleId: "s2",
+            }],
+          }),
+        }),
+      });
+
+      const result = await s.getOdlaVerificationWorkspace({
+        authority: authority(),
+        data: {caseId: "c1", tenantId: "t1", brandUid: "b1"},
+      });
+
+      assert.equal(
+          result.custodyIntegrityContext.contractVersion,
+          "odla-custody-integrity-context-v1",
+      );
+      assert.equal(result.custodyIntegrityContext.referencedSampleCount, 2);
+      const s1 = result.custodyIntegrityContext.samples.find(
+          (value) => value.sampleId === "s1",
+      );
+      const s2 = result.custodyIntegrityContext.samples.find(
+          (value) => value.sampleId === "s2",
+      );
+      assert.equal(s1.integrityStatus, "VERIFIED");
+      assert.equal(s1.currentSealId, "S1");
+      assert.equal(
+          s1.testResultIntegritySummary.status,
+          "VERIFIED",
+      );
+      assert.equal(s2.integrityStatus, "NOT_ESTABLISHED");
+      assert.equal(s2.integrityCode, "NO_CUSTODY_EVENTS");
+    },
+);
+
+test(
+    "ODLA-2B-SVC-002 custody predecessor lookup is sample-specific",
+    async () => {
+      let captured = null;
+      const a = adapter({
+        getLatestCustodyEvent: async (caseId, sampleId) => {
+          captured = {caseId, sampleId};
+          return null;
+        },
+      });
+      const s = createOdlaWorkspaceService({adapter: a});
+      await s.appendOdlaChainOfCustodyEvent({
+        authority: authority(),
+        data: {
+          operationId: "odla2b-op1",
+          tenantId: "t1",
+          brandUid: "b1",
+          caseId: "c1",
+          sampleId: "reserve-s2",
+          eventSequence: 1,
+          eventType: "sealed",
+          occurredAt: "2026-09-14T00:00:00Z",
+          recordedAt: "2026-09-14T00:00:00Z",
+          actorType: "operator",
+          locationCode: "TR",
+          sealId: "SEAL-S2",
+          evidenceRefs: [],
+        },
+      });
+      assert.deepEqual(
+          captured,
+          {caseId: "c1", sampleId: "reserve-s2"},
+      );
+    },
+);

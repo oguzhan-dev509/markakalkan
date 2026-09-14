@@ -121,6 +121,71 @@ void main() {
               },
             ],
 
+            'custodyIntegrityContext': <String, Object?>{
+              'contractVersion': odlaCustodyIntegrityContextContractVersion,
+              'samples': <Object?>[
+                <String, Object?>{
+                  'sampleId': 's1',
+                  'eventCount': 1,
+                  'latestEventId': 'e1',
+                  'latestEventSequence': 1,
+                  'currentSealId': 'seal-1',
+                  'sealIds': <Object?>['seal-1'],
+                  'sealChangeCount': 0,
+                  'openingEventCount': 0,
+                  'hasSealChange': false,
+                  'appendOnlyStatus': 'VERIFIED',
+                  'integrityStatus': 'VERIFIED',
+                  'integrityCode': 'OK',
+                  'hashIntegrityStatus': 'VERIFIED',
+                  'sequenceIntegrityStatus': 'VERIFIED',
+                  'predecessorIntegrityStatus': 'VERIFIED',
+                  'evidenceReferenceCount': 1,
+                  'testRequestIds': <Object?>['q1'],
+                  'testResultIds': <Object?>['r1'],
+                  'appealIds': <Object?>[],
+                  'testResultIntegritySummary': <String, Object?>{
+                    'status': 'VERIFIED',
+                    'reportedCount': 1,
+                    'verifiedCount': 1,
+                    'failedCount': 0,
+                    'unknownCount': 0,
+                  },
+                },
+                <String, Object?>{
+                  'sampleId': 's2',
+                  'eventCount': 0,
+                  'latestEventId': null,
+                  'latestEventSequence': null,
+                  'currentSealId': null,
+                  'sealIds': <Object?>[],
+                  'sealChangeCount': 0,
+                  'openingEventCount': 0,
+                  'hasSealChange': false,
+                  'appendOnlyStatus': 'NOT_ESTABLISHED',
+                  'integrityStatus': 'NOT_ESTABLISHED',
+                  'integrityCode': 'NO_CUSTODY_EVENTS',
+                  'hashIntegrityStatus': 'NOT_ESTABLISHED',
+                  'sequenceIntegrityStatus': 'NOT_ESTABLISHED',
+                  'predecessorIntegrityStatus': 'NOT_ESTABLISHED',
+                  'evidenceReferenceCount': 0,
+                  'testRequestIds': <Object?>[],
+                  'testResultIds': <Object?>[],
+                  'appealIds': <Object?>['a1'],
+                  'testResultIntegritySummary': <String, Object?>{
+                    'status': 'NOT_REPORTED',
+                    'reportedCount': 0,
+                    'verifiedCount': 0,
+                    'failedCount': 0,
+                    'unknownCount': 0,
+                  },
+                },
+              ],
+              'referencedSampleCount': 2,
+              'establishedSampleCount': 1,
+              'notEstablishedSampleCount': 1,
+              'truncated': false,
+            },
             'laboratoryRegistryContext': <String, Object?>{
               'contractVersion': odlaLaboratoryRegistryContextContractVersion,
               'laboratories': <Object?>[
@@ -224,6 +289,21 @@ void main() {
       expect(detail.appeals, hasLength(1));
       expect(detail.appeals.single.appealId, 'a1');
       expect(detail.appeals.single.secondLaboratoryId, 'lab-2');
+
+      final custody = detail.custodyIntegrityContext;
+      expect(
+        custody.contractVersion,
+        odlaCustodyIntegrityContextContractVersion,
+      );
+      expect(custody.referencedSampleCount, 2);
+      expect(custody.establishedSampleCount, 1);
+      expect(custody.notEstablishedSampleCount, 1);
+      expect(custody.samples, hasLength(2));
+      expect(custody.samples.first.sampleId, 's1');
+      expect(custody.samples.first.integrityStatus, 'VERIFIED');
+      expect(custody.samples.first.currentSealId, 'seal-1');
+      expect(custody.samples.last.sampleId, 's2');
+      expect(custody.samples.last.integrityStatus, 'NOT_ESTABLISHED');
 
       final registry = detail.laboratoryRegistryContext;
       expect(

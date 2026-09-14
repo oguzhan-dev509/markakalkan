@@ -497,15 +497,91 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
     return Object.freeze({...snap.data(), profileId});
   }
 
-  async function getLatestCustodyEvent(caseId) {
+  function custodySampleStatePath(caseId, sampleId) {
+    const normalized = requireString(sampleId, "sampleId");
+    const encoded = Buffer.from(normalized, "utf8").toString("base64url");
+    return childPath(caseId, "samples", `s_${encoded}`);
+  }
+
+  async function getLatestCustodyEvent(caseId, sampleId = null) {
     const root = await db.doc(casePath(caseId)).get();
     if (!root.exists) fail("not-found", "ODLA verification case not found");
-    const data = root.data();
-    if (!data.latestCustodyEventId) return null;
-    const eventSnap = await db
-        .doc(childPath(caseId, "custodyEvents", data.latestCustodyEventId))
+    const rootData = root.data();
+
+    if (typeof sampleId !== "string" || !sampleId.trim()) {
+      if (!rootData.latestCustodyEventId) return null;
+      const legacySnap = await db
+          .doc(
+              childPath(
+                  caseId,
+                  "custodyEvents",
+                  rootData.latestCustodyEventId,
+              ),
+          )
+          .get();
+      return legacySnap.exists ?
+        Object.freeze({...legacySnap.data()}) :
+        null;
+    }
+
+    const normalizedSampleId = sampleId.trim();
+    const sampleSnap = await db
+        .doc(custodySampleStatePath(caseId, normalizedSampleId))
         .get();
-    return eventSnap.exists ? Object.freeze({...eventSnap.data()}) : null;
+    if (sampleSnap.exists) {
+      const state = sampleSnap.data();
+      if (!state.latestCustodyEventId) {
+        fail("failed-precondition", "Custody sample head is incomplete");
+      }
+      const eventSnap = await db
+          .doc(
+              childPath(
+                  caseId,
+                  "custodyEvents",
+                  state.latestCustodyEventId,
+              ),
+          )
+          .get();
+      if (!eventSnap.exists) {
+        fail("failed-precondition", "Custody sample head event missing");
+      }
+      const event = eventSnap.data();
+      if (
+        event.sampleId !== normalizedSampleId ||
+        event.eventPayloadSha256 !==
+          state.latestCustodyEventPayloadSha256 ||
+        event.eventSequence !== state.latestCustodySequence
+      ) {
+        fail("failed-precondition", "Custody sample head mismatch");
+      }
+      return Object.freeze({...event});
+    }
+
+    if (rootData.latestCustodyEventId) {
+      const legacySnap = await db
+          .doc(
+              childPath(
+                  caseId,
+                  "custodyEvents",
+                  rootData.latestCustodyEventId,
+              ),
+          )
+          .get();
+      if (legacySnap.exists) {
+        const legacy = legacySnap.data();
+        if (legacy.sampleId === normalizedSampleId) {
+          return Object.freeze({...legacy});
+        }
+      }
+    }
+
+    const legacyEvents = await listCustodyEvents(caseId);
+    const matching = legacyEvents.filter(
+        (event) => event.sampleId === normalizedSampleId,
+    );
+    return matching.length ?
+      Object.freeze({...matching[matching.length - 1]}) :
+      null;
   }
 
   async function appendCustodyEvent({
@@ -518,6 +594,9 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
     const eventRef = db.doc(
         childPath(event.caseId, "custodyEvents", event.eventId),
     );
+    const sampleRef = db.doc(
+        custodySampleStatePath(event.caseId, event.sampleId),
+    );
     const audit = normalizeAuditContext(
         event.caseId,
         operationId,
@@ -528,6 +607,7 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
     const auditRef = db.doc(
         childPath(event.caseId, "auditEvents", audit.auditEventId),
     );
+
     return db.runTransaction(async (tx) => {
       const root = await tx.get(rootRef);
       if (!root.exists) {
@@ -535,6 +615,8 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
       }
       const existing = await tx.get(eventRef);
       const auditSnap = await tx.get(auditRef);
+      const sampleSnap = await tx.get(sampleRef);
+
       if (existing.exists) {
         const current = existing.data();
         if (current.operationId !== operationId) {
@@ -554,33 +636,126 @@ function createOdlaFirestoreAdapter({db, FieldValue}) {
       if (auditSnap.exists) {
         fail("already-exists", "Audit event identity conflict");
       }
-      const rootData = root.data();
-      const expectedSequence = Number.isInteger(
-          rootData.latestCustodySequence,
-      ) ?
-        rootData.latestCustodySequence + 1 :
-        1;
-      if (event.eventSequence !== expectedSequence) {
-        fail("failed-precondition", "Custody sequence precondition failed");
+
+      let predecessor = null;
+      if (event.eventSequence === 1) {
+        if (
+          event.previousEventId !== null ||
+          event.previousEventPayloadSha256 !== null
+        ) {
+          fail(
+              "failed-precondition",
+              "Custody genesis predecessor mismatch",
+          );
+        }
+      } else {
+        if (
+          typeof event.previousEventId !== "string" ||
+          !event.previousEventId ||
+          typeof event.previousEventPayloadSha256 !== "string" ||
+          !event.previousEventPayloadSha256
+        ) {
+          fail("failed-precondition", "Custody predecessor required");
+        }
+        const predecessorSnap = await tx.get(
+            db.doc(
+                childPath(
+                    event.caseId,
+                    "custodyEvents",
+                    event.previousEventId,
+                ),
+            ),
+        );
+        if (!predecessorSnap.exists) {
+          fail("failed-precondition", "Custody predecessor event missing");
+        }
+        predecessor = predecessorSnap.data();
+        if (
+          predecessor.sampleId !== event.sampleId ||
+          predecessor.eventId !== event.previousEventId ||
+          predecessor.eventPayloadSha256 !==
+            event.previousEventPayloadSha256 ||
+          predecessor.eventSequence !== event.eventSequence - 1
+        ) {
+          fail("failed-precondition", "Custody predecessor mismatch");
+        }
       }
+
+      if (sampleSnap.exists) {
+        const state = sampleSnap.data();
+        const expectedSequence = Number.isInteger(
+            state.latestCustodySequence,
+        ) ?
+          state.latestCustodySequence + 1 :
+          1;
+        if (event.eventSequence !== expectedSequence) {
+          fail(
+              "failed-precondition",
+              "Custody sample sequence precondition failed",
+          );
+        }
+        if (
+          event.eventSequence > 1 &&
+          (
+            event.previousEventId !== state.latestCustodyEventId ||
+            event.previousEventPayloadSha256 !==
+              state.latestCustodyEventPayloadSha256
+          )
+        ) {
+          fail(
+              "failed-precondition",
+              "Custody sample predecessor precondition failed",
+          );
+        }
+      } else if (event.eventSequence > 1 && predecessor === null) {
+        fail(
+            "failed-precondition",
+            "Legacy custody predecessor validation failed",
+        );
+      }
+
       const data = {
         ...event,
         operationId: requireString(operationId, "operationId"),
         actorUid: requireString(actorUid, "actorUid"),
         recordedAtServer: FieldValue.serverTimestamp(),
       };
+      const now = FieldValue.serverTimestamp();
       tx.create(eventRef, data);
       tx.create(auditRef, audit);
       tx.set(
-          rootRef,
+          sampleRef,
           {
+            schemaVersion: 1,
+            sampleId: event.sampleId,
             latestCustodySequence: event.eventSequence,
             latestCustodyEventId: event.eventId,
             latestCustodyEventPayloadSha256: event.eventPayloadSha256,
-            updatedAt: FieldValue.serverTimestamp(),
+            currentSealId: event.sealId ?? null,
+            updatedAt: now,
           },
           {merge: true},
       );
+
+      const rootData = root.data();
+      if (
+        !rootData.latestCustodyEventId ||
+        event.previousEventId === rootData.latestCustodyEventId
+      ) {
+        tx.set(
+            rootRef,
+            {
+              latestCustodySequence: event.eventSequence,
+              latestCustodyEventId: event.eventId,
+              latestCustodyEventPayloadSha256:
+                event.eventPayloadSha256,
+              updatedAt: now,
+            },
+            {merge: true},
+        );
+      } else {
+        tx.set(rootRef, {updatedAt: now}, {merge: true});
+      }
       return {created: true, idempotent: false, data};
     });
   }
