@@ -72,6 +72,7 @@ import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_public_radar_page.dart';
 import 'package:markakalkan/modules/marka_kalkan/sahte_ikiz_sicili/presentation/counterfeit_twin_public_detail_page.dart';
 
+import '../features/odla/presentation/odla_workspace_page.dart';
 abstract final class AppRouter {
   static Future<void> openManagementCenter(BuildContext context) {
     return Navigator.of(context).push(
@@ -670,6 +671,15 @@ abstract final class AppRouter {
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/risk-scan/public-lite'),
         builder: (_) => const PublicLiteRiskScanPreviewPage(),
+      ),
+    );
+  }
+
+  static Future<void> openOdlaWorkspace(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/odla'),
+        builder: (_) => const OdlaWorkspacePage(),
       ),
     );
   }

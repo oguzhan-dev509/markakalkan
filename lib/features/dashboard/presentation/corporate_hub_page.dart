@@ -96,6 +96,15 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
       status: _ModuleStatus.active,
     ),
     _CorporateModule(
+      id: 'odla',
+      title: 'Orijinallik ve Laboratuvar Doğrulama',
+      description:
+          'Yetkiniz kapsamındaki ODLA vakalarını, laboratuvar doğrulama '
+          'akışlarını ve delil zincirini güvenli biçimde inceleyin.',
+      icon: Icons.biotech_outlined,
+      status: _ModuleStatus.active,
+    ),
+    _CorporateModule(
       id: 'traceability',
       title: 'Ürün Kimliği ve İzlenebilirlik',
       description:
@@ -498,7 +507,35 @@ class _CorporateHubPageState extends State<CorporateHubPage> {
                           .map(
                             (module) => SizedBox(
                               width: cardWidth,
-                              child: module.id == 'cases'
+                              child: module.id == 'odla'
+                                  ? Semantics(
+                                      button: true,
+                                      label:
+                                          'Orijinallik ve Laboratuvar '
+                                          'Doğrulama çalışma alanını aç',
+                                      child: GestureDetector(
+                                        key: const ValueKey(
+                                          'odla-workspace-action',
+                                        ),
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () =>
+                                            AppRouter.openOdlaWorkspace(
+                                              context,
+                                            ),
+                                        child: IgnorePointer(
+                                          child: _CorporateModuleCard(
+                                            module: module,
+                                            riskOperationsRouteOpener: widget
+                                                .riskOperationsRouteOpener,
+                                            customsSecurityRouteOpener: widget
+                                                .customsSecurityRouteOpener,
+                                            interventionLegalRouteOpener: widget
+                                                .interventionLegalRouteOpener,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : module.id == 'cases'
                                   ? Semantics(
                                       button: true,
                                       child: GestureDetector(

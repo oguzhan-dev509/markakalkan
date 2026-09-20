@@ -211,6 +211,14 @@ class HomeSolutionFamiliesSection extends StatelessWidget {
                 'QR veya ürün koduyla ürünün kimliğini ve doğrulama kaydını inceleyin.',
             destination: _Destination.productVerification,
           ),
+          _ModuleData(
+            icon: Icons.biotech_outlined,
+            title: 'Orijinallik ve Laboratuvar Doğrulama',
+            description:
+                'Ürün ve vaka doğrulamalarını, laboratuvar incelemelerini ve '
+                'delil zincirini güvenli ODLA çalışma alanında yönetin.',
+            destination: _Destination.odla,
+          ),
         ],
       ),
     ];
@@ -462,6 +470,8 @@ class _ModuleTileState extends State<_ModuleTile> {
         return;
       case _Destination.productVerification:
         return AppRouter.openProductVerification(context);
+      case _Destination.odla:
+        return AppRouter.openOdlaWorkspace(context);
     }
   }
 
@@ -579,6 +589,7 @@ enum _Destination {
   productionBatches,
   productCodes,
   productVerification,
+  odla,
 }
 
 class _FamilyData {
