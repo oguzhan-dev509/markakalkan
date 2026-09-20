@@ -272,7 +272,7 @@ match /brands/{brandUid}/digitalDetectiveTasks/{taskId} {
   allow read: if request.auth != null
       && request.auth.uid == brandUid;
 
-  allow create: if request.auth != null
+  allow create: if false
       && request.auth.uid == brandUid
       && request.resource.data.keys().hasAll([
         'taskName',
@@ -392,6 +392,11 @@ match /brands/{brandUid}/digitalDetectiveTasks/{taskId} {
     // Bulgular yalnız güvenilir sunucu servisleriyle yazılır.
     allow create, update, delete: if false;
   }
+}
+
+match /brands/{brandUid}/_digitalDetectiveTaskCreateReceipts/{receiptId} {
+  // Idempotency receipt documents are server-only.
+  allow read, create, update, delete: if false;
 }
 
 match /brands/{brandUid}/aiFieldOperations/{operationId} {

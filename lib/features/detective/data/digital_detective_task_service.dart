@@ -1,15 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class DigitalDetectiveTaskService {
   DigitalDetectiveTaskService({
     FirebaseFirestore? firestore,
     FirebaseAuth? firebaseAuth,
+    FirebaseFunctions? functions,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
+       _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+       _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'europe-west3');
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _firebaseAuth;
+  final FirebaseFunctions _functions;
 
   User get _currentUser {
     final user = _firebaseAuth.currentUser;
@@ -81,36 +86,44 @@ class DigitalDetectiveTaskService {
     required DateTime endDate,
   }) async {
     final user = _currentUser;
-    final document = _tasksCollection.doc();
+    final submissionId =
+        '${DateTime.now().toUtc().microsecondsSinceEpoch}-'
+        '${user.uid.hashCode}-${identityHashCode(Object())}';
 
-    await document.set({
-      'taskName': taskName.trim(),
-      'brandName': brandName.trim(),
-      'productName': productName.trim(),
-      'categoryId': categoryId,
-      'subcategory': subcategory?.trim(),
-      'violationIds': violationIds,
-      'sources': sources,
-      'searchTerms': searchTerms,
-      'excludedTerms': excludedTerms,
-      'countries': countries,
-      'cities': cities,
-      'minimumPrice': minimumPrice,
-      'maximumPrice': maximumPrice,
-      'currency': currency,
-      'frequency': frequency,
-      'riskLevel': riskLevel,
-      'startDate': Timestamp.fromDate(startDate),
-      'endDate': Timestamp.fromDate(endDate),
-      'status': 'queued',
-      'ownerUid': user.uid,
-      'ownerEmail': user.email?.trim().toLowerCase(),
-      'resultCount': 0,
-      'processedCount': 0,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final result = await _functions
+        .httpsCallable('createDigitalDetectiveTask')
+        .call<dynamic>(<String, dynamic>{
+          'taskName': taskName.trim(),
+          'brandName': brandName.trim(),
+          'productName': productName.trim(),
+          'categoryId': categoryId,
+          'subcategory': subcategory?.trim(),
+          'violationIds': violationIds,
+          'sources': sources,
+          'searchTerms': searchTerms,
+          'excludedTerms': excludedTerms,
+          'countries': countries,
+          'cities': cities,
+          'minimumPrice': minimumPrice,
+          'maximumPrice': maximumPrice,
+          'currency': currency,
+          'frequency': frequency,
+          'riskLevel': riskLevel,
+          'startDate': startDate.toUtc().toIso8601String(),
+          'endDate': endDate.toUtc().toIso8601String(),
+          'submissionId': submissionId,
+        });
 
-    return document.id;
+    final data = result.data;
+    if (data is! Map) {
+      throw StateError('Dijital Dedektif görevi yanıtı geçersiz.');
+    }
+
+    final taskId = data['taskId']?.toString().trim() ?? '';
+    if (taskId.isEmpty) {
+      throw StateError('Dijital Dedektif görev numarası alınamadı.');
+    }
+
+    return taskId;
   }
 }
