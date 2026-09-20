@@ -41,6 +41,42 @@ void main() {
   });
 
   test(
+    'ODLA operational repository routes seven write callables exactly',
+    () async {
+      final names = <String>[];
+      final payloads = <Map<String, Object?>>[];
+      final repository = CallableOdlaWorkspaceRepository(
+        callable: (name, request) async {
+          names.add(name);
+          payloads.add(Map<String, Object?>.from(request));
+          return <String, Object?>{'ok': true};
+        },
+      );
+      const payload = <String, Object?>{'operationId': 'op-1'};
+
+      await repository.createVerificationCase(payload);
+      await repository.appendCustodyEvent(payload);
+      await repository.createTestRequest(payload);
+      await repository.recordTestResult(payload);
+      await repository.adjudicateFinding(payload);
+      await repository.openAppeal(payload);
+      await repository.resolveAppeal(payload);
+
+      expect(names, <String>[
+        odlaCreateVerificationCaseCallableName,
+        odlaAppendCustodyCallableName,
+        odlaCreateTestRequestCallableName,
+        odlaRecordTestResultCallableName,
+        odlaAdjudicateFindingCallableName,
+        odlaOpenAppealCallableName,
+        odlaResolveAppealCallableName,
+      ]);
+      expect(payloads, hasLength(7));
+      expect(payloads.every((item) => item['operationId'] == 'op-1'), isTrue);
+    },
+  );
+
+  test(
     'ODLA detail sends exact case scope and parses five typed domains',
     () async {
       Map<String, Object?>? captured;
@@ -96,7 +132,12 @@ void main() {
                 'resultSummaryCode': 'AUTHENTIC',
                 'custodyIntegrityVerified': true,
                 'referenceIntegrityVerified': true,
-                'reportSha256': 'abc',
+                'reportIntegrityContractVersion':
+                    odlaReportIntegrityContractVersion,
+                'reportArtifactRef': 'artifact:report-1',
+                'reportArtifactVersion': 2,
+                'reportSha256':
+                    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
               },
             ],
             'findings': <Object?>[
@@ -280,6 +321,54 @@ void main() {
       expect(detail.testResults.single.testResultId, 'r1');
       expect(detail.testResults.single.resultSummaryCode, 'AUTHENTIC');
       expect(detail.testResults.single.custodyIntegrityVerified, isTrue);
+      expect(
+        detail.testResults.single.reportIntegrityContractVersion,
+        odlaReportIntegrityContractVersion,
+      );
+      expect(detail.testResults.single.reportArtifactRef, 'artifact:report-1');
+      expect(detail.testResults.single.reportArtifactVersion, 2);
+      expect(
+        detail.testResults.single.reportIntegrityStatus,
+        'ARTIFACT_VERSION_BOUND',
+      );
+
+      const validHash =
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+      expect(
+        OdlaTestResult.fromMap(<String, Object?>{
+          'reportSha256': validHash,
+        }).reportIntegrityStatus,
+        'LEGACY_HASH_ONLY',
+      );
+      expect(
+        OdlaTestResult.fromMap(<String, Object?>{
+          'reportIntegrityContractVersion': odlaReportIntegrityContractVersion,
+          'reportSha256': validHash,
+        }).reportIntegrityStatus,
+        'HASH_RECORDED',
+      );
+      expect(
+        OdlaTestResult.fromMap(<String, Object?>{
+          'reportIntegrityContractVersion': odlaReportIntegrityContractVersion,
+          'reportArtifactRef': 'artifact:partial',
+          'reportSha256': validHash,
+        }).reportIntegrityStatus,
+        'ARTIFACT_BINDING_INCOMPLETE',
+      );
+      expect(
+        OdlaTestResult.fromMap(<String, Object?>{
+          'reportIntegrityContractVersion': 'future-contract-v2',
+          'reportSha256': validHash,
+        }).reportIntegrityStatus,
+        'UNKNOWN_CONTRACT',
+      );
+      expect(
+        OdlaTestResult.fromMap(<String, Object?>{
+          'reportIntegrityContractVersion': odlaReportIntegrityContractVersion,
+          'reportSha256': 'not-a-sha',
+        }).reportIntegrityStatus,
+        'HASH_FORMAT_INVALID',
+      );
 
       expect(detail.findings, hasLength(1));
       expect(detail.findings.single.findingId, 'f1');

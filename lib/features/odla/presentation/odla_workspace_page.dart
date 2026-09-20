@@ -2,6 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../data/odla_workspace_repository.dart';
 
+int _odlaClientSequence = 0;
+
+String _nextOdlaClientId(String prefix) {
+  final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+  final sequence = _odlaClientSequence++;
+  return '$prefix-$now-$sequence';
+}
+
+bool _hasAnyOdlaRole(List<String> roles, Set<String> allowed) =>
+    roles.any(allowed.contains);
+
+bool _canCreateOdlaCase(List<String> roles) => _hasAnyOdlaRole(roles, const {
+  'verified_rightsholder',
+  'authorized_representative',
+});
+
 class OdlaWorkspacePage extends StatefulWidget {
   const OdlaWorkspacePage({super.key, this.repository});
 
@@ -28,12 +44,96 @@ class _OdlaWorkspacePageState extends State<OdlaWorkspacePage> {
     });
   }
 
-  Future<void> _openCase(OdlaCaseSummary summary) async {
+  Future<void> _createCase(OdlaDiscoverySnapshot discovery) async {
+    final repository = _repository;
+
+    if (repository is! OdlaWorkspaceOperations ||
+        !_canCreateOdlaCase(discovery.roles)) {
+      return;
+    }
+
+    final request = await _showOdlaOperationDialog(
+      context,
+
+      title: 'Yeni doğrulama vakası',
+
+      description:
+          'Vaka sunucuda yetki, marka kapsamı ve doğrulama profili ile '
+          'yeniden doğrulanır.',
+
+      fields: <_OdlaFieldSpec>[
+        _OdlaFieldSpec(
+          keyName: 'brandUid',
+
+          label: 'Marka kimliği',
+
+          initialValue: discovery.brandUids.isEmpty
+              ? ''
+              : discovery.brandUids.first,
+        ),
+
+        const _OdlaFieldSpec(
+          keyName: 'profileId',
+
+          label: 'Doğrulama profili kimliği',
+        ),
+
+        const _OdlaFieldSpec(
+          keyName: 'countryCode',
+
+          label: 'Ülke kodu',
+
+          initialValue: 'TR',
+        ),
+      ],
+
+      buildRequest: (values, toggles) => <String, Object?>{
+        'operationId': _nextOdlaClientId('case-op'),
+
+        'caseId': _nextOdlaClientId('case'),
+
+        'tenantId': discovery.tenantId,
+
+        'brandUid': values['brandUid']!,
+
+        'profileId': values['profileId']!,
+
+        'countryCode': values['countryCode']!.toUpperCase(),
+      },
+    );
+
+    if (request == null) return;
+
+    try {
+      final operations = repository as OdlaWorkspaceOperations;
+
+      await operations.createVerificationCase(request);
+
+      if (!mounted) return;
+
+      _refresh();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Doğrulama vakası oluşturuldu.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_safeErrorMessage(error))));
+    }
+  }
+
+  Future<void> _openCase(OdlaCaseSummary summary, List<String> roles) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/odla/workspace-detail'),
-        builder: (_) =>
-            _OdlaWorkspaceDetailPage(repository: _repository, summary: summary),
+        builder: (_) => _OdlaWorkspaceDetailPage(
+          repository: _repository,
+          summary: summary,
+          roles: roles,
+        ),
       ),
     );
   }
@@ -89,13 +189,27 @@ class _OdlaWorkspacePageState extends State<OdlaWorkspacePage> {
                     _WorkspaceHero(discovery: discovery),
                     const SizedBox(height: 20),
                     _DiscoveryStats(discovery: discovery),
+                    if (_canCreateOdlaCase(discovery.roles) &&
+                        _repository is OdlaWorkspaceOperations) ...[
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilledButton.icon(
+                          key: const ValueKey('odla-create-case-action'),
+                          onPressed: () => _createCase(discovery),
+                          icon: const Icon(Icons.add_task_outlined),
+                          label: const Text('Yeni doğrulama vakası'),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     if (discovery.cases.isEmpty)
                       _RichEmptyState(roles: discovery.roles)
                     else
                       _CaseCollection(
                         cases: discovery.cases,
-                        onOpen: _openCase,
+                        onOpen: (summary) =>
+                            _openCase(summary, discovery.roles),
                       ),
                   ],
                 ),
@@ -616,10 +730,12 @@ class _OdlaWorkspaceDetailPage extends StatefulWidget {
   const _OdlaWorkspaceDetailPage({
     required this.repository,
     required this.summary,
+    required this.roles,
   });
 
   final OdlaWorkspaceRepository repository;
   final OdlaCaseSummary summary;
+  final List<String> roles;
 
   @override
   State<_OdlaWorkspaceDetailPage> createState() =>
@@ -693,7 +809,22 @@ class _OdlaWorkspaceDetailPageState extends State<_OdlaWorkspaceDetailPage> {
                     const SizedBox(height: 16),
                     _OperationalCounters(detail: detail),
                     const SizedBox(height: 16),
-                    const _ReadOnlyNotice(),
+                    _OperationalNotice(
+                      operationsEnabled:
+                          widget.repository is OdlaWorkspaceOperations,
+                    ),
+                    const SizedBox(height: 12),
+                    _OdlaRoleContextCard(roles: widget.roles),
+                    const SizedBox(height: 12),
+                    _OdlaActionPanel(
+                      repository: widget.repository,
+                      summary: widget.summary,
+                      roles: widget.roles,
+                      detail: detail,
+                      onChanged: _retry,
+                    ),
+                    const SizedBox(height: 12),
+                    const _ServerManagedControlsNotice(),
                     const SizedBox(height: 16),
                     _OperationalWorkspace(detail: detail),
                   ],
@@ -825,30 +956,889 @@ class _OperationalCounters extends StatelessWidget {
   }
 }
 
-class _ReadOnlyNotice extends StatelessWidget {
-  const _ReadOnlyNotice();
+class _OdlaRoleContextCard extends StatelessWidget {
+  const _OdlaRoleContextCard({required this.roles});
+
+  final List<String> roles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const ValueKey('odla-detail-role-context'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Yetki kapsamı',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            if (roles.isEmpty)
+              const Text('Görüntülenebilir rol bilgisi yok.')
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: roles
+                    .map((role) => Chip(label: Text(_roleLabel(role))))
+                    .toList(growable: false),
+              ),
+            const SizedBox(height: 8),
+            const Text(
+              'Çalışma alanı erişimi: read_workspace — sunucu tarafından doğrulanır.',
+              key: ValueKey('odla-detail-read-workspace-access'),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Bu görünür rol ve erişim bağlamı yalnız kullanıcıya açıklama sağlar; '
+              'işlem yetkisi sunucu callable katmanında yeniden doğrulanır.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OdlaActionPanel extends StatefulWidget {
+  const _OdlaActionPanel({
+    required this.repository,
+    required this.summary,
+    required this.roles,
+    required this.detail,
+    required this.onChanged,
+  });
+
+  final OdlaWorkspaceRepository repository;
+  final OdlaCaseSummary summary;
+  final List<String> roles;
+  final OdlaWorkspaceDetail detail;
+  final VoidCallback onChanged;
+
+  @override
+  State<_OdlaActionPanel> createState() => _OdlaActionPanelState();
+}
+
+class _OdlaActionPanelState extends State<_OdlaActionPanel> {
+  bool _busy = false;
+
+  OdlaWorkspaceOperations? get _operations {
+    final repository = widget.repository;
+    if (repository is! OdlaWorkspaceOperations) return null;
+    return repository as OdlaWorkspaceOperations;
+  }
+
+  bool _can(Set<String> allowed) =>
+      _operations != null && _hasAnyOdlaRole(widget.roles, allowed);
+
+  String _latestTestRequestId() {
+    for (final item in widget.detail.testRequests.reversed) {
+      final value = item.testRequestId;
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  String _latestFindingId() {
+    for (final item in widget.detail.findings.reversed) {
+      final value = item.findingId;
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  String _latestAppealId() {
+    for (final item in widget.detail.appeals.reversed) {
+      final value = item.appealId;
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  Map<String, Object?> _scope(String operationPrefix) => <String, Object?>{
+    'operationId': _nextOdlaClientId(operationPrefix),
+    'tenantId': widget.summary.tenantId,
+    'brandUid': widget.summary.brandUid,
+    'caseId': widget.summary.caseId,
+  };
+
+  Map<String, Object?> _findingInputs(String choice) {
+    return switch (choice) {
+      'INTEGRITY_CONFLICT' => <String, Object?>{'integrityConflict': true},
+      'QUALITY_NONCONFORMING' => <String, Object?>{
+        'qualityNonconforming': true,
+      },
+      'AUTHORITY_CONFIRMED' => <String, Object?>{'authorityConfirmed': true},
+      'RIGHTSHOLDER_CONFIRMED' => <String, Object?>{
+        'rightsholderConfirmed': true,
+      },
+      'AUTHENTICITY_CONSISTENT' => <String, Object?>{
+        'authenticityConsistent': true,
+      },
+      'AUTHENTICITY_INCONSISTENT' => <String, Object?>{
+        'authenticityInconsistent': true,
+      },
+      _ => <String, Object?>{},
+    };
+  }
+
+  Future<void> _execute(
+    Future<Object?> Function(OdlaWorkspaceOperations operations) action,
+    String successMessage,
+  ) async {
+    final operations = _operations;
+    if (operations == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await action(operations);
+      if (!mounted) return;
+      widget.onChanged();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(successMessage)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_safeErrorMessage(error))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _appendCustody() async {
+    final request = await _showOdlaOperationDialog(
+      context,
+      title: 'Delil zinciri olayı ekle',
+      description:
+          'Numune hareketi append-only olarak kaydedilir. Önceki olay bağı '
+          'sunucuda doğrulanır.',
+      fields: const <_OdlaFieldSpec>[
+        _OdlaFieldSpec(keyName: 'sampleId', label: 'Numune kimliği'),
+        _OdlaFieldSpec(
+          keyName: 'eventSequence',
+          label: 'Olay sıra numarası',
+          integer: true,
+        ),
+        _OdlaFieldSpec(
+          keyName: 'eventType',
+          label: 'Olay tipi',
+          initialValue: 'sample_received',
+        ),
+        _OdlaFieldSpec(
+          keyName: 'actorType',
+          label: 'Aktör tipi',
+          initialValue: 'operator',
+        ),
+        _OdlaFieldSpec(
+          keyName: 'locationCode',
+          label: 'Konum kodu',
+          initialValue: 'TR',
+        ),
+        _OdlaFieldSpec(
+          keyName: 'sealId',
+          label: 'Mühür kimliği',
+          required: false,
+        ),
+        _OdlaFieldSpec(
+          keyName: 'evidenceRefs',
+          label: 'Delil referansları (virgülle)',
+          required: false,
+        ),
+      ],
+      toggles: const <_OdlaToggleSpec>[
+        _OdlaToggleSpec(
+          keyName: 'transportEvidenceRequired',
+          label: 'Taşıma delili zorunlu',
+        ),
+      ],
+      buildRequest: (values, toggles) {
+        final now = DateTime.now().toUtc().toIso8601String();
+        final evidence = (values['evidenceRefs'] ?? '')
+            .split(',')
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false);
+        return <String, Object?>{
+          ..._scope('custody-op'),
+          'sampleId': values['sampleId']!,
+          'eventSequence': int.parse(values['eventSequence']!),
+          'eventType': values['eventType']!,
+          'occurredAt': now,
+          'recordedAt': now,
+          'actorType': values['actorType']!,
+          'locationCode': values['locationCode']!,
+          if ((values['sealId'] ?? '').isNotEmpty) 'sealId': values['sealId'],
+          'evidenceRefs': evidence,
+          'transportEvidenceRequired':
+              toggles['transportEvidenceRequired'] ?? false,
+        };
+      },
+    );
+    if (request == null) return;
+    await _execute(
+      (operations) => operations.appendCustodyEvent(request),
+      'Delil zinciri olayı kaydedildi.',
+    );
+  }
+
+  Future<void> _createTestRequest() async {
+    final request = await _showOdlaOperationDialog(
+      context,
+      title: 'Laboratuvar testi talep et',
+      description:
+          'Laboratuvar, yöntem, kapsam ve vaka profili sunucuda yeniden '
+          'doğrulanır.',
+      fields: const <_OdlaFieldSpec>[
+        _OdlaFieldSpec(keyName: 'sampleId', label: 'Numune kimliği'),
+        _OdlaFieldSpec(keyName: 'laboratoryId', label: 'Laboratuvar kimliği'),
+        _OdlaFieldSpec(keyName: 'testQuestionCode', label: 'Test sorusu kodu'),
+        _OdlaFieldSpec(keyName: 'methodCode', label: 'Yöntem kodu'),
+        _OdlaFieldSpec(
+          keyName: 'appealId',
+          label: 'İtiraz kimliği (varsa)',
+          required: false,
+        ),
+      ],
+      toggles: const <_OdlaToggleSpec>[
+        _OdlaToggleSpec(
+          keyName: 'requireChainOfCustody',
+          label: 'Delil zinciri zorunlu',
+          initialValue: true,
+        ),
+      ],
+      buildRequest: (values, toggles) => <String, Object?>{
+        ..._scope('test-request-op'),
+        'testRequestId': _nextOdlaClientId('test-request'),
+        'sampleId': values['sampleId']!,
+        'laboratoryId': values['laboratoryId']!,
+        'testQuestionCode': values['testQuestionCode']!,
+        'methodCode': values['methodCode']!,
+        'requireChainOfCustody': toggles['requireChainOfCustody'] ?? true,
+        if ((values['appealId'] ?? '').isNotEmpty)
+          'appealId': values['appealId'],
+      },
+    );
+    if (request == null) return;
+    await _execute(
+      (operations) => operations.createTestRequest(request),
+      'Laboratuvar test talebi oluşturuldu.',
+    );
+  }
+
+  Future<void> _recordResult() async {
+    final request = await _showOdlaOperationDialog(
+      context,
+      title: 'Laboratuvar sonucunu kaydet',
+      description:
+          'Sonuç yalnız atanmış ve güncel ACTIVE + VERIFIED akreditasyona '
+          'sahip laboratuvar için kabul edilir.',
+      fields: <_OdlaFieldSpec>[
+        _OdlaFieldSpec(
+          keyName: 'testRequestId',
+          label: 'Test talebi kimliği',
+          initialValue: _latestTestRequestId(),
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'laboratoryReportId',
+          label: 'Laboratuvar rapor kimliği',
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'reportSha256',
+          label: 'Rapor SHA-256',
+          sha256: true,
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'resultCode',
+          label: 'Sonuç kodu',
+          initialValue: 'CONSISTENT',
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'reportArtifactRef',
+          label: 'Rapor artefakt referansı (varsa)',
+          required: false,
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'reportArtifactVersion',
+          label: 'Artefakt sürümü (varsa)',
+          required: false,
+          integer: true,
+        ),
+      ],
+      buildRequest: (values, toggles) {
+        final artifactRef = values['reportArtifactRef'] ?? '';
+        final artifactVersion = values['reportArtifactVersion'] ?? '';
+        if (artifactRef.isEmpty != artifactVersion.isEmpty) {
+          throw const FormatException(
+            'Artefakt referansı ve sürümü birlikte girilmelidir.',
+          );
+        }
+        return <String, Object?>{
+          ..._scope('test-result-op'),
+          'testRequestId': values['testRequestId']!,
+          'testResultId': _nextOdlaClientId('test-result'),
+          'laboratoryReportId': values['laboratoryReportId']!,
+          'reportSha256': values['reportSha256']!.toLowerCase(),
+          'resultCode': values['resultCode']!,
+          if (artifactRef.isNotEmpty) 'reportArtifactRef': artifactRef,
+          if (artifactVersion.isNotEmpty)
+            'reportArtifactVersion': int.parse(artifactVersion),
+        };
+      },
+    );
+    if (request == null) return;
+    await _execute(
+      (operations) => operations.recordTestResult(request),
+      'Laboratuvar sonucu kaydedildi.',
+    );
+  }
+
+  Future<void> _adjudicate() async {
+    final request = await _showOdlaOperationDialog(
+      context,
+      title: 'Bulgu oluştur / değerlendir',
+      description:
+          'Bulgu append-only sürüm olarak yazılır; nihaiyet ve delil '
+          'eşikleri sunucuda fail-closed uygulanır.',
+      fields: <_OdlaFieldSpec>[
+        const _OdlaFieldSpec(
+          keyName: 'findingId',
+          label: 'Bulgu kimliği',
+          initialValue: '',
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'findingVersion',
+          label: 'Bulgu sürümü',
+          initialValue: '1',
+          integer: true,
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'findingChoice',
+          label: 'Bulgu girdisi',
+          initialValue: 'INCONCLUSIVE',
+          choices: <String>[
+            'INCONCLUSIVE',
+            'AUTHENTICITY_CONSISTENT',
+            'AUTHENTICITY_INCONSISTENT',
+            'QUALITY_NONCONFORMING',
+            'RIGHTSHOLDER_CONFIRMED',
+            'AUTHORITY_CONFIRMED',
+            'INTEGRITY_CONFLICT',
+          ],
+        ),
+        _OdlaFieldSpec(
+          keyName: 'primaryTestRequestId',
+          label: 'Birincil test talebi (varsa)',
+          initialValue: _latestTestRequestId(),
+          required: false,
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'supersedesFindingId',
+          label: 'Yerine geçtiği bulgu (sürüm > 1 ise)',
+          required: false,
+        ),
+      ],
+      buildRequest: (values, toggles) {
+        final findingId = (values['findingId'] ?? '').isEmpty
+            ? _nextOdlaClientId('finding')
+            : values['findingId']!;
+        return <String, Object?>{
+          ..._scope('finding-op'),
+          'findingId': findingId,
+          'findingVersion': int.parse(values['findingVersion']!),
+          'findingInputs': _findingInputs(values['findingChoice']!),
+          if ((values['primaryTestRequestId'] ?? '').isNotEmpty)
+            'primaryTestRequestId': values['primaryTestRequestId'],
+          if ((values['supersedesFindingId'] ?? '').isNotEmpty)
+            'supersedesFindingId': values['supersedesFindingId'],
+        };
+      },
+    );
+    if (request == null) return;
+    await _execute(
+      (operations) => operations.adjudicateFinding(request),
+      'Bulgu değerlendirmesi kaydedildi.',
+    );
+  }
+
+  Future<void> _openAppeal() async {
+    final request = await _showOdlaOperationDialog(
+      context,
+      title: 'İtiraz aç',
+      description:
+          'Yalnız maddi itiraz gerekçeleri kabul edilir. İkinci laboratuvar '
+          'bağımsızlığı sunucuda uygulanır.',
+      fields: <_OdlaFieldSpec>[
+        _OdlaFieldSpec(
+          keyName: 'challengedFindingId',
+          label: 'İtiraz edilen bulgu',
+          initialValue: _latestFindingId(),
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'groundCode',
+          label: 'İtiraz gerekçesi',
+          initialValue: 'request_second_independent_lab',
+          choices: <String>[
+            'sample_identity_dispute',
+            'custody_integrity_dispute',
+            'laboratory_method_or_scope_dispute',
+            'new_material_provenance_evidence',
+            'conflicting_rightsholder_authentication',
+            'request_second_independent_lab',
+          ],
+        ),
+      ],
+      buildRequest: (values, toggles) => <String, Object?>{
+        ..._scope('appeal-open-op'),
+        'appealId': _nextOdlaClientId('appeal'),
+        'challengedFindingId': values['challengedFindingId']!,
+        'groundCode': values['groundCode']!,
+      },
+    );
+    if (request == null) return;
+    await _execute(
+      (operations) => operations.openAppeal(request),
+      'İtiraz açıldı.',
+    );
+  }
+
+  Future<void> _resolveAppeal() async {
+    final request = await _showOdlaOperationDialog(
+      context,
+      title: 'İtirazı sonuçlandır',
+      description:
+          'İtiraz kaydı, ikinci test ve laboratuvar bağı sunucudan okunur; '
+          'istemci laboratuvar kimliği dayatamaz.',
+      fields: <_OdlaFieldSpec>[
+        _OdlaFieldSpec(
+          keyName: 'appealId',
+          label: 'İtiraz kimliği',
+          initialValue: _latestAppealId(),
+        ),
+        const _OdlaFieldSpec(
+          keyName: 'findingChoice',
+          label: 'Çözüm bulgu girdisi',
+          initialValue: 'INCONCLUSIVE',
+          choices: <String>[
+            'INCONCLUSIVE',
+            'AUTHENTICITY_CONSISTENT',
+            'AUTHENTICITY_INCONSISTENT',
+            'QUALITY_NONCONFORMING',
+            'RIGHTSHOLDER_CONFIRMED',
+            'AUTHORITY_CONFIRMED',
+            'INTEGRITY_CONFLICT',
+          ],
+        ),
+      ],
+      toggles: const <_OdlaToggleSpec>[
+        _OdlaToggleSpec(
+          keyName: 'conflictingLaboratoryResults',
+          label: 'Laboratuvar sonuçları çelişkili',
+        ),
+      ],
+      buildRequest: (values, toggles) => <String, Object?>{
+        ..._scope('appeal-resolve-op'),
+        'appealId': values['appealId']!,
+        'conflictingLaboratoryResults':
+            toggles['conflictingLaboratoryResults'] ?? false,
+        'findingInputs': _findingInputs(values['findingChoice']!),
+      },
+    );
+    if (request == null) return;
+    await _execute(
+      (operations) => operations.resolveAppeal(request),
+      'İtiraz çözümü kaydedildi.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final buttons = <Widget>[
+      if (_can(const {
+        'verified_rightsholder',
+        'authorized_representative',
+        'assigned_laboratory',
+        'authorized_operator',
+      }))
+        OutlinedButton.icon(
+          key: const ValueKey('odla-append-custody-action'),
+          onPressed: _busy ? null : _appendCustody,
+          icon: const Icon(Icons.link_outlined),
+          label: const Text('Delil zinciri olayı'),
+        ),
+      if (_can(const {
+        'verified_rightsholder',
+        'authorized_representative',
+        'authorized_reviewer',
+      }))
+        OutlinedButton.icon(
+          key: const ValueKey('odla-create-test-request-action'),
+          onPressed: _busy ? null : _createTestRequest,
+          icon: const Icon(Icons.science_outlined),
+          label: const Text('Test talebi'),
+        ),
+      if (_can(const {'assigned_laboratory'}))
+        OutlinedButton.icon(
+          key: const ValueKey('odla-record-test-result-action'),
+          onPressed: _busy ? null : _recordResult,
+          icon: const Icon(Icons.fact_check_outlined),
+          label: const Text('Test sonucu'),
+        ),
+      if (_can(const {'authorized_reviewer'}))
+        OutlinedButton.icon(
+          key: const ValueKey('odla-adjudicate-finding-action'),
+          onPressed: _busy ? null : _adjudicate,
+          icon: const Icon(Icons.gavel_outlined),
+          label: const Text('Bulgu değerlendir'),
+        ),
+      if (_can(const {'verified_rightsholder', 'authorized_representative'}))
+        OutlinedButton.icon(
+          key: const ValueKey('odla-open-appeal-action'),
+          onPressed: _busy ? null : _openAppeal,
+          icon: const Icon(Icons.rate_review_outlined),
+          label: const Text('İtiraz aç'),
+        ),
+      if (_can(const {'authorized_reviewer'}))
+        OutlinedButton.icon(
+          key: const ValueKey('odla-resolve-appeal-action'),
+          onPressed: _busy ? null : _resolveAppeal,
+          icon: const Icon(Icons.task_alt_outlined),
+          label: const Text('İtirazı sonuçlandır'),
+        ),
+    ];
+
+    if (buttons.isEmpty) return const SizedBox.shrink();
+    return Card(
+      key: const ValueKey('odla-operational-action-panel'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Yetkili operasyonlar',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Görünen düğmeler rol kapsamını yansıtır; son yetki kararı '
+              'App Check korumalı sunucu callable katmanındadır.',
+            ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: buttons),
+            if (_busy) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OdlaFieldSpec {
+  const _OdlaFieldSpec({
+    required this.keyName,
+    required this.label,
+    this.initialValue = '',
+    this.required = true,
+    this.integer = false,
+    this.sha256 = false,
+    this.choices = const <String>[],
+  });
+
+  final String keyName;
+  final String label;
+  final String initialValue;
+  final bool required;
+  final bool integer;
+  final bool sha256;
+  final List<String> choices;
+  final int maxLines = 1;
+}
+
+class _OdlaToggleSpec {
+  const _OdlaToggleSpec({
+    required this.keyName,
+    required this.label,
+    this.initialValue = false,
+  });
+
+  final String keyName;
+  final String label;
+  final bool initialValue;
+}
+
+typedef _OdlaRequestBuilder =
+    Map<String, Object?> Function(
+      Map<String, String> values,
+      Map<String, bool> toggles,
+    );
+
+Future<Map<String, Object?>?> _showOdlaOperationDialog(
+  BuildContext context, {
+  required String title,
+  required String description,
+  required List<_OdlaFieldSpec> fields,
+  List<_OdlaToggleSpec> toggles = const <_OdlaToggleSpec>[],
+  required _OdlaRequestBuilder buildRequest,
+}) {
+  return showDialog<Map<String, Object?>>(
+    context: context,
+    builder: (context) => _OdlaOperationDialog(
+      title: title,
+      description: description,
+      fields: fields,
+      toggles: toggles,
+      buildRequest: buildRequest,
+    ),
+  );
+}
+
+class _OdlaOperationDialog extends StatefulWidget {
+  const _OdlaOperationDialog({
+    required this.title,
+    required this.description,
+    required this.fields,
+    required this.toggles,
+    required this.buildRequest,
+  });
+
+  final String title;
+  final String description;
+  final List<_OdlaFieldSpec> fields;
+  final List<_OdlaToggleSpec> toggles;
+  final _OdlaRequestBuilder buildRequest;
+
+  @override
+  State<_OdlaOperationDialog> createState() => _OdlaOperationDialogState();
+}
+
+class _OdlaOperationDialogState extends State<_OdlaOperationDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final Map<String, TextEditingController> _controllers;
+  late final Map<String, String> _choices;
+  late final Map<String, bool> _toggles;
+  String? _formError;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = <String, TextEditingController>{
+      for (final field in widget.fields)
+        if (field.choices.isEmpty)
+          field.keyName: TextEditingController(text: field.initialValue),
+    };
+    _choices = <String, String>{
+      for (final field in widget.fields)
+        if (field.choices.isNotEmpty)
+          field.keyName: field.choices.contains(field.initialValue)
+              ? field.initialValue
+              : field.choices.first,
+    };
+    _toggles = <String, bool>{
+      for (final toggle in widget.toggles) toggle.keyName: toggle.initialValue,
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  String? _validate(_OdlaFieldSpec field, String? raw) {
+    final value = (raw ?? '').trim();
+    if (field.required && value.isEmpty) {
+      return '${field.label} zorunludur.';
+    }
+    if (value.isEmpty) return null;
+    if (field.integer) {
+      final number = int.tryParse(value);
+      if (number == null || number < 1) {
+        return '${field.label} pozitif tam sayı olmalıdır.';
+      }
+    }
+    if (field.sha256 && !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(value)) {
+      return '${field.label} 64 haneli SHA-256 olmalıdır.';
+    }
+    return null;
+  }
+
+  void _submit() {
+    setState(() => _formError = null);
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final values = <String, String>{};
+    for (final field in widget.fields) {
+      values[field.keyName] = field.choices.isEmpty
+          ? _controllers[field.keyName]!.text.trim()
+          : _choices[field.keyName]!;
+    }
+    try {
+      final request = widget.buildRequest(
+        Map<String, String>.unmodifiable(values),
+        Map<String, bool>.unmodifiable(_toggles),
+      );
+      Navigator.of(context).pop(request);
+    } on FormatException catch (error) {
+      setState(() => _formError = error.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.description),
+                const SizedBox(height: 16),
+                for (final field in widget.fields) ...[
+                  if (field.choices.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      initialValue: _choices[field.keyName],
+                      decoration: InputDecoration(labelText: field.label),
+                      items: field.choices
+                          .map(
+                            (choice) => DropdownMenuItem<String>(
+                              value: choice,
+                              child: Text(choice),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _choices[field.keyName] = value);
+                        }
+                      },
+                    )
+                  else
+                    TextFormField(
+                      controller: _controllers[field.keyName],
+                      decoration: InputDecoration(labelText: field.label),
+                      maxLines: field.maxLines,
+                      keyboardType: field.integer
+                          ? TextInputType.number
+                          : TextInputType.text,
+                      validator: (value) => _validate(field, value),
+                    ),
+                  const SizedBox(height: 10),
+                ],
+                for (final toggle in widget.toggles)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(toggle.label),
+                    value: _toggles[toggle.keyName] ?? false,
+                    onChanged: (value) =>
+                        setState(() => _toggles[toggle.keyName] = value),
+                  ),
+                if (_formError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _formError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Sunucuya gönder')),
+      ],
+    );
+  }
+}
+
+class _OperationalNotice extends StatelessWidget {
+  const _OperationalNotice({required this.operationsEnabled});
+
+  final bool operationsEnabled;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: const ValueKey('odla-server-mediated-notice'),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.visibility_outlined),
-          SizedBox(width: 12),
+          const Icon(Icons.security_outlined),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Bu çalışma alanı yalnız getOdlaVerificationWorkspace üzerinden '
-              'sunucunun yetkilendirdiği read_workspace görünümünü gösterir. '
-              'İstemci tarafında ODLA yazma işlemi veya doğrudan Firestore erişimi yoktur.',
+              operationsEnabled
+                  ? 'ODLA yazma işlemleri doğrudan Firestore üzerinden değil, '
+                        'App Check korumalı callable katmanı üzerinden yürütülür. '
+                        'Rol düğmeleri yalnız kullanılabilir işlemleri gösterir; '
+                        'sunucu yetkilendirmesi nihai karardır.'
+                  : 'Bu görünüm Salt okunur çalışıyor. Yazma yetkisi veya '
+                        'operasyon istemcisi bulunmadığında hiçbir istemci yazması '
+                        'yapılmaz.',
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ServerManagedControlsNotice extends StatelessWidget {
+  const _ServerManagedControlsNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const ValueKey('odla-server-managed-controls'),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sunucu tarafından yönetilen kontroller',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Muhbir güvenilirliği: otomatik cezalandırma oluşturmaz; '
+              'delil eşiği ve kötüye kullanım incelemesi sunucuda değerlendirilir.',
+            ),
+            SizedBox(height: 6),
+            Text(
+              'Finansman yetkilendirmesi: finansman kapsamı ve geçerlilik '
+              'sunucuda doğrulanır; bu ekranda doğrudan finansman veya escrow '
+              'yazması yapılmaz.',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1098,24 +2088,33 @@ class _OperationalWorkspace extends StatelessWidget {
                   if (result.reportedAt != null) result.reportedAt!,
                 ].join(' • '),
                 state: null,
-                rows: _displayRows(result.raw, const [
-                  'testResultId',
-                  'testRequestId',
-                  'sampleId',
-                  'laboratoryId',
-                  'laboratoryReportId',
-                  'methodCode',
-                  'resultCode',
-                  'resultSummaryCode',
-                  'measurementRefs',
-                  'reportArtifactRef',
-                  'reportSha256',
-                  'custodyIntegrityVerified',
-                  'referenceIntegrityVerified',
-                  'reportedAt',
-                  'receivedAt',
-                  'appendOnly',
-                ]),
+                rows: _displayRows(
+                  <String, Object?>{
+                    ...result.raw,
+                    'reportIntegrityStatus': result.reportIntegrityStatus,
+                  },
+                  const [
+                    'testResultId',
+                    'testRequestId',
+                    'sampleId',
+                    'laboratoryId',
+                    'laboratoryReportId',
+                    'reportIntegrityContractVersion',
+                    'methodCode',
+                    'resultCode',
+                    'resultSummaryCode',
+                    'measurementRefs',
+                    'reportArtifactRef',
+                    'reportArtifactVersion',
+                    'reportSha256',
+                    'reportIntegrityStatus',
+                    'custodyIntegrityVerified',
+                    'referenceIntegrityVerified',
+                    'reportedAt',
+                    'receivedAt',
+                    'appendOnly',
+                  ],
+                ),
               ),
             )
             .toList(growable: false),
@@ -1211,13 +2210,24 @@ class _OperationalWorkspace extends StatelessWidget {
         }
 
         final width = (constraints.maxWidth - 14) / 2;
-        return Wrap(
+        final hasUnpairedLastSection = sections.length.isOdd;
+        final pairedSections = hasUnpairedLastSection
+            ? sections.sublist(0, sections.length - 1)
+            : sections;
+        final pairedGrid = Wrap(
           spacing: 14,
           runSpacing: 14,
           crossAxisAlignment: WrapCrossAlignment.start,
-          children: sections
+          children: pairedSections
               .map((section) => SizedBox(width: width, child: section))
               .toList(growable: false),
+        );
+        if (!hasUnpairedLastSection) {
+          return pairedGrid;
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [pairedGrid, const SizedBox(height: 14), sections.last],
         );
       },
     );
@@ -1707,11 +2717,14 @@ String _fieldLabel(String key) {
     'updatedAt': 'Güncellenme',
     'testResultId': 'Test sonucu',
     'laboratoryReportId': 'Laboratuvar raporu',
+    'reportIntegrityContractVersion': 'Rapor bütünlük sözleşmesi',
     'resultCode': 'Sonuç kodu',
     'resultSummaryCode': 'Sonuç özeti',
     'measurementRefs': 'Ölçüm referansları',
     'reportArtifactRef': 'Rapor artefaktı',
+    'reportArtifactVersion': 'Rapor artefakt sürümü',
     'reportSha256': 'Rapor SHA-256',
+    'reportIntegrityStatus': 'Rapor bütünlük durumu',
     'custodyIntegrityVerified': 'Delil zinciri bütünlüğü',
     'referenceIntegrityVerified': 'Referans bütünlüğü',
     'reportedAt': 'Raporlama zamanı',

@@ -6,7 +6,16 @@ const String odlaCustodyIntegrityContextContractVersion =
     'odla-custody-integrity-context-v1';
 const String odlaLaboratoryRegistryContextContractVersion =
     'odla-workspace-laboratory-registry-context-v1';
+const String odlaReportIntegrityContractVersion = 'odla-report-integrity-v1';
 const String odlaWorkspaceCallableName = 'getOdlaVerificationWorkspace';
+const String odlaCreateVerificationCaseCallableName =
+    'createOdlaVerificationCase';
+const String odlaAppendCustodyCallableName = 'appendOdlaChainOfCustodyEvent';
+const String odlaCreateTestRequestCallableName = 'createOdlaTestRequest';
+const String odlaRecordTestResultCallableName = 'recordOdlaTestResult';
+const String odlaAdjudicateFindingCallableName = 'adjudicateOdlaFinding';
+const String odlaOpenAppealCallableName = 'openOdlaAppeal';
+const String odlaResolveAppealCallableName = 'resolveOdlaAppeal';
 
 typedef OdlaCallable =
     Future<Object?> Function(String name, Map<String, Object?> request);
@@ -16,7 +25,18 @@ abstract interface class OdlaWorkspaceRepository {
   Future<OdlaWorkspaceDetail> loadWorkspace(OdlaCaseSummary summary);
 }
 
-final class CallableOdlaWorkspaceRepository implements OdlaWorkspaceRepository {
+abstract interface class OdlaWorkspaceOperations {
+  Future<Object?> createVerificationCase(Map<String, Object?> request);
+  Future<Object?> appendCustodyEvent(Map<String, Object?> request);
+  Future<Object?> createTestRequest(Map<String, Object?> request);
+  Future<Object?> recordTestResult(Map<String, Object?> request);
+  Future<Object?> adjudicateFinding(Map<String, Object?> request);
+  Future<Object?> openAppeal(Map<String, Object?> request);
+  Future<Object?> resolveAppeal(Map<String, Object?> request);
+}
+
+final class CallableOdlaWorkspaceRepository
+    implements OdlaWorkspaceRepository, OdlaWorkspaceOperations {
   CallableOdlaWorkspaceRepository({
     FirebaseFunctions? functions,
     OdlaCallable? callable,
@@ -28,32 +48,61 @@ final class CallableOdlaWorkspaceRepository implements OdlaWorkspaceRepository {
   final FirebaseFunctions? _functions;
   final OdlaCallable? _callable;
 
-  Future<Object?> _call(Map<String, Object?> request) async {
+  Future<Object?> _call(String name, Map<String, Object?> request) async {
     final injected = _callable;
     if (injected != null) {
-      return injected(odlaWorkspaceCallableName, request);
+      return injected(name, request);
     }
-    final result = await _functions!
-        .httpsCallable(odlaWorkspaceCallableName)
-        .call(request);
+    final result = await _functions!.httpsCallable(name).call(request);
     return result.data;
   }
 
   @override
   Future<OdlaDiscoverySnapshot> loadDiscovery() async {
-    final raw = await _call(<String, Object?>{});
+    final raw = await _call(odlaWorkspaceCallableName, <String, Object?>{});
     return OdlaDiscoverySnapshot.fromMap(_requiredMap(raw, r'$'));
   }
 
   @override
   Future<OdlaWorkspaceDetail> loadWorkspace(OdlaCaseSummary summary) async {
-    final raw = await _call(<String, Object?>{
+    final raw = await _call(odlaWorkspaceCallableName, <String, Object?>{
       'caseId': summary.caseId,
       'tenantId': summary.tenantId,
       'brandUid': summary.brandUid,
     });
     return OdlaWorkspaceDetail.fromMap(_requiredMap(raw, r'$'));
   }
+
+  Future<Object?> _write(String name, Map<String, Object?> request) =>
+      _call(name, Map<String, Object?>.unmodifiable(request));
+
+  @override
+  Future<Object?> createVerificationCase(Map<String, Object?> request) =>
+      _write(odlaCreateVerificationCaseCallableName, request);
+
+  @override
+  Future<Object?> appendCustodyEvent(Map<String, Object?> request) =>
+      _write(odlaAppendCustodyCallableName, request);
+
+  @override
+  Future<Object?> createTestRequest(Map<String, Object?> request) =>
+      _write(odlaCreateTestRequestCallableName, request);
+
+  @override
+  Future<Object?> recordTestResult(Map<String, Object?> request) =>
+      _write(odlaRecordTestResultCallableName, request);
+
+  @override
+  Future<Object?> adjudicateFinding(Map<String, Object?> request) =>
+      _write(odlaAdjudicateFindingCallableName, request);
+
+  @override
+  Future<Object?> openAppeal(Map<String, Object?> request) =>
+      _write(odlaOpenAppealCallableName, request);
+
+  @override
+  Future<Object?> resolveAppeal(Map<String, Object?> request) =>
+      _write(odlaResolveAppealCallableName, request);
 }
 
 final class OdlaDiscoverySnapshot {
@@ -530,6 +579,10 @@ final class OdlaTestResult {
   String? get sampleId => _optionalString(raw['sampleId']);
   String? get laboratoryId => _optionalString(raw['laboratoryId']);
   String? get laboratoryReportId => _optionalString(raw['laboratoryReportId']);
+  String? get reportIntegrityContractVersion =>
+      _optionalString(raw['reportIntegrityContractVersion']);
+  String? get reportArtifactRef => _optionalString(raw['reportArtifactRef']);
+  int? get reportArtifactVersion => _optionalInt(raw['reportArtifactVersion']);
   String? get methodCode => _optionalString(raw['methodCode']);
   String? get resultCode => _optionalString(raw['resultCode']);
   String? get resultSummaryCode => _optionalString(raw['resultSummaryCode']);
@@ -540,6 +593,31 @@ final class OdlaTestResult {
   String? get reportedAt => _optionalScalarText(raw['reportedAt']);
   String? get receivedAt => _optionalScalarText(raw['receivedAt']);
   String? get reportSha256 => _optionalString(raw['reportSha256']);
+
+  String get reportIntegrityStatus {
+    final hash = reportSha256;
+    if (hash == null || !RegExp(r'^[a-f0-9]{64}$').hasMatch(hash)) {
+      return 'HASH_FORMAT_INVALID';
+    }
+
+    final artifactRef = reportArtifactRef;
+    final artifactVersion = reportArtifactVersion;
+    final hasArtifactRef = artifactRef != null;
+    final hasArtifactVersion = artifactVersion != null;
+    if (hasArtifactRef != hasArtifactVersion ||
+        (artifactVersion != null && artifactVersion < 1)) {
+      return 'ARTIFACT_BINDING_INCOMPLETE';
+    }
+
+    final contractVersion = reportIntegrityContractVersion;
+    if (contractVersion == null) {
+      return hasArtifactRef ? 'UNKNOWN_CONTRACT' : 'LEGACY_HASH_ONLY';
+    }
+    if (contractVersion != odlaReportIntegrityContractVersion) {
+      return 'UNKNOWN_CONTRACT';
+    }
+    return hasArtifactRef ? 'ARTIFACT_VERSION_BOUND' : 'HASH_RECORDED';
+  }
 }
 
 final class OdlaFinding {

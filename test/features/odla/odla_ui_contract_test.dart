@@ -5,8 +5,71 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:markakalkan/features/odla/data/odla_workspace_repository.dart';
 import 'package:markakalkan/features/odla/presentation/odla_workspace_page.dart';
 
+void _expectOdlaOperationalServerMediatedSurface() {
+  final repository = File(
+    'lib/features/odla/data/odla_workspace_repository.dart',
+  ).readAsStringSync();
+  final page = File(
+    'lib/features/odla/presentation/odla_workspace_page.dart',
+  ).readAsStringSync();
+
+  for (final callable in <String>[
+    'getOdlaVerificationWorkspace',
+    'createOdlaVerificationCase',
+    'appendOdlaChainOfCustodyEvent',
+    'createOdlaTestRequest',
+    'recordOdlaTestResult',
+    'adjudicateOdlaFinding',
+    'openOdlaAppeal',
+    'resolveOdlaAppeal',
+  ]) {
+    expect(repository, contains(callable));
+  }
+
+  for (final marker in <String>[
+    'OdlaWorkspaceOperations',
+    'createVerificationCase',
+    'appendCustodyEvent',
+    'createTestRequest',
+    'recordTestResult',
+    'adjudicateFinding',
+    'openAppeal',
+    'resolveAppeal',
+  ]) {
+    expect(repository, contains(marker));
+  }
+
+  for (final key in <String>[
+    'odla-create-case-action',
+    'odla-operational-action-panel',
+    'odla-append-custody-action',
+    'odla-create-test-request-action',
+    'odla-record-test-result-action',
+    'odla-adjudicate-finding-action',
+    'odla-open-appeal-action',
+    'odla-resolve-appeal-action',
+    'odla-server-managed-controls',
+  ]) {
+    expect(page, contains(key));
+  }
+
+  expect(page, contains('Muhbir güvenilirliği'));
+  expect(page, contains('Finansman yetkilendirmesi'));
+  expect(page, contains('sunucu yetkilendirmesi nihai karardır'));
+  expect(page, contains('App Check korumalı callable'));
+  expect(page, contains('Salt okunur'));
+
+  expect(repository, isNot(contains("package:cloud_firestore")));
+  expect(page, isNot(contains("package:cloud_firestore")));
+  expect(repository, isNot(contains('FirebaseFirestore')));
+  expect(page, isNot(contains('FirebaseFirestore')));
+}
+
 void main() {
-  test('ODLA UI remains routed and strictly read-only', () {
+  test('ODLA server-mediated operational surface is complete', () {
+    _expectOdlaOperationalServerMediatedSurface();
+  });
+  test('ODLA UI remains routed and server-mediated', () {
     final hub = File(
       'lib/features/dashboard/presentation/corporate_hub_page.dart',
     ).readAsStringSync();
@@ -23,11 +86,8 @@ void main() {
     expect(router, contains('openOdlaWorkspace'));
     expect(router, contains("RouteSettings(name: '/odla')"));
 
-    expect(repository, contains('getOdlaVerificationWorkspace'));
-    expect(repository, isNot(contains('cloud_firestore')));
-    expect(page, isNot(contains('cloud_firestore')));
-
-    const forbidden = <String>[
+    for (final callable in <String>[
+      'getOdlaVerificationWorkspace',
       'createOdlaVerificationCase',
       'appendOdlaChainOfCustodyEvent',
       'createOdlaTestRequest',
@@ -35,15 +95,34 @@ void main() {
       'adjudicateOdlaFinding',
       'openOdlaAppeal',
       'resolveOdlaAppeal',
-    ];
-    for (final name in forbidden) {
-      expect(page, isNot(contains(name)), reason: '$name UI içinde olmamalı');
+    ]) {
       expect(
         repository,
-        isNot(contains(name)),
-        reason: '$name repository içinde olmamalı',
+        contains(callable),
+        reason: '$callable repository server-mediated routing içinde olmalı',
       );
     }
+
+    for (final forbidden in <String>[
+      'createOdlaVerificationCase',
+      'appendOdlaChainOfCustodyEvent',
+      'createOdlaTestRequest',
+      'recordOdlaTestResult',
+      'adjudicateOdlaFinding',
+      'openOdlaAppeal',
+      'resolveOdlaAppeal',
+    ]) {
+      expect(
+        page,
+        isNot(contains("'$forbidden'")),
+        reason: '$forbidden page içinde ham callable adı olarak bulunmamalı',
+      );
+    }
+
+    expect(repository, isNot(contains("package:cloud_firestore")));
+    expect(page, isNot(contains("package:cloud_firestore")));
+    expect(repository, isNot(contains('FirebaseFirestore')));
+    expect(page, isNot(contains('FirebaseFirestore')));
   });
 
   test(
@@ -191,6 +270,43 @@ void main() {
 
       expect(repository.workspaceCalls, 1);
       expect(find.text('Vaka Operasyon Görünümü'), findsOneWidget);
+      // R16: top counter cards are asserted before lazy-detail scrolling.
+      for (final label in <String>[
+        'Delil zinciri',
+        'Test talebi',
+        'Test sonucu',
+        'Bulgu',
+        'İtiraz',
+      ]) {
+        final labelFinder = find.text(label);
+        expect(labelFinder, findsOneWidget);
+        final counterCard = find.ancestor(
+          of: labelFinder,
+          matching: find.byType(Card),
+        );
+        expect(counterCard, findsOneWidget);
+        expect(
+          find.descendant(of: counterCard, matching: find.text('1')),
+          findsOneWidget,
+          reason: '$label sayacı 1 olmalı',
+        );
+      }
+
+      final roleContextFinder = find.byKey(
+        const ValueKey('odla-detail-role-context'),
+      );
+      expect(roleContextFinder, findsOneWidget);
+      expect(find.textContaining('read_workspace'), findsOneWidget);
+      final detailScrollable = find
+          .ancestor(of: roleContextFinder, matching: find.byType(Scrollable))
+          .first;
+      expect(detailScrollable, findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Delil Zinciri'),
+        240,
+        scrollable: detailScrollable,
+      );
+      await tester.pumpAndSettle();
 
       for (final title in <String>[
         'Delil Zinciri',
@@ -219,27 +335,6 @@ void main() {
         );
       }
 
-      for (final label in <String>[
-        'Delil zinciri',
-        'Test talebi',
-        'Test sonucu',
-        'Bulgu',
-        'İtiraz',
-      ]) {
-        final labelFinder = find.text(label);
-        expect(labelFinder, findsOneWidget);
-        final counterCard = find.ancestor(
-          of: labelFinder,
-          matching: find.byType(Card),
-        );
-        expect(counterCard, findsOneWidget);
-        expect(
-          find.descendant(of: counterCard, matching: find.text('1')),
-          findsOneWidget,
-          reason: '$label sayacı 1 olmalı',
-        );
-      }
-      expect(find.textContaining('read_workspace'), findsOneWidget);
       _expectNoRenderException(tester);
     },
   );
@@ -354,6 +449,10 @@ void main() {
 
     expect(page, contains('Numune & Mühür Bütünlüğü'));
     expect(page, contains('hashIntegrityStatus'));
+    expect(page, contains('reportIntegrityContractVersion'));
+    expect(page, contains('reportArtifactRef'));
+    expect(page, contains('reportArtifactVersion'));
+    expect(page, contains('reportIntegrityStatus'));
     expect(page, contains('predecessorIntegrityStatus'));
     expect(repository, contains('OdlaCustodyIntegrityContext'));
     expect(repository, contains('OdlaSampleCustodyIntegrity'));
@@ -453,7 +552,11 @@ Map<String, Object?> _detail() {
         'resultSummaryCode': 'AUTHENTIC',
         'custodyIntegrityVerified': true,
         'referenceIntegrityVerified': true,
-        'reportSha256': 'abc123',
+        'reportIntegrityContractVersion': odlaReportIntegrityContractVersion,
+        'reportArtifactRef': 'artifact:report-1',
+        'reportArtifactVersion': 2,
+        'reportSha256':
+            'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
       },
     ],
     'findings': <Object?>[
